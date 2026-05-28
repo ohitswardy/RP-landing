@@ -1,0 +1,47 @@
+import { motion } from 'framer-motion';
+
+const ease = [0.25, 1, 0.5, 1] as const;
+
+export default function PageHeader({
+  eyebrow, title, italic, dek,
+}: {
+  eyebrow: string; title: string; italic?: string; dek?: string;
+}) {
+  return (
+    <section className="relative bg-blueprint text-paper overflow-hidden">
+      <div
+        aria-hidden
+        className="absolute -left-40 -top-40 w-[700px] h-[700px] rounded-full pointer-events-none opacity-[0.18]"
+        style={{ background: 'radial-gradient(closest-side, var(--color-amber) 0%, transparent 70%)' }}
+      />
+      <div className="container-fluid relative pt-20 md:pt-28 pb-20 md:pb-28">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease }}
+          className="eyebrow eyebrow-paper mb-10"
+        >
+          {eyebrow}
+        </motion.div>
+        <motion.h1
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, ease, delay: 0.05 }}
+          className="text-[clamp(2.5rem,6vw,5.5rem)] leading-[1.04] tracking-[-0.028em] max-w-[18ch] font-medium"
+        >
+          {title}{italic ? <> <span className="text-paper/75">{italic}</span></> : null}
+        </motion.h1>
+        {dek && (
+          <motion.p
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, ease, delay: 0.2 }}
+            className="mt-9 max-w-[60ch] text-[17px] leading-[1.6] text-paper/72"
+          >
+            {dek}
+          </motion.p>
+        )}
+      </div>
+    </section>
+  );
+}
