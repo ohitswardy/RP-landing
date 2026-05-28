@@ -8,12 +8,16 @@ import Insights from './pages/Insights';
 import Login from './pages/Login';
 import Contact from './pages/Contact';
 import MarketRibbon from './components/MarketRibbon';
+import Breadcrumb from './components/Breadcrumb';
+import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
   return (
     <div className="min-h-screen flex flex-col">
+      <ScrollToTop />
       <MarketRibbon />
       <Navbar />
+      <Breadcrumb />
       <main className="flex-1">
         <Routes>
           <Route path="/" element={<Home />} />

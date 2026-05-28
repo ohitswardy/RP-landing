@@ -5,7 +5,6 @@ import Newsletter from '../components/Newsletter';
 
 const data = {
   research: {
-    eyebrow: 'Practice 01',
     title: 'Research Advisory',
     dek: 'Original, conviction-led equity research with the institutional rigor of a global house and the ground-truth of a local one.',
     pillars: [
@@ -17,7 +16,6 @@ const data = {
     proof: [['120+', 'names'], ['1,400', 'notes / yr'], ['22 yrs', 'avg PM tenure']],
   },
   sales: {
-    eyebrow: 'Practice 02',
     title: 'Sales Advisory',
     dek: 'A high-touch institutional dealing desk that knows your mandate, your benchmarks, and your reporting calendar.',
     pillars: [
@@ -29,7 +27,6 @@ const data = {
     proof: [['300+', 'institutions'], ['9', 'global jurisdictions'], ['Partner-led', 'coverage']],
   },
   trading: {
-    eyebrow: 'Practice 03',
     title: 'Trading & Execution',
     dek: 'Discreet block, agency, and program execution on the PSE by a desk that has traded through every regime since 1999.',
     pillars: [
@@ -41,7 +38,6 @@ const data = {
     proof: [['Top 10', 'PSE trading participant'], ['<10bps', 'avg slippage on blocks'], ['24/5', 'global desk coverage']],
   },
   corporate: {
-    eyebrow: 'Practice 04',
     title: 'Corporate Access',
     dek: 'The deepest C-suite rolodex in Philippine equities. Conferences, NDRs, site visits, and corporate days that move conviction.',
     pillars: [
@@ -56,6 +52,13 @@ const data = {
 
 type Key = keyof typeof data;
 
+const heroImages: Record<Key, string> = {
+  research:  '/Services1.jpg',
+  sales:     '/Services2.jpg',
+  trading:   '/Services3.jpg',
+  corporate: '/Services4.jpg',
+};
+
 export default function Services() {
   const { slug } = useParams();
   const key = (slug && (slug.toLowerCase() in data)) ? slug.toLowerCase() as Key : null;
@@ -67,6 +70,7 @@ export default function Services() {
           eyebrow="Practices"
           title="Four practices, one mandate."
           dek="Each practice is run by senior partners with two decades of specialization. The work compounds; the client benefits."
+          bgImage="/Services Hero.png"
         />
         <section className="bg-paper">
           <div className="container-fluid py-24 md:py-32">
@@ -100,7 +104,7 @@ export default function Services() {
   const d = data[key];
   return (
     <>
-      <PageHeader eyebrow={d.eyebrow} title={d.title} dek={d.dek} />
+      <PageHeader eyebrow={d.eyebrow} title={d.title} dek={d.dek} bgImage={heroImages[key]} />
       <section className="bg-paper">
         <div className="container-fluid py-24 md:py-32">
           <div className="grid grid-cols-12 gap-x-6 gap-y-12">
@@ -119,25 +123,6 @@ export default function Services() {
                 </Reveal>
               ))}
             </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-navy text-paper">
-        <div className="container-fluid">
-          <div className="grid grid-cols-1 md:grid-cols-3">
-            {d.proof.map(([k, v], i) => (
-              <div
-                key={k}
-                className={`py-12 md:py-14 px-2 md:px-8 ${i > 0 ? 'md:border-l rule-navy' : ''} ${i >= 1 ? 'border-t md:border-t-0 rule-navy' : ''}`}
-              >
-                <div className="flex items-baseline gap-3">
-                  <span className="inline-block w-4 h-px" style={{ background: 'var(--color-amber)' }} aria-hidden />
-                  <span className="num text-[clamp(2.25rem,4vw,3.5rem)] leading-none tracking-[-0.025em] font-medium">{k}</span>
-                </div>
-                <div className="mono mt-4 text-[11px] tracking-[0.16em] uppercase text-paper/55">{v}</div>
-              </div>
-            ))}
           </div>
         </div>
       </section>

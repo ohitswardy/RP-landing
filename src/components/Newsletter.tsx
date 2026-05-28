@@ -10,7 +10,6 @@ export default function Newsletter() {
     <section className="bg-navy-deep text-paper border-t rule-navy">
       <div className="container-fluid py-20 md:py-28 text-center">
         <Reveal>
-          <div className="eyebrow eyebrow-paper justify-center mb-7 inline-flex">Stay informed</div>
           <h2 className="text-[clamp(1.8rem,3.4vw,2.8rem)] leading-[1.08] tracking-[-0.02em]">
             Stay current with updates.
           </h2>

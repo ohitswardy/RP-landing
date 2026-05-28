@@ -7,7 +7,6 @@ export default function Careers() {
       <div className="container-fluid py-20 md:py-28">
         <div className="grid grid-cols-12 gap-x-6 gap-y-8 items-end">
           <Reveal className="col-span-12 lg:col-span-7">
-            <div className="eyebrow eyebrow-paper mb-7">Experience the Regis difference</div>
             <h2 className="text-[clamp(1.8rem,3.4vw,2.8rem)] leading-[1.08] tracking-[-0.02em]">
               Careers at Regis Partners.
             </h2>

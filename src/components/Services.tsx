@@ -17,18 +17,24 @@ export default function Services() {
       <div className="container-fluid py-24 md:py-32">
         <div className="grid grid-cols-12 gap-x-6 gap-y-12 items-start">
           <Reveal className="col-span-12 lg:col-span-5">
-            <div className="eyebrow eyebrow-paper mb-6">What we do</div>
-            <h2 className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] tracking-[-0.025em] max-w-[16ch]">
-              Deep expertise across the Philippine capital markets.
-            </h2>
-            <p className="mt-7 max-w-[44ch] text-paper/65 leading-relaxed text-[15.5px]">
-              From research to execution, we partner with global allocators,
-              corporates, and sponsors through every phase of the capital
-              cycle.
-            </p>
-            <Link to="/services" className="btn-ghost mt-10">
-              All practices <span>→</span>
-            </Link>
+            <div className="relative overflow-hidden rounded-sm h-full min-h-[420px] lg:min-h-[520px]">
+              <img
+                src="/Skyline.jpg"
+                alt="Philippine skyline at night"
+                className="absolute inset-0 w-full h-full object-cover object-center"
+              />
+              {/* Dark navy gradient overlay */}
+              <div
+                className="absolute inset-0"
+                style={{ background: 'linear-gradient(to top, oklch(0.14 0.040 260 / 0.92) 0%, oklch(0.14 0.040 260 / 0.55) 55%, oklch(0.14 0.040 260 / 0.30) 100%)' }}
+              />
+              {/* Text anchored to bottom */}
+              <div className="absolute inset-x-0 bottom-0 p-8 md:p-10">
+                <h2 className="text-[clamp(1.75rem,3vw,2.75rem)] leading-[1.05] tracking-[-0.025em] max-w-[16ch]">
+                  Deep expertise across the Philippine capital markets.
+                </h2>
+              </div>
+            </div>
           </Reveal>
 
           <div className="col-span-12 lg:col-span-7">

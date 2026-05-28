@@ -105,7 +105,6 @@ export default function Insights() {
       <div className="container-fluid py-24 md:py-32">
         <div className="flex items-end justify-between gap-6 mb-12 md:mb-16">
           <Reveal>
-            <div className="eyebrow mb-6">Our insights</div>
             <h2 className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] tracking-[-0.025em]">
               Research that moves markets.
             </h2>

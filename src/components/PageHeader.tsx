@@ -3,17 +3,34 @@ import { motion } from 'framer-motion';
 const ease = [0.25, 1, 0.5, 1] as const;
 
 export default function PageHeader({
-  eyebrow, title, italic, dek,
+  eyebrow, title, italic, dek, bgImage,
 }: {
-  eyebrow: string; title: string; italic?: string; dek?: string;
+  eyebrow: string; title: string; italic?: string; dek?: string; bgImage?: string;
 }) {
   return (
-    <section className="relative bg-blueprint text-paper overflow-hidden">
-      <div
-        aria-hidden
-        className="absolute -left-40 -top-40 w-[700px] h-[700px] rounded-full pointer-events-none opacity-[0.18]"
-        style={{ background: 'radial-gradient(closest-side, var(--color-amber) 0%, transparent 70%)' }}
-      />
+    <section className={`relative text-paper overflow-hidden ${bgImage ? '' : 'bg-blueprint'}`}>
+      {bgImage && (
+        <>
+          <img
+            src={bgImage}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 w-full h-full object-cover object-center"
+          />
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{ background: 'linear-gradient(to top, oklch(0.14 0.040 260 / 0.88) 0%, oklch(0.14 0.040 260 / 0.70) 50%, oklch(0.14 0.040 260 / 0.55) 100%)' }}
+          />
+        </>
+      )}
+      {!bgImage && (
+        <div
+          aria-hidden
+          className="absolute -left-40 -top-40 w-[700px] h-[700px] rounded-full pointer-events-none opacity-[0.18]"
+          style={{ background: 'radial-gradient(closest-side, var(--color-amber) 0%, transparent 70%)' }}
+        />
+      )}
       <div className="container-fluid relative pt-20 md:pt-28 pb-20 md:pb-28">
         <motion.div
           initial={{ opacity: 0, y: 6 }}
