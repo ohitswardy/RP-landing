@@ -271,7 +271,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-paper/95 backdrop-blur" onMouseLeave={scheduleClose}>
+    <header className="sticky top-9 z-40 bg-paper/95 backdrop-blur" onMouseLeave={scheduleClose}>
       {/* ── Main bar ── */}
       <div className="border-b rule">
         <div className="container-fluid flex items-center justify-between h-16">

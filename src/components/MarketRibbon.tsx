@@ -20,7 +20,7 @@ export default function MarketRibbon() {
   const statusLabel = status === 'loading' ? 'PSE · Loading' : isLive ? 'PSE · Delayed' : 'PSE · Data 15min delayed. Don\'t trade off it';
 
   return (
-    <div className="bg-navy-deep text-paper border-b rule-navy overflow-hidden">
+    <div className="sticky top-0 z-50 bg-navy-deep text-paper border-b rule-navy overflow-hidden">
       <div className="flex items-stretch h-9">
         {/* Live indicator */}
         <div

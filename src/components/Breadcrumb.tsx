@@ -28,7 +28,7 @@ export default function Breadcrumb() {
 
   return (
     <div
-      className="bg-paper border-b"
+      className="sticky top-[100px] z-30 bg-paper border-b"
       style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 10%, transparent)' }}
     >
       <div className="container-fluid">

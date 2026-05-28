@@ -121,6 +121,10 @@
     transition: background 0.4s var(--ease-quart), transform 0.4s var(--ease-quart);
   }
   .btn-dark:hover { background: var(--color-amber-deep); transform: translateY(-1px); }
+
+  /* Hide scrollbar while preserving scroll functionality (used by TeamTabs) */
+  .tabs-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .tabs-scroll::-webkit-scrollbar { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
