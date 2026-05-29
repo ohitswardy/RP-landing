@@ -220,7 +220,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40" style={{ background: '#ffffff' }} onMouseLeave={scheduleClose}>
+    <header className="sticky top-9 z-40" style={{ background: '#ffffff' }} onMouseLeave={scheduleClose}>
       {/* ── Main bar ── */}
       <div className="border-b rule">
         <div className="container-fluid flex items-center justify-between h-16">

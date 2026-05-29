@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import Reveal from '../components/Reveal';
 import Newsletter from '../components/Newsletter';
@@ -569,7 +569,7 @@ function AboutHero() {
   return (
     <section
       ref={sectionRef}
-      className="relative overflow-hidden text-paper"
+      className="relative overflow-hidden text-paper flex items-center"
       style={{ minHeight: 'clamp(580px, 82vh, 820px)', backgroundColor: 'var(--color-navy)' }}
     >
 
@@ -700,10 +700,7 @@ function AboutHero() {
       </div>
 
       {/* ── Content ───────────────────────────────────────────── */}
-      <div
-        className="container-fluid relative"
-        style={{ paddingTop: 'clamp(5rem, 9vw, 7.5rem)', paddingBottom: 'clamp(4.5rem, 7vw, 6.5rem)' }}
-      >
+      <div className="container-fluid relative w-full py-12">
         <motion.div style={{ y: contentY }}>
 
           {/* Eyebrow */}
@@ -726,18 +723,6 @@ function AboutHero() {
             About Us
           </motion.h1>
 
-          {/* Dek */}
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, ease: heroEase, delay: 0.20 }}
-            className="mt-9 text-[17px] leading-[1.65]"
-            style={{ maxWidth: '50ch', color: 'oklch(0.992 0.003 80 / 0.70)' }}
-          >
-            Regis Partners is an independent institutional brokerage, research, and capital markets
-            firm, founded in Makati in 1999.
-          </motion.p>
-
           {/* Amber gradient divider rule */}
           <motion.div
             initial={{ scaleX: 0, opacity: 0 }}
@@ -755,6 +740,22 @@ function AboutHero() {
         </motion.div>
       </div>
     </section>
+  );
+}
+
+function LeadershipSection() {
+  const [activeLabel, setActiveLabel] = useState(teamTabs[0]?.label ?? '');
+
+  return (
+    <>
+      <Reveal className="max-w-3xl mb-10">
+        <div className="eyebrow mb-6">{activeLabel}</div>
+        <h2 className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] tracking-tight">
+          The people behind the platform.
+        </h2>
+      </Reveal>
+      <TeamTabs tabs={teamTabs} onTabChange={setActiveLabel} />
+    </>
   );
 }
 
@@ -788,13 +789,7 @@ export default function About() {
 
       <section id="leadership" className="bg-bone scroll-mt-16">
         <div className="container-fluid py-24 md:py-32">
-          <Reveal className="max-w-3xl mb-10">
-            <div className="eyebrow mb-6">Board of Directors</div>
-            <h2 className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] tracking-tight">
-              The people behind the platform.
-            </h2>
-          </Reveal>
-          <TeamTabs tabs={teamTabs} />
+          <LeadershipSection />
         </div>
       </section>
 

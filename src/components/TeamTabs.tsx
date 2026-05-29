@@ -12,9 +12,10 @@ export interface TeamTab {
 
 interface TeamTabsProps {
   tabs: TeamTab[];
+  onTabChange?: (label: string) => void;
 }
 
-export default function TeamTabs({ tabs }: TeamTabsProps) {
+export default function TeamTabs({ tabs, onTabChange }: TeamTabsProps) {
   const [activeId, setActiveId] = useState(tabs[0]?.id ?? '');
   const uid = useId();
 
@@ -47,7 +48,7 @@ export default function TeamTabs({ tabs }: TeamTabsProps) {
             aria-selected={activeId === tab.id}
             aria-controls={`panel-${uid}-${tab.id}`}
             tabIndex={activeId === tab.id ? 0 : -1}
-            onClick={() => setActiveId(tab.id)}
+            onClick={() => { setActiveId(tab.id); onTabChange?.(tab.label); }}
             onKeyDown={(e) => handleKeyDown(e, idx)}
             className={`relative whitespace-nowrap py-3.5 px-5 text-[13px] tracking-[0.01em]
               transition-colors duration-200
