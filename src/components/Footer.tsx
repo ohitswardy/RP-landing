@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import LegalModal, { type ModalType } from './LegalModal';
 
 const cols = [
   { h: 'Quick links', items: [['Our Services', '/services'], ['Our Insights', '/insights'], ['About', '/about'], ['Careers', '/contact'], ['Investor Relations', '/contact']] },
@@ -6,7 +8,11 @@ const cols = [
 ] as const;
 
 export default function Footer() {
+  const [modal, setModal] = useState<ModalType>(null);
+
   return (
+    <>
+    <LegalModal open={modal} onClose={() => setModal(null)} />
     <footer className="bg-navy-deep text-paper">
       <div className="container-fluid pt-20 pb-10">
         <div className="grid grid-cols-12 gap-x-6 gap-y-14">
@@ -54,11 +60,12 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-[12px] text-paper/50">
           <div>© 1999–2026 Regis Partners, Inc. · SEC Reg. No. AS-099-XXXXX</div>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
-            <Link to="/contact" className="hover:text-paper">Terms & Conditions</Link>
-            <Link to="/contact" className="hover:text-paper">Privacy & Cookies</Link>
+            <button onClick={() => setModal('terms')} className="hover:text-paper transition-colors cursor-pointer">Terms & Conditions</button>
+            <button onClick={() => setModal('privacy')} className="hover:text-paper transition-colors cursor-pointer">Privacy & Cookies</button>
           </div>
         </div>
       </div>
     </footer>
+    </>
   );
 }

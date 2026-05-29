@@ -22,7 +22,7 @@ export default function Insights() {
       <PageHeader
         eyebrow="The journal"
         title="Research worth being early on."
-        dek="Selected publications from the Regis research desk. Full archive and models available to institutional clients via the research portal."
+        bgImage="/InsightsBG.png"
       />
 
       <section className="bg-paper">

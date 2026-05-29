@@ -1,3 +1,4 @@
+import { useLayoutEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 const LABELS: Record<string, string> = {
@@ -12,8 +13,39 @@ const LABELS: Record<string, string> = {
   corporate: 'Corporate Access',
 };
 
+function useStickyTop() {
+  const [top, setTop] = useState(101);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const navbar = document.getElementById('site-navbar');
+      if (navbar) {
+        const navTop = parseFloat(getComputedStyle(navbar).top) || 0;
+        setTop(Math.ceil(navTop + navbar.getBoundingClientRect().height));
+      }
+    };
+
+    measure();
+
+    const ro = new ResizeObserver(measure);
+    const ribbon = document.getElementById('market-ribbon');
+    const navbar = document.getElementById('site-navbar');
+    if (ribbon) ro.observe(ribbon);
+    if (navbar) ro.observe(navbar);
+
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
+  return top;
+}
+
 export default function Breadcrumb() {
   const { pathname } = useLocation();
+  const stickyTop = useStickyTop();
   const segments = pathname.split('/').filter(Boolean);
 
   if (segments.length === 0) return null;
@@ -28,8 +60,12 @@ export default function Breadcrumb() {
 
   return (
     <div
-      className="sticky top-[100px] z-30 bg-paper border-b"
-      style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 10%, transparent)' }}
+      className="z-30 bg-paper border-b"
+      style={{
+        position: 'sticky',
+        top: stickyTop,
+        borderColor: 'color-mix(in oklab, var(--color-ink) 10%, transparent)',
+      }}
     >
       <div className="container-fluid">
         <nav aria-label="Breadcrumb">

@@ -4,122 +4,18 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 const ease = [0.25, 1, 0.5, 1] as const;
 
-// ─── Inline SVG feature visuals ────────────────────────────────────────────
-
-function VisualServices() {
-  return (
-    <svg viewBox="0 0 300 160" fill="none" className="w-full h-full">
-      {([
-        [20, 120], [68, 90], [116, 105], [164, 65], [212, 80], [260, 45],
-      ] as [number, number][]).map(([x, top], i) => (
-        <rect key={i} x={x} y={top} width={30} height={160 - top}
-          fill="var(--color-paper)" fillOpacity={0.06 + i * 0.025} />
-      ))}
-      {([
-        [20, 120], [68, 90], [116, 105], [164, 65], [212, 80], [260, 45],
-      ] as [number, number][]).map(([x, top], i) => (
-        <rect key={`t-${i}`} x={x} y={top} width={30} height={3}
-          fill="var(--color-amber)" fillOpacity={i === 5 ? 0.9 : 0.35} />
-      ))}
-      <line x1="0" y1="158" x2="300" y2="158" stroke="var(--color-amber)" strokeWidth="1" strokeOpacity="0.5" />
-    </svg>
-  );
-}
-
-function VisualInsights() {
-  const points = [300, 260, 280, 220, 240, 190, 200, 170, 160, 150, 120, 130, 80, 110, 40, 95];
-  const poly = points.map((v, i) => (i % 2 === 0 ? `${v},` : `${v} `)).join('').trim();
-  return (
-    <svg viewBox="0 0 300 160" fill="none" className="w-full h-full">
-      <defs>
-        <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--color-amber)" stopOpacity="0.12" />
-          <stop offset="100%" stopColor="var(--color-amber)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <line key={i} x1="0" y1={30 + i * 30} x2="300" y2={30 + i * 30}
-          stroke="var(--color-paper)" strokeOpacity="0.05" />
-      ))}
-      <polyline points={poly} stroke="var(--color-amber)" strokeWidth="1.5" fill="url(#chartFill)" />
-      {points.filter((_, i) => i % 2 === 0).map((x, i) => (
-        <circle key={i} cx={x} cy={points[i * 2 + 1]} r={i === 7 ? 3.5 : 2}
-          fill={i === 7 ? 'var(--color-amber)' : 'var(--color-paper)'} fillOpacity={0.6} />
-      ))}
-    </svg>
-  );
-}
-
-function VisualAbout() {
-  const years = [1999, 2004, 2009, 2014, 2019, 2026];
-  return (
-    <svg viewBox="0 0 300 160" fill="none" className="w-full h-full">
-      <line x1="20" y1="80" x2="280" y2="80" stroke="var(--color-paper)" strokeOpacity="0.12" />
-      {years.map((y, i) => {
-        const x = 20 + i * 52;
-        const isLast = i === years.length - 1;
-        return (
-          <g key={y}>
-            <circle cx={x} cy={80} r={isLast ? 6 : 3.5}
-              fill={isLast ? 'var(--color-amber)' : 'var(--color-paper)'}
-              fillOpacity={isLast ? 1 : 0.55} />
-            {isLast && <circle cx={x} cy={80} r={11} stroke="var(--color-amber)" strokeOpacity="0.25" strokeWidth="1" fill="none" />}
-            <text x={x} y={104} textAnchor="middle"
-              fill={isLast ? 'var(--color-amber)' : 'var(--color-paper)'}
-              fillOpacity={isLast ? 0.8 : 0.3}
-              fontFamily="var(--font-mono)" fontSize="8">
-              {y}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function VisualContact() {
-  const buildings: [number, number, number][] = [
-    [20, 60, 28], [56, 40, 22], [86, 75, 32], [126, 35, 24],
-    [158, 55, 20], [186, 28, 26], [220, 65, 30], [258, 45, 22],
-  ];
-  return (
-    <svg viewBox="0 0 300 160" fill="none" className="w-full h-full">
-      {buildings.map(([x, top, w], i) => (
-        <g key={i}>
-          <rect x={x} y={top} width={w} height={160 - top}
-            fill="var(--color-paper)" fillOpacity={0.05 + (i % 3) * 0.03} />
-          {Array.from({ length: Math.floor((160 - top) / 18) }).map((_, r) =>
-            Array.from({ length: Math.floor(w / 9) }).map((_, c) => (
-              <rect key={`w-${r}-${c}`}
-                x={x + 4 + c * 9} y={top + 6 + r * 18} width={4} height={6}
-                fill="var(--color-paper)" fillOpacity={(r + c) % 3 === 0 ? 0.18 : 0.04} />
-            ))
-          )}
-        </g>
-      ))}
-      <line x1="0" y1="158" x2="300" y2="158" stroke="var(--color-amber)" strokeWidth="1" strokeOpacity="0.5" />
-    </svg>
-  );
-}
-
 // ─── Menu content ───────────────────────────────────────────────────────────
 
 type MenuLink = { label: string; desc?: string; href: string };
 type MenuColumn = { heading: string; links: MenuLink[] };
 type MenuDef = {
-  feature: { headline: string; sub: string; cta: string; href: string; visual: JSX.Element };
+  feature: { href: string; image: string };
   columns: MenuColumn[];
 };
 
 const MENUS: Record<string, MenuDef> = {
   services: {
-    feature: {
-      headline: 'Four practices,\none mandate.',
-      sub: 'Each practice run by senior partners with two decades of specialisation.',
-      cta: 'View all practices',
-      href: '/services',
-      visual: <VisualServices />,
-    },
+    feature: { href: '/services', image: '/Services Hero.png' },
     columns: [
       {
         heading: 'What We Do',
@@ -135,13 +31,7 @@ const MENUS: Record<string, MenuDef> = {
     ],
   },
   insights: {
-    feature: {
-      headline: 'Research worth\nbeing early on.',
-      sub: 'Original, conviction-led work from the Regis desk. Full archive for institutional clients.',
-      cta: 'Browse all insights',
-      href: '/insights',
-      visual: <VisualInsights />,
-    },
+    feature: { href: '/insights', image: '/InsightsBG.png' },
     columns: [
       {
         heading: 'Insights',
@@ -153,13 +43,7 @@ const MENUS: Record<string, MenuDef> = {
     ],
   },
   about: {
-    feature: {
-      headline: 'Twenty-five years,\nno shortcuts.',
-      sub: 'Independent. Partner-led. Built in Makati for the long term.',
-      cta: 'Read our story',
-      href: '/about',
-      visual: <VisualAbout />,
-    },
+    feature: { href: '/about', image: '/lobby.jpg' },
     columns: [
       {
         heading: 'About',
@@ -172,13 +56,7 @@ const MENUS: Record<string, MenuDef> = {
     ],
   },
   contact: {
-    feature: {
-      headline: 'Makati.\nSingapore.\nHong Kong.',
-      sub: 'Get in touch with the team that knows the Philippine market.',
-      cta: 'Contact us',
-      href: '/contact',
-      visual: <VisualContact />,
-    },
+    feature: { href: '/contact', image: '/sunray.jpg' },
     columns: [
       {
         heading: 'Get in Touch',
@@ -220,7 +98,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-9 z-40" style={{ background: '#ffffff' }} onMouseLeave={scheduleClose}>
+    <header id="site-navbar" className="sticky top-9 z-40" style={{ background: '#ffffff' }} onMouseLeave={scheduleClose}>
       {/* ── Main bar ── */}
       <div className="border-b rule">
         <div className="container-fluid flex items-center justify-between h-16">
@@ -316,51 +194,28 @@ export default function Navbar() {
             <div className="container-fluid">
               <div className="grid grid-cols-12">
 
-                {/* Left: feature panel (navy) */}
-                <div
-                  className="col-span-4 relative overflow-hidden flex flex-col justify-between p-10 min-h-[340px]"
+                {/* Left: feature panel — hero image */}
+                <Link
+                  to={MENUS[open].feature.href}
+                  onClick={() => setOpen(null)}
+                  className="group/feat col-span-4 relative overflow-hidden block min-h-[340px]"
                   style={{ background: 'var(--color-navy)' }}
                 >
-                  {/* Blueprint texture */}
+                  <img
+                    src={MENUS[open].feature.image}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[1100ms] ease-out group-hover/feat:scale-[1.05]"
+                    draggable={false}
+                  />
+                  {/* Navy gradient overlay for brand cohesion */}
                   <div aria-hidden className="absolute inset-0 pointer-events-none" style={{
-                    backgroundImage: 'linear-gradient(to right, color-mix(in oklab, var(--color-paper) 3%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in oklab, var(--color-paper) 2%, transparent) 1px, transparent 1px)',
-                    backgroundSize: '48px 48px',
+                    background: 'linear-gradient(to top right, oklch(0.14 0.040 260 / 0.62) 0%, oklch(0.14 0.040 260 / 0.20) 55%, oklch(0.14 0.040 260 / 0.34) 100%)',
                   }} />
-                  {/* Amber radial glow top-right */}
-                  <div aria-hidden className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none" style={{
-                    background: 'radial-gradient(closest-side, var(--color-amber) 0%, transparent 70%)',
-                    opacity: 0.08,
+                  {/* Amber accent line at base */}
+                  <div aria-hidden className="absolute bottom-0 left-0 right-0 h-[2px]" style={{
+                    background: 'linear-gradient(90deg, var(--color-amber) 0%, var(--color-amber-deep) 50%, transparent 100%)',
                   }} />
-
-                  {/* SVG visual */}
-                  <div className="relative h-36 w-full mb-2">
-                    {MENUS[open].feature.visual}
-                  </div>
-
-                  {/* Text content */}
-                  <div className="relative">
-                    <p className="mono text-[10px] tracking-[0.2em] uppercase mb-3" style={{ color: 'var(--color-amber)' }}>
-                      Regis Partners
-                    </p>
-                    <h3
-                      className="text-[1.3rem] leading-[1.15] tracking-[-0.022em] font-medium text-paper mb-3 whitespace-pre-line max-w-[20ch]"
-                    >
-                      {MENUS[open].feature.headline}
-                    </h3>
-                    <p className="text-[13px] leading-relaxed mb-7 max-w-[32ch]" style={{ color: 'color-mix(in oklab, var(--color-paper) 52%, transparent)' }}>
-                      {MENUS[open].feature.sub}
-                    </p>
-                    <Link
-                      to={MENUS[open].feature.href}
-                      onClick={() => setOpen(null)}
-                      className="group/cta inline-flex items-center gap-3 text-[12.5px] font-medium text-paper"
-                    >
-                      <span className="block h-px transition-all duration-300 group-hover/cta:w-8 w-5" style={{ background: 'var(--color-amber)' }} />
-                      {MENUS[open].feature.cta}
-                      <span className="opacity-0 group-hover/cta:opacity-100 transition-opacity duration-200 text-amber-400">→</span>
-                    </Link>
-                  </div>
-                </div>
+                </Link>
 
                 {/* Right: link columns */}
                 <div

@@ -73,9 +73,7 @@ export default function Hero() {
           transition={{ duration: 0.9, ease, delay: 0.22 }}
           className="mt-10 max-w-[58ch] text-[17px] leading-[1.6] text-paper/72"
         >
-          Independent since 1999. We connect global institutional capital to
-          the Philippine market through original research, high-touch
-          execution, and the deepest corporate-access franchise on the PSE.
+          
         </motion.p>
 
         {/* Divider */}

@@ -1,42 +1,17 @@
 import { motion } from 'framer-motion';
 import { useTicker } from '../hooks/useTicker';
 
-function formatTime(d: Date | null): string {
-  if (!d) return '— —';
-  return d.toLocaleTimeString('en-PH', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Manila',
-  }) + ' PHT';
-}
-
 export default function MarketRibbon() {
-  const { entries, status, updatedAt } = useTicker();
+  const { entries, status } = useTicker();
   const row = [...entries, ...entries];
 
   const isLive = status === 'live';
   const dotColor = isLive ? 'var(--color-signal)' : 'var(--color-amber)';
-  const statusLabel = status === 'loading' ? 'PSE · Loading' : isLive ? 'PSE · Delayed' : 'PSE · Data 15min delayed. Don\'t trade off it';
+  const statusLabel = status === 'loading' ? 'PSE · Loading' : isLive ? 'PSE · Delayed' : 'PSE · 15mins delay.';
 
   return (
-    <div className="sticky top-0 z-50 bg-navy-deep text-paper border-b rule-navy overflow-hidden">
+    <div id="market-ribbon" className="sticky top-0 z-50 bg-navy-deep text-paper border-b rule-navy overflow-hidden">
       <div className="flex items-stretch h-9">
-        {/* Live indicator */}
-        <div
-          className="shrink-0 pl-6 pr-5 flex items-center gap-2 border-r rule-navy"
-          title={isLive ? 'Source: phisix-api · approx. 15-minute delay' : 'Falling back to placeholder values'}
-        >
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
-            style={{ background: dotColor }}
-            aria-hidden
-          />
-          <span className="mono text-[10.5px] tracking-[0.18em] uppercase text-paper/55">
-            {statusLabel}
-          </span>
-        </div>
-
         {/* Marquee */}
         <div className="relative flex-1 overflow-hidden">
           <div
@@ -79,10 +54,18 @@ export default function MarketRibbon() {
           </motion.div>
         </div>
 
-        {/* Timestamp */}
-        <div className="hidden md:flex shrink-0 pr-6 pl-5 items-center border-l rule-navy">
-          <span className="mono text-[10.5px] tracking-[0.16em] uppercase text-paper/55">
-            {formatTime(updatedAt)}
+        {/* Live indicator */}
+        <div
+          className="shrink-0 pl-5 pr-6 flex items-center gap-2 border-l rule-navy"
+          title={isLive ? 'Source: phisix-api · approx. 15-minute delay' : 'Falling back to placeholder values'}
+        >
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
+            style={{ background: dotColor }}
+            aria-hidden
+          />
+          <span className="mono text-[10.5px] tracking-[0.18em] uppercase text-paper/55">
+            {statusLabel}
           </span>
         </div>
       </div>
