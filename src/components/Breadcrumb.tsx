@@ -1,8 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 
 const LABELS: Record<string, string> = {
-  about:     'The Firm',
-  services:  'Practices',
+  about:     'About Us',
+  services:  'Services',
   insights:  'Insights',
   contact:   'Contact',
   login:     'Client Login',

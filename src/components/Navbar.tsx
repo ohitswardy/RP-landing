@@ -249,7 +249,7 @@ const NAV = [
   { label: 'Our Services',       key: 'services', href: '/services' },
   { label: 'Our Insights',       key: 'insights', href: '/insights' },
   { label: 'About',              key: 'about',    href: '/about'    },
-  { label: 'Investor Relations', key: 'contact',  href: '/contact'  },
+  { label: 'Contact Us', key: 'contact',  href: '/contact'  },
 ] as const;
 
 // ─── Component ──────────────────────────────────────────────────────────────

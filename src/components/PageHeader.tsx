@@ -3,9 +3,9 @@ import { motion } from 'framer-motion';
 const ease = [0.25, 1, 0.5, 1] as const;
 
 export default function PageHeader({
-  eyebrow, title, italic, dek, bgImage,
+  eyebrow, title, italic, dek, bgImage, overlayStyle,
 }: {
-  eyebrow: string; title: string; italic?: string; dek?: string; bgImage?: string;
+  eyebrow: string; title: string; italic?: string; dek?: string; bgImage?: string; overlayStyle?: React.CSSProperties;
 }) {
   return (
     <section className={`relative text-paper overflow-hidden ${bgImage ? '' : 'bg-blueprint'}`}>
@@ -20,7 +20,7 @@ export default function PageHeader({
           <div
             aria-hidden
             className="absolute inset-0"
-            style={{ background: 'linear-gradient(to top, oklch(0.14 0.040 260 / 0.88) 0%, oklch(0.14 0.040 260 / 0.70) 50%, oklch(0.14 0.040 260 / 0.55) 100%)' }}
+            style={overlayStyle ?? { background: 'linear-gradient(to top, oklch(0.14 0.040 260 / 0.88) 0%, oklch(0.14 0.040 260 / 0.70) 50%, oklch(0.14 0.040 260 / 0.55) 100%)' }}
           />
         </>
       )}

@@ -25,9 +25,16 @@ export default function Contact() {
   return (
     <>
       <PageHeader
-        eyebrow="Engagement"
-        title="Open a conversation."
+        eyebrow=""
+        title="Contact Us"
         dek="We respond to qualified institutional inquiries within one business day. For market-hours dealing, contact the trading desk directly."
+        bgImage="/sunray.jpg"
+        overlayStyle={{
+          background: [
+            'radial-gradient(ellipse at 78% 12%, oklch(0.65 0.15 80 / 0.18) 0%, transparent 45%)',
+            'linear-gradient(to bottom, oklch(0.14 0.040 260 / 0.76) 0%, oklch(0.14 0.040 260 / 0.68) 40%, oklch(0.14 0.040 260 / 0.90) 100%)',
+          ].join(', '),
+        }}
       />
 
       <section className="bg-paper">

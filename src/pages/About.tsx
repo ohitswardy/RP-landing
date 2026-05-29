@@ -1,4 +1,5 @@
-import PageHeader from '../components/PageHeader';
+import { useRef } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import Reveal from '../components/Reveal';
 import Newsletter from '../components/Newsletter';
 import TeamTabs, { type TeamTab } from '../components/TeamTabs';
@@ -292,14 +293,476 @@ const teamTabs: TeamTab[] = [
   { id: 'operations', label: 'Operations',         people: operationsTeam },
 ];
 
+
+const firmProfile = [
+  { label: 'Established',      value: '1999, Makati City' },
+  { label: 'Formerly',         value: 'Deutsche Regis Partners Inc.' },
+  { label: 'PSE Membership',   value: 'Member since 2004; SCCP affiliated' },
+  { label: 'Global Partner',   value: 'Jefferies Financial Group (since 2020)' },
+  { label: 'Research Coverage',value: '120+ PSE-listed names' },
+  { label: 'Clients',          value: 'Domestic and international institutional' },
+] as const;
+
+const awards = [
+  {
+    org: 'Fund Managers Association of the Philippines (FMAP)',
+    items: [
+      { name: 'Best Equities House',           years: '2007 to 2010, 2012 to 2014, 2016 to 2023' },
+      { name: 'Best Equities Research',        years: '2007 to 2014, 2016 to 2018, 2023, 2024' },
+      { name: 'Best Equities Sales',           years: '2006 to 2009, 2015, 2017, 2021' },
+      { name: 'Best Equities Sales Execution', years: '2010, 2016, 2018, 2023' },
+    ],
+  },
+  {
+    org: 'Philippine Stock Exchange (PSE)',
+    items: [
+      { name: 'Bell Award for Corporate Governance',              years: '2014 to 2017' },
+      { name: 'Best Compliance Program for Trading Participants', years: '2017' },
+    ],
+  },
+  {
+    org: 'Asiamoney',
+    items: [
+      { name: 'Best Domestic Brokerage', years: '2002 to 2005, 2011 to 2015, 2017 to 2023' },
+    ],
+  },
+  {
+    org: 'All-Asia Institutional Investor Survey',
+    items: [
+      { name: '#1 Ranked Research Team', years: '2015, 2017' },
+    ],
+  },
+];
+
+function CompanyOverview() {
+  return (
+    <section
+      className="relative overflow-hidden text-paper"
+      style={{ backgroundColor: 'var(--color-navy-deep)' }}
+    >
+      {/* Blueprint grid — atmosphere layer */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, color-mix(in oklab, var(--color-paper) 3%, transparent) 1px, transparent 1px),' +
+            'linear-gradient(to bottom, color-mix(in oklab, var(--color-paper) 2%, transparent) 1px, transparent 1px)',
+          backgroundSize: '96px 96px',
+        }}
+      />
+
+      {/* Amber atmospheric glow — far right */}
+      <div
+        aria-hidden
+        className="absolute pointer-events-none"
+        style={{
+          right: '-240px',
+          top: '20%',
+          width: '560px',
+          height: '560px',
+          borderRadius: '50%',
+          background: 'radial-gradient(closest-side, oklch(0.760 0.140 62 / 0.09) 0%, transparent 70%)',
+        }}
+      />
+
+      {/* Whisper glow — left edge */}
+      <div
+        aria-hidden
+        className="absolute pointer-events-none"
+        style={{
+          left: '-160px',
+          bottom: '10%',
+          width: '420px',
+          height: '420px',
+          borderRadius: '50%',
+          background: 'radial-gradient(closest-side, oklch(0.760 0.140 62 / 0.045) 0%, transparent 70%)',
+        }}
+      />
+
+      <div
+        className="container-fluid relative"
+        style={{
+          paddingTop:    'clamp(5rem, 8vw, 7.5rem)',
+          paddingBottom: 'clamp(5rem, 8vw, 7.5rem)',
+        }}
+      >
+        {/* ── Section Header ──────────────────────────────────── */}
+
+        <Reveal delay={0.05}>
+          <h2
+            className="text-[clamp(2.25rem,4.5vw,4rem)] leading-[1.04] tracking-[-0.028em] font-medium"
+            style={{ maxWidth: '22ch' }}
+          >
+            Company Overview
+          </h2>
+        </Reveal>
+
+        {/* Full-width amber-to-line divider */}
+        <Reveal delay={0.09}>
+          <div
+            aria-hidden
+            className="mt-12 mb-14"
+            style={{
+              height: '1px',
+              background: 'linear-gradient(to right, var(--color-amber) 0%, var(--color-navy-line) 55%, transparent 100%)',
+            }}
+          />
+        </Reveal>
+
+        {/* ── Editorial Two-Column ────────────────────────────── */}
+        <div className="grid grid-cols-12 gap-x-6 gap-y-14">
+
+          {/* Left: narrative prose */}
+          <div className="col-span-12 lg:col-span-7 flex flex-col gap-8">
+
+            <Reveal delay={0.11}>
+              <p
+                className="text-[17px] leading-[1.72]"
+                style={{ color: 'oklch(0.992 0.003 80 / 0.72)', maxWidth: '65ch' }}
+              >
+                Regis Partners, Inc. (formerly Deutsche Regis Partners Inc.) is one of the largest
+                equity brokerage houses in the Philippine Stock Exchange. Its country-based team
+                provides research, sales, trading, and execution services to a broad base of
+                foreign and domestic institutional clients.
+              </p>
+            </Reveal>
+
+            <Reveal delay={0.14}>
+              <div
+                aria-hidden
+                style={{ height: '1px', width: '36px', background: 'var(--color-amber)', opacity: 0.5 }}
+              />
+            </Reveal>
+
+            <Reveal delay={0.17}>
+              <p
+                className="text-[17px] leading-[1.72]"
+                style={{ color: 'oklch(0.992 0.003 80 / 0.72)', maxWidth: '65ch' }}
+              >
+                Organized in 1999 as a joint venture between local management (51%) and The 
+                Deutsche Bank Group (49%), Regis Partners grew to become the dominant equities 
+                house in the PSE for over a decade. Following the decision by Deutsche Bank to 
+                exit the equities business globally in 2019, management took full control of Regis Partners, and in August 2020, signed an exclusive cooperation with Jefferies 
+                Financial Group, one of the largest independent equities houses in the USA.
+              </p>
+            </Reveal>
+
+            <Reveal delay={0.20}>
+              <div
+                aria-hidden
+                style={{ height: '1px', width: '36px', background: 'var(--color-amber)', opacity: 0.5 }}
+              />
+            </Reveal>
+
+            <Reveal delay={0.22}>
+              <p
+                className="text-[17px] leading-[1.72]"
+                style={{ color: 'oklch(0.992 0.003 80 / 0.72)', maxWidth: '65ch' }}
+              >
+                With over 20 years of experience and coverage of Philippine equities, Regis 
+                Partners prides itself in providing cutting edge research and advisory services, as 
+                well as top-level corporate access to its institutional clients. Its primary goal is to 
+                provide sound financial advice that challenges conventional wisdom and the consensus view.
+              </p>
+            </Reveal>
+
+            <Reveal delay={0.25}>
+              <div
+                aria-hidden
+                style={{ height: '1px', width: '36px', background: 'var(--color-amber)', opacity: 0.5 }}
+              />
+            </Reveal>
+
+            <Reveal delay={0.28}>
+              <p
+                className="text-[17px] leading-[1.72]"
+                style={{ color: 'oklch(0.992 0.003 80 / 0.72)', maxWidth: '65ch' }}
+              >
+                Regis Partners has received numerous awards for Best Equity House and Best R
+                esearch House from institutions such as The Fund Managers Association of the 
+                Philippines (FMAP), and from publications including Institutional Investor and Asiamoney. Regis Partners has also been a recipient of the Philippine Stock 
+                Exchange Bell Award for Good Governance.
+              </p>
+            </Reveal>
+
+          </div>
+
+          {/* Right: firm profile registry */}
+          <Reveal delay={0.16} className="col-span-12 lg:col-span-5">
+            <div className="lg:pl-12">
+              <div
+                className="border-t pt-8"
+                style={{ borderColor: 'var(--color-navy-line)' }}
+              >
+                <div
+                  style={{
+                    fontFamily:    'var(--font-mono)',
+                    fontSize:      '10.5px',
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    color:         'oklch(0.992 0.003 80 / 0.34)',
+                    marginBottom:  '1.75rem',
+                  }}
+                >
+                  Company Profile
+                </div>
+
+                <dl>
+                  {firmProfile.map(({ label, value }) => (
+                    <div
+                      key={label}
+                      className="flex justify-between items-baseline gap-4 py-4 border-b"
+                      style={{ borderColor: 'var(--color-navy-line)' }}
+                    >
+                      <dt
+                        style={{
+                          fontFamily:    'var(--font-mono)',
+                          fontSize:      '10.5px',
+                          letterSpacing: '0.09em',
+                          textTransform: 'uppercase',
+                          color:         'oklch(0.992 0.003 80 / 0.38)',
+                          flexShrink:    0,
+                        }}
+                      >
+                        {label}
+                      </dt>
+                      <dd
+                        className="text-right"
+                        style={{
+                          fontSize:   '13.5px',
+                          lineHeight: '1.45',
+                          color:      'oklch(0.992 0.003 80 / 0.80)',
+                        }}
+                      >
+                        {value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </div>
+          </Reveal>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   About Hero — cinematic split-panel with portrait lobby image
+───────────────────────────────────────────────────────────── */
+const heroEase = [0.25, 1, 0.5, 1] as const;
+
+function AboutHero() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start start', 'end start'],
+  });
+
+  /* Parallax layers — image drifts up, content holds steady */
+  const imgY      = useTransform(scrollYProgress, [0, 1], ['0%', '18%']);
+  const contentY  = useTransform(scrollYProgress, [0, 1], ['0%', '-5%']);
+
+  return (
+    <section
+      ref={sectionRef}
+      className="relative overflow-hidden text-paper"
+      style={{ minHeight: 'clamp(580px, 82vh, 820px)', backgroundColor: 'var(--color-navy)' }}
+    >
+
+      {/* ── Left panel: navy + blueprint grid ─────────────────── */}
+      <div
+        aria-hidden
+        className="absolute inset-0 lg:right-[42%]"
+        style={{
+          backgroundColor: 'var(--color-navy)',
+          backgroundImage:
+            'linear-gradient(to right, color-mix(in oklab, var(--color-paper) 4%, transparent) 1px, transparent 1px),' +
+            'linear-gradient(to bottom, color-mix(in oklab, var(--color-paper) 3%, transparent) 1px, transparent 1px)',
+          backgroundSize: '96px 96px',
+        }}
+      />
+
+      {/* ── Amber atmospheric glow — bottom-left ─────────────── */}
+      <div
+        aria-hidden
+        className="absolute -left-60 -bottom-60 w-225 h-225 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(closest-side, oklch(0.760 0.140 62 / 0.22) 0%, transparent 70%)' }}
+      />
+
+      {/* ── Amber whisper accent — upper-left ────────────────── */}
+      <div
+        aria-hidden
+        className="absolute left-[6%] top-[18%] w-80 h-80 rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(closest-side, oklch(0.760 0.140 62 / 0.055) 0%, transparent 70%)' }}
+      />
+
+      {/* ── RIGHT PANEL: portrait image — desktop only ────────── */}
+      <div
+        aria-hidden
+        className="hidden lg:block absolute right-0 top-0 bottom-0"
+        style={{ width: '44%' }}
+      >
+        <div className="absolute inset-0 overflow-hidden">
+
+          {/* Parallax image — oversized for travel headroom */}
+          <motion.div
+            className="absolute"
+            style={{ top: '-12%', bottom: '-12%', left: 0, right: 0, y: imgY }}
+          >
+            <img
+              src="/lobby.jpg"
+              alt=""
+              aria-hidden
+              className="w-full h-full object-cover"
+              style={{ objectPosition: '50% 18%' }}
+            />
+          </motion.div>
+
+          {/* Left-edge hard blend: navy → image (the panel seam) */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                'linear-gradient(to right,' +
+                  'oklch(0.215 0.048 260 / 1.00)  0%,' +
+                  'oklch(0.215 0.048 260 / 0.84) 10%,' +
+                  'oklch(0.215 0.048 260 / 0.46) 26%,' +
+                  'oklch(0.215 0.048 260 / 0.10) 46%,' +
+                  'transparent 68%)',
+            }}
+          />
+
+          {/* Right-edge fade to deep navy */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                'linear-gradient(to left,' +
+                  'oklch(0.165 0.040 260 / 0.72) 0%,' +
+                  'oklch(0.165 0.040 260 / 0.22) 30%,' +
+                  'transparent 58%)',
+            }}
+          />
+
+          {/* Top vignette */}
+          <div
+            className="absolute inset-x-0 top-0 pointer-events-none"
+            style={{
+              height: '38%',
+              background: 'linear-gradient(to bottom, oklch(0.215 0.048 260 / 0.84) 0%, transparent 100%)',
+            }}
+          />
+
+          {/* Bottom vignette — blends to next section */}
+          <div
+            className="absolute inset-x-0 bottom-0 pointer-events-none"
+            style={{
+              height: '50%',
+              background:
+                'linear-gradient(to top,' +
+                  'oklch(0.165 0.040 260 / 0.96) 0%,' +
+                  'oklch(0.165 0.040 260 / 0.48) 50%,' +
+                  'transparent 100%)',
+            }}
+          />
+
+          {/* Navy tint for OKLCH colour-space harmony */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'oklch(0.215 0.048 260 / 0.14)', mixBlendMode: 'multiply' }}
+          />
+        </div>
+      </div>
+
+      {/* ── MOBILE: full-bleed image backdrop ────────────────── */}
+      <div aria-hidden className="lg:hidden absolute inset-0">
+        <img
+          src="/lobby.jpg"
+          alt=""
+          className="w-full h-full object-cover"
+          style={{ objectPosition: '42% 22%' }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(155deg,' +
+                'oklch(0.165 0.040 260 / 0.97)  0%,' +
+                'oklch(0.165 0.040 260 / 0.92) 42%,' +
+                'oklch(0.215 0.048 260 / 0.80) 72%,' +
+                'oklch(0.215 0.048 260 / 0.68) 100%)',
+          }}
+        />
+      </div>
+
+      {/* ── Content ───────────────────────────────────────────── */}
+      <div
+        className="container-fluid relative"
+        style={{ paddingTop: 'clamp(5rem, 9vw, 7.5rem)', paddingBottom: 'clamp(4.5rem, 7vw, 6.5rem)' }}
+      >
+        <motion.div style={{ y: contentY }}>
+
+          {/* Eyebrow */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: heroEase }}
+            className="eyebrow eyebrow-paper mb-10"
+          >
+          </motion.div>
+
+          {/* Headline */}
+          <motion.h1
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1.1, ease: heroEase, delay: 0.05 }}
+            className="text-[clamp(2.5rem,6vw,5.5rem)] leading-[1.03] tracking-[-0.028em] font-medium"
+            style={{ maxWidth: '18ch' }}
+          >
+            About Us
+          </motion.h1>
+
+          {/* Dek */}
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, ease: heroEase, delay: 0.20 }}
+            className="mt-9 text-[17px] leading-[1.65]"
+            style={{ maxWidth: '50ch', color: 'oklch(0.992 0.003 80 / 0.70)' }}
+          >
+            Regis Partners is an independent institutional brokerage, research, and capital markets
+            firm, founded in Makati in 1999.
+          </motion.p>
+
+          {/* Amber gradient divider rule */}
+          <motion.div
+            initial={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: 1, opacity: 1 }}
+            transition={{ duration: 1.0, ease: heroEase, delay: 0.38 }}
+            aria-hidden
+            className="origin-left mt-12 mb-10"
+            style={{
+              height: '1px',
+              width: 'min(300px, 100%)',
+              background: 'linear-gradient(to right, var(--color-amber), transparent)',
+            }}
+          />
+
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 export default function About() {
   return (
     <>
-      <PageHeader
-        eyebrow="The firm"
-        title="A quarter-century in Philippine equities."
-        dek="Regis Partners is an independent institutional brokerage, research, and capital markets firm, founded in Makati in 1999."
-      />
+      <AboutHero />
+      <CompanyOverview />
 
       <section className="bg-paper">
         <div className="container-fluid py-24 md:py-32">
@@ -327,7 +790,7 @@ export default function About() {
         <div className="container-fluid py-24 md:py-32">
           <Reveal className="max-w-3xl mb-10">
             <div className="eyebrow mb-6">Board of Directors</div>
-            <h2 className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] tracking-[-0.025em]">
+            <h2 className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] tracking-tight">
               The people behind the platform.
             </h2>
           </Reveal>
@@ -343,21 +806,60 @@ export default function About() {
               Selected awards & rankings.
             </h2>
           </Reveal>
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-12">
-            {[
-              ['Asiamoney Brokers Poll',    'Best Local Brokerage, PH — 2018–2024'],
-              ['Institutional Investor',     'All-Asia Research Team #1, PH — 2021, 2023'],
-              ['FinanceAsia',                'Best Equity House, PH — 2019, 2022'],
-              ['Alpha Southeast Asia',       'Best Local Broker, PH — 2020, 2024'],
-              ['The Asset Triple A',         'Best Corporate Access House — 2023'],
-              ['PSE Bell Awards',            'Top Trading Participant by Value — 2022'],
-            ].map(([a, b]) => (
-              <Reveal key={a} className="border-b rule py-6 flex items-baseline justify-between gap-6">
-                <span className="text-lg tracking-[-0.012em] font-medium">{a}</span>
-                <span className="text-slate text-[14px] text-right">{b}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12">
+            {awards.map((group) => (
+              <Reveal key={group.org} className="border-b rule pt-6 pb-8">
+                <p
+                  className="font-mono text-[13px] font-semibold tracking-[0.1em] uppercase mb-4"
+                  style={{ color: 'var(--color-slate)' }}
+                >
+                  {group.org}
+                </p>
+                <ul>
+                  {group.items.map((item) => (
+                    <motion.li
+                      key={item.name}
+                      className="relative flex items-baseline justify-between gap-4 py-3 border-t rule first:border-t-0 cursor-default overflow-hidden"
+                      whileHover="hovered"
+                      initial="rest"
+                    >
+                      {/* Amber wash on hover */}
+                      <motion.div
+                        aria-hidden
+                        className="absolute inset-0 pointer-events-none"
+                        style={{ backgroundColor: 'var(--color-amber)' }}
+                        variants={{ rest: { opacity: 0 }, hovered: { opacity: 0.055 } }}
+                        transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
+                      />
+                      {/* Left accent bar */}
+                      <motion.div
+                        aria-hidden
+                        className="absolute left-0 top-0 bottom-0 w-0.5 pointer-events-none"
+                        style={{ backgroundColor: 'var(--color-amber)' }}
+                        variants={{ rest: { scaleY: 0, originY: 0 }, hovered: { scaleY: 1, originY: 0 } }}
+                        transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
+                      />
+                      <motion.span
+                        className="relative pl-3 text-[15px] tracking-[-0.01em] font-medium"
+                        variants={{ rest: { x: 0 }, hovered: { x: 3 } }}
+                        transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
+                      >
+                        {item.name}
+                      </motion.span>
+                      <motion.span
+                        className="relative text-[13px] text-right shrink-0 tabular-nums"
+                        style={{ color: 'var(--color-slate)' }}
+                        variants={{ rest: { opacity: 0.65 }, hovered: { opacity: 1 } }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {item.years}
+                      </motion.span>
+                    </motion.li>
+                  ))}
+                </ul>
               </Reveal>
             ))}
-          </ul>
+          </div>
         </div>
       </section>
 
