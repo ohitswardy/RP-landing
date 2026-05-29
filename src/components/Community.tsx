@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 export default function Community() {
   return (
     <section className="bg-paper">
-      <div className="container-fluid py-24 md:py-32">
+      <div className="container-fluid pt-10 pb-24 md:pt-12 md:pb-32">
         <div className="grid grid-cols-12 gap-x-6 gap-y-10 items-center">
           <Reveal className="col-span-12 lg:col-span-5 lg:col-start-1 order-2 lg:order-1">
             <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.1] tracking-[-0.02em] max-w-[20ch] text-ink">

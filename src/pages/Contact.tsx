@@ -37,7 +37,7 @@ export default function Contact() {
         }}
       />
 
-      <section className="bg-paper">
+      <section id="enquiry" className="bg-paper scroll-mt-16">
         <div className="container-fluid py-24 md:py-32">
           <div className="grid grid-cols-12 gap-x-6 gap-y-16">
             <Reveal className="col-span-12 lg:col-span-7 lg:pr-12 lg:border-r rule">
@@ -95,7 +95,7 @@ export default function Contact() {
               )}
             </Reveal>
 
-            <div className="col-span-12 lg:col-span-5">
+            <div id="compliance" className="col-span-12 lg:col-span-5 scroll-mt-16">
               <div className="eyebrow mb-8">Direct desks</div>
               <ul className="border-t rule">
                 {desks.map(([k, v]) => (
@@ -110,7 +110,7 @@ export default function Contact() {
         </div>
       </section>
 
-      <section className="bg-bone">
+      <section id="offices" className="bg-bone scroll-mt-16">
         <div className="container-fluid py-24 md:py-32">
           <Reveal className="max-w-3xl mb-12">
             <div className="eyebrow mb-6">Offices</div>

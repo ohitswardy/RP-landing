@@ -67,9 +67,7 @@ export default function Services() {
     return (
       <>
         <PageHeader
-          eyebrow="Practices"
-          title="Four practices, one mandate."
-          dek="Each practice is run by senior partners with two decades of specialization. The work compounds; the client benefits."
+          title="Our Services"
           bgImage="/Services Hero.png"
         />
         <section className="bg-paper">
@@ -80,7 +78,6 @@ export default function Services() {
                 return (
                   <Reveal key={k} delay={i * 0.06} className="border-r border-b rule p-10 md:p-12 hover:bg-bone transition-colors duration-500 group">
                     <Link to={`/services/${k}`} className="block">
-                      <div className="eyebrow mb-8">{d.eyebrow}</div>
                       <h3 className="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.08] tracking-[-0.022em] font-medium">
                         {d.title}
                       </h3>
@@ -109,7 +106,7 @@ export default function Services() {
         <div className="container-fluid py-24 md:py-32">
           <div className="grid grid-cols-12 gap-x-6 gap-y-12">
             <Reveal className="col-span-12 lg:col-span-4">
-              <div className="eyebrow mb-6">Pillars</div>
+              <div className="eyebrow mb-6">Service</div>
               <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.08] tracking-[-0.02em]">
                 What the practice delivers.
               </h2>

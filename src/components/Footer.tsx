@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 
 const cols = [
   { h: 'Quick links', items: [['Our Services', '/services'], ['Our Insights', '/insights'], ['About', '/about'], ['Careers', '/contact'], ['Investor Relations', '/contact']] },
-  { h: 'Company',     items: [['Culture & Growth', '/about'], ['Community', '/about'], ['Sustainability', '/about'], ['Press Releases', '/insights'], ['Events', '/contact']] },
   { h: 'Client Login',items: [['Research Portal', '/login'], ['Prime Brokerage', '/login'], ['Regis Access', '/login'], ['Wealth Management', '/login']] },
 ] as const;
 
@@ -57,8 +56,6 @@ export default function Footer() {
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <Link to="/contact" className="hover:text-paper">Terms & Conditions</Link>
             <Link to="/contact" className="hover:text-paper">Privacy & Cookies</Link>
-            <Link to="/contact" className="hover:text-paper">Regulatory Disclosures</Link>
-            <Link to="/contact" className="hover:text-paper">Accessibility</Link>
           </div>
         </div>
       </div>

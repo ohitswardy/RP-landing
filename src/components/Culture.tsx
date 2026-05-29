@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 export default function Culture() {
   return (
     <section className="bg-paper">
-      <div className="container-fluid py-24 md:py-32">
+      <div className="container-fluid pt-24 pb-10 md:pt-32 md:pb-12">
         <div className="grid grid-cols-12 gap-x-6 gap-y-10 items-stretch">
           {/* Photo — trading floor */}
           <Reveal className="col-span-12 lg:col-span-7">

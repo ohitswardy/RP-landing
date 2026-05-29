@@ -122,30 +122,14 @@ const MENUS: Record<string, MenuDef> = {
     },
     columns: [
       {
-        heading: 'Research',
+        heading: 'What We Do',
         links: [
-          { label: 'Research Advisory',    desc: 'Single-name coverage across 120+ PSE names.',    href: '/services/research' },
-          { label: 'Sector Deep-Dives',    desc: 'Banks, property, consumer, power, TMT.',         href: '/services/research' },
-          { label: 'Macro & Strategy',     desc: 'BSP, FX, fiscal — translated into positioning.', href: '/services/research' },
-          { label: 'Bespoke Mandates',     desc: 'Confidential commissioned research.',            href: '/services/research' },
-        ],
-      },
-      {
-        heading: 'Markets',
-        links: [
-          { label: 'Sales Advisory',       desc: 'High-touch institutional dealing desk.',         href: '/services/sales' },
-          { label: 'Trading & Execution',  desc: 'Block, agency, and program on the PSE.',        href: '/services/trading' },
-          { label: 'Algos & Program',      desc: 'VWAP, TWAP, IS trajectories.',                  href: '/services/trading' },
-          { label: 'Cross-Border',         desc: 'DvP, omnibus, and segregated custody.',          href: '/services/trading' },
-        ],
-      },
-      {
-        heading: 'Access',
-        links: [
-          { label: 'Corporate Access',     desc: 'Conferences, NDRs, site visits.',               href: '/services/corporate' },
-          { label: 'Manila Conference',    desc: '60+ issuers. 200+ investors annually.',         href: '/services/corporate' },
-          { label: 'C-Suite NDRs',         desc: 'Asia, US, and Europe roadshows.',               href: '/services/corporate' },
-          { label: 'Thematic Days',        desc: 'Banks, infra, ESG-themed calendars.',           href: '/services/corporate' },
+          { label: 'Research Advisory',    desc: 'Original equity research across 120+ PSE names.',      href: '/services/research' },
+          { label: 'Sales Advisory',       desc: 'High-touch institutional sales and idea generation.',  href: '/services/sales' },
+          { label: 'Trading & Execution',  desc: 'Block, agency, and algorithmic execution on the PSE.', href: '/services/trading' },
+          { label: 'Corporate Access',     desc: 'Conferences, NDRs, and C-suite engagement.',           href: '/services/corporate' },
+          { label: 'Capital Markets',      desc: 'Equity issuance, follow-ons, and placements.',         href: '/services' },
+          { label: 'Advisory',             desc: 'Strategic and corporate finance counsel.',              href: '/services' },
         ],
       },
     ],
@@ -160,30 +144,10 @@ const MENUS: Record<string, MenuDef> = {
     },
     columns: [
       {
-        heading: 'Latest',
+        heading: 'Insights',
         links: [
-          { label: 'Beyond the rate cycle',  desc: 'Philippine consumption as the durable trade.', href: '/insights' },
-          { label: 'NIMs have peaked',       desc: 'What survives the compression.',               href: '/insights' },
-          { label: "BSP's quiet pivot",      desc: 'Five charts on the policy shift.',             href: '/insights' },
-          { label: 'Office vacancy bottoms', desc: 'Why the next leg is selective.',               href: '/insights' },
-        ],
-      },
-      {
-        heading: 'Sectors',
-        links: [
-          { label: 'Macro & Strategy',       href: '/insights' },
-          { label: 'Philippine Banks',       href: '/insights' },
-          { label: 'Property & Infrastructure', href: '/insights' },
-          { label: 'Consumer & Retail',      href: '/insights' },
-          { label: 'Power & Utilities',      href: '/insights' },
-        ],
-      },
-      {
-        heading: 'Client Access',
-        links: [
-          { label: 'Research Portal',        desc: 'Full archive for institutional clients.', href: '/login' },
-          { label: 'Morning Call Replays',   desc: 'Daily briefings on demand.',             href: '/login' },
-          { label: 'Client Login',           href: '/login' },
+          { label: 'All Research',          desc: 'Full archive of published work.',                href: '/insights' },
+          { label: 'Client Login',          desc: 'Access the full research portal.',               href: '/login' },
         ],
       },
     ],
@@ -198,20 +162,11 @@ const MENUS: Record<string, MenuDef> = {
     },
     columns: [
       {
-        heading: 'The Firm',
+        heading: 'About',
         links: [
-          { label: 'Overview',              desc: 'Founded 1999. PSE member firm.',              href: '/about' },
-          { label: 'Heritage & Timeline',   desc: 'Twenty-five years of milestones.',            href: '/about' },
-          { label: 'Awards & Rankings',     desc: 'Asiamoney, II, FinanceAsia recognition.',    href: '/about' },
-        ],
-      },
-      {
-        heading: 'People',
-        links: [
-          { label: 'Leadership',            desc: 'Senior partners who run the desk.',           href: '/about' },
-          { label: 'Research Team',         href: '/about' },
-          { label: 'Sales & Trading',       href: '/about' },
-          { label: 'Careers',               href: '/contact' },
+          { label: 'Our Heritage',          desc: 'Founded 1999. Twenty-five years of milestones.',   href: '/about#heritage' },
+          { label: 'Leadership',            desc: 'Senior partners who run the desk.',                href: '/about#leadership' },
+          { label: 'Awards & Rankings',     desc: 'Asiamoney, II, and FinanceAsia recognition.',     href: '/about#awards' },
         ],
       },
     ],
@@ -226,19 +181,11 @@ const MENUS: Record<string, MenuDef> = {
     },
     columns: [
       {
-        heading: 'Engage',
+        heading: 'Get in Touch',
         links: [
-          { label: 'Request a Meeting',     desc: 'Set up a call or bespoke roadshow.',          href: '/contact' },
-          { label: 'Investor Relations',    desc: 'For equity issuers and IR teams.',            href: '/contact' },
-          { label: 'Research Enquiries',    desc: 'Commission bespoke research mandates.',       href: '/contact' },
-        ],
-      },
-      {
-        heading: 'Compliance',
-        links: [
-          { label: 'Research Portal Login', href: '/login' },
-          { label: 'Regulatory Disclosures', href: '/contact' },
-          { label: 'Legal & Compliance',    href: '/contact' },
+          { label: 'Send an Enquiry',       desc: 'Qualified institutional inquiries welcome.',      href: '/contact#enquiry' },
+          { label: 'Our Offices',           desc: 'Makati HQ and regional locations.',               href: '/contact#offices' },
+          { label: 'Compliance & KYC',      desc: 'Regulatory and compliance contact.',              href: '/contact#compliance' },
         ],
       },
     ],
@@ -258,7 +205,9 @@ export default function Navbar() {
   const [open, setOpen] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
+  const [menuLeft, setMenuLeft] = useState(0);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navItemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const loc = useLocation();
 
   useEffect(() => { setOpen(null); setMobileOpen(false); }, [loc.pathname]);
@@ -271,12 +220,12 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-9 z-40 bg-paper/95 backdrop-blur" onMouseLeave={scheduleClose}>
+    <header className="sticky top-0 z-40" style={{ background: '#ffffff' }} onMouseLeave={scheduleClose}>
       {/* ── Main bar ── */}
       <div className="border-b rule">
         <div className="container-fluid flex items-center justify-between h-16">
           <Link to="/" className="flex items-center shrink-0" onClick={() => setOpen(null)}>
-            <img src="/RegisFULL.png" alt="Regis Partners" style={{ height: '56px', width: 'auto' }} draggable={false} />
+            <img src="/Banner.png" alt="Regis Partners" style={{ height: '56px', width: 'auto' }} draggable={false} />
           </Link>
 
           {/* Desktop nav */}
@@ -287,7 +236,18 @@ export default function Navbar() {
                 <Link
                   key={n.key}
                   to={n.href}
-                  onMouseEnter={() => { cancelClose(); setOpen(n.key); }}
+                  ref={(el) => { navItemRefs.current[n.key] = el; }}
+                  onMouseEnter={() => {
+                    cancelClose();
+                    setOpen(n.key);
+                    const el = navItemRefs.current[n.key];
+                    if (el) {
+                      const rect = el.getBoundingClientRect();
+                      const center = rect.left + rect.width / 2;
+                      const menuWidth = window.innerWidth * 0.4;
+                      setMenuLeft(Math.max(0, Math.min(center - menuWidth / 2, window.innerWidth - menuWidth)));
+                    }
+                  }}
                   onClick={() => setOpen(null)}
                   className="relative flex items-center gap-1.5 px-4 h-16 text-[13.5px] tracking-[-0.005em] transition-colors"
                   style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-slate)' }}
@@ -346,9 +306,10 @@ export default function Navbar() {
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.22, ease }}
             onMouseEnter={cancelClose}
-            className="hidden md:block absolute left-0 right-0 shadow-2xl"
+            className="hidden md:block absolute shadow-2xl w-[40%]"
             style={{
-              background: 'var(--color-paper)',
+              left: menuLeft,
+              background: '#ffffff',
               borderBottom: '1px solid color-mix(in oklab, var(--color-ink) 10%, transparent)',
             }}
           >
@@ -479,7 +440,7 @@ export default function Navbar() {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.35, ease }}
-            className="md:hidden overflow-hidden bg-paper border-t rule"
+            className="md:hidden overflow-hidden border-t rule" style={{ background: '#ffffff' }}
           >
             <div className="container-fluid py-4 flex flex-col">
               {NAV.map((n) => (

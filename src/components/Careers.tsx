@@ -3,8 +3,16 @@ import { Link } from 'react-router-dom';
 
 export default function Careers() {
   return (
-    <section className="bg-navy text-paper">
-      <div className="container-fluid py-20 md:py-28">
+    <section
+      className="relative text-paper overflow-hidden"
+      style={{
+        backgroundImage: 'url(/CareersBG.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      <div className="absolute inset-0 bg-navy/75" />
+      <div className="relative container-fluid py-20 md:py-28">
         <div className="grid grid-cols-12 gap-x-6 gap-y-8 items-end">
           <Reveal className="col-span-12 lg:col-span-7">
             <h2 className="text-[clamp(1.8rem,3.4vw,2.8rem)] leading-[1.08] tracking-[-0.02em]">

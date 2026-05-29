@@ -7,13 +7,13 @@ export default function Newsletter() {
   const [sent, setSent] = useState(false);
 
   return (
-    <section className="bg-navy-deep text-paper border-t rule-navy">
+    <section className="bg-white text-navy-deep border-t border-gray-200">
       <div className="container-fluid py-20 md:py-28 text-center">
         <Reveal>
           <h2 className="text-[clamp(1.8rem,3.4vw,2.8rem)] leading-[1.08] tracking-[-0.02em]">
             Stay current with updates.
           </h2>
-          <p className="mt-5 max-w-[48ch] mx-auto text-paper/65 text-[15px] leading-relaxed">
+          <p className="mt-5 max-w-[48ch] mx-auto text-navy-deep/60 text-[15px] leading-relaxed">
             Subscribe to receive selected research, market commentary, and
             event invitations from the Regis desk.
           </p>
@@ -28,7 +28,7 @@ export default function Newsletter() {
           ) : (
             <motion.form
               onSubmit={(e) => { e.preventDefault(); if (email) setSent(true); }}
-              className="mt-10 max-w-md mx-auto flex border rule-navy bg-navy"
+              className="mt-10 max-w-md mx-auto flex border border-gray-300 bg-white"
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               transition={{ duration: 0.6 }}
@@ -38,7 +38,7 @@ export default function Newsletter() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Your email address"
-                className="flex-1 bg-transparent px-5 py-4 text-paper text-[14px] outline-none placeholder:text-paper/35"
+                className="flex-1 bg-transparent px-5 py-4 text-navy-deep text-[14px] outline-none placeholder:text-navy-deep/35"
               />
               <button
                 type="submit"
@@ -49,7 +49,7 @@ export default function Newsletter() {
               </button>
             </motion.form>
           )}
-          <p className="mt-5 text-paper/40 text-[12px]">For institutional and qualified investors only. Unsubscribe anytime.</p>
+          <p className="mt-5 text-navy-deep/40 text-[12px]">For institutional and qualified investors only. Unsubscribe anytime.</p>
         </Reveal>
       </div>
     </section>
