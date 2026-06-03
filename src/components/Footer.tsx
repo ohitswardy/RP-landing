@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import LegalModal, { type ModalType } from './LegalModal';
 
 const cols = [
-  { h: 'Quick links', items: [['Our Services', '/services'], ['Our Insights', '/insights'], ['About', '/about'], ['Careers', '/contact'], ['Investor Relations', '/contact']] },
+  { h: 'Quick links', items: [['Our Services', '/services'], ['Our Insights', '/insights'], ['About', '/about'], ['Contact Us', '/contact']] },
   { h: 'Client Login',items: [['Research Portal', '/login'], ['Prime Brokerage', '/login'], ['Regis Access', '/login'], ['Wealth Management', '/login']] },
 ] as const;
 

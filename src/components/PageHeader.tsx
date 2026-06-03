@@ -1,37 +1,63 @@
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
 
 const ease = [0.25, 1, 0.5, 1] as const;
 
 export default function PageHeader({
-  eyebrow, title, italic, dek, bgImage, overlayStyle,
+  eyebrow, title, italic, dek, bgImage, bgImages, overlayStyle,
 }: {
-  eyebrow: string; title: string; italic?: string; dek?: string; bgImage?: string; overlayStyle?: React.CSSProperties;
+  eyebrow?: string; title: string; italic?: string; dek?: string; bgImage?: string; bgImages?: string[]; overlayStyle?: React.CSSProperties;
 }) {
+  const slides = bgImages && bgImages.length > 1 ? bgImages : bgImage ? [bgImage] : [];
+  const isSlideshow = slides.length > 1;
+
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (!isSlideshow) return;
+    const id = setInterval(() => setCurrent(c => (c + 1) % slides.length), 2500);
+    return () => clearInterval(id);
+  }, [isSlideshow, slides.length]);
+
   return (
-    <section className={`relative text-paper overflow-hidden ${bgImage ? '' : 'bg-blueprint'}`}>
-      {bgImage && (
+    <section className={`relative text-paper overflow-hidden ${slides.length > 0 ? '' : 'bg-blueprint'}`}>
+      {slides.length > 0 && (
         <>
-          <img
-            src={bgImage}
-            alt=""
-            aria-hidden
-            className="absolute inset-0 w-full h-full object-cover object-center"
-          />
+          {isSlideshow ? slides.map((src, i) => (
+            <motion.img
+              key={src}
+              src={src}
+              alt=""
+              aria-hidden
+              animate={{ opacity: i === current ? 1 : 0 }}
+              transition={{ duration: 1.4, ease: 'easeInOut' }}
+              className="absolute inset-0 w-full h-full object-cover object-center"
+              style={{ zIndex: i === current ? 1 : 0 }}
+            />
+          )) : (
+            <img
+              src={slides[0]}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 w-full h-full object-cover object-center"
+            />
+          )}
           <div
             aria-hidden
             className="absolute inset-0"
-            style={overlayStyle ?? { background: 'linear-gradient(to top, oklch(0.14 0.040 260 / 0.88) 0%, oklch(0.14 0.040 260 / 0.70) 50%, oklch(0.14 0.040 260 / 0.55) 100%)' }}
+            style={{ ...( overlayStyle ?? { background: 'linear-gradient(to top, oklch(0.14 0.040 260 / 0.88) 0%, oklch(0.14 0.040 260 / 0.70) 50%, oklch(0.14 0.040 260 / 0.55) 100%)' }), zIndex: 2 }}
           />
+
         </>
       )}
-      {!bgImage && (
+      {slides.length === 0 && (
         <div
           aria-hidden
           className="absolute -left-40 -top-40 w-[700px] h-[700px] rounded-full pointer-events-none opacity-[0.18]"
           style={{ background: 'radial-gradient(closest-side, var(--color-amber) 0%, transparent 70%)' }}
         />
       )}
-      <div className="container-fluid relative pt-20 md:pt-28 pb-20 md:pb-28">
+      <div className="container-fluid relative pt-20 md:pt-28 pb-20 md:pb-28" style={{ zIndex: 4 }}>
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}

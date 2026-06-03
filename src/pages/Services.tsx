@@ -52,11 +52,11 @@ const data = {
 
 type Key = keyof typeof data;
 
-const heroImages: Record<Key, string> = {
-  research:  '/Services1.jpg',
-  sales:     '/Services2.jpg',
-  trading:   '/Services3.jpg',
-  corporate: '/Services4.jpg',
+const heroImages: Record<Key, string | string[]> = {
+  research:  ['/Services1.jpg', '/Service1.1.jpg', '/service1.2.jpg'],
+  sales:     ['/Services2.jpg', '/Service 2.1.jpg'],
+  trading:   ['/Services3.jpg', '/Service 3.1.jpg', '/Service 3.2.jpg'],
+  corporate: ['/Services4.jpg', '/Services 4.1.jpg', '/Service 4.2.jpg'],
 };
 
 export default function Services() {
@@ -99,9 +99,12 @@ export default function Services() {
   }
 
   const d = data[key];
+  const hImg = heroImages[key];
+  const bgImages = Array.isArray(hImg) ? hImg : undefined;
+  const bgImage  = Array.isArray(hImg) ? undefined : hImg;
   return (
     <>
-      <PageHeader eyebrow={d.eyebrow} title={d.title} dek={d.dek} bgImage={heroImages[key]} />
+      <PageHeader eyebrow="Service" title={d.title} dek={d.dek} bgImage={bgImage} bgImages={bgImages} />
       <section className="bg-paper">
         <div className="container-fluid py-24 md:py-32">
           <div className="grid grid-cols-12 gap-x-6 gap-y-12">

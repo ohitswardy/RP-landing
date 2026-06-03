@@ -1,7 +1,13 @@
 import { useRef, useState } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import emailjs from '@emailjs/browser';
 import Reveal from '../components/Reveal';
 import Newsletter from '../components/Newsletter';
+
+const EMAILJS_PUBLIC_KEY      = import.meta.env.VITE_EMAILJS_PUBLIC_KEY      as string;
+const EMAILJS_SERVICE_ID      = import.meta.env.VITE_EMAILJS_SERVICE_ID      as string;
+const EMAILJS_ADMIN_TEMPLATE  = import.meta.env.VITE_EMAILJS_ADMIN_TEMPLATE_ID as string;
+const EMAILJS_USER_TEMPLATE   = import.meta.env.VITE_EMAILJS_USER_TEMPLATE_ID  as string;
 
 /* ─────────────────────────────────────────────────────────────
    Contact Hero — cinematic split-panel with sunray image
@@ -209,9 +215,47 @@ function ContactHero() {
   );
 }
 
+type SubmitStatus = 'idle' | 'sending' | 'success' | 'error';
+
 export default function Contact() {
   const [form, setForm] = useState({ name: '', firm: '', email: '', interest: 'Research', message: '' });
-  const [sent, setSent] = useState(false);
+  const [status, setStatus] = useState<SubmitStatus>('idle');
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setStatus('sending');
+
+    // All fields sent to both templates — ensures no 422 from missing variables
+    // regardless of which {{variable}} names you used in the EmailJS dashboard.
+    const params = {
+      // Admin template variables
+      from_name:  form.name,
+      from_firm:  form.firm || '—',
+      from_email: form.email,
+      interest:   form.interest,
+      message:    form.message,
+      // User confirmation template variables
+      to_name:    form.name,
+      to_email:   form.email,
+      // Aliases — cover common EmailJS default variable names
+      name:       form.name,
+      email:      form.email,
+      firm:       form.firm || '—',
+      reply_to:   form.email,
+    };
+
+    try {
+      // Fire both sends concurrently — admin notification + user confirmation
+      await Promise.all([
+        emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_ADMIN_TEMPLATE, params, EMAILJS_PUBLIC_KEY),
+        emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_USER_TEMPLATE,  params, EMAILJS_PUBLIC_KEY),
+      ]);
+      setStatus('success');
+    } catch (err) {
+      console.error('[EmailJS] Send failed:', err);
+      setStatus('error');
+    }
+  };
 
   return (
     <>
@@ -247,7 +291,7 @@ export default function Contact() {
 
             {/* ── Right: form panel ───────────────────────────────── */}
             <Reveal className="col-span-12 lg:col-span-8 lg:pl-16 lg:border-l rule">
-              {sent ? (
+              {status === 'success' ? (
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -265,16 +309,14 @@ export default function Contact() {
                     Thank you.
                   </h3>
                   <p className="text-slate leading-relaxed" style={{ maxWidth: '52ch' }}>
-                    Your inquiry has been received. A partner will reach out
-                    within one business day. For urgent matters, call the
-                    trading desk on +63&nbsp;2&nbsp;8848&nbsp;0000.
+                    Your inquiry has been received. A confirmation has been sent
+                    to <span className="text-ink">{form.email}</span>. A partner
+                    will reach out within one business day. For urgent matters,
+                    call the trading desk on +63&nbsp;2&nbsp;8848&nbsp;0000.
                   </p>
                 </motion.div>
               ) : (
-                <form
-                  onSubmit={(e) => { e.preventDefault(); setSent(true); }}
-                  className="space-y-10"
-                >
+                <form onSubmit={handleSubmit} className="space-y-10">
                   <Row>
                     <Input
                       label="Name"
@@ -324,14 +366,51 @@ export default function Contact() {
                     onChange={(v) => setForm({ ...form, message: v })}
                   />
 
-                  <button type="submit" className="btn-dark group">
-                    Send inquiry
-                    <span
-                      aria-hidden
-                      className="transition-transform duration-200 group-hover:translate-x-0.5"
+                  {/* Error feedback */}
+                  {status === 'error' && (
+                    <motion.p
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="text-[13px] leading-relaxed"
+                      style={{ color: 'oklch(0.55 0.18 25)' }}
                     >
-                      →
-                    </span>
+                      Something went wrong — please try again or email us
+                      directly at{' '}
+                      <a
+                        href="mailto:info@regis.ph"
+                        className="underline underline-offset-2"
+                      >
+                        info@regis.ph
+                      </a>
+                      .
+                    </motion.p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={status === 'sending'}
+                    className="btn-dark group disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {status === 'sending' ? (
+                      <>
+                        <span
+                          aria-hidden
+                          className="inline-block w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin"
+                        />
+                        Sending…
+                      </>
+                    ) : (
+                      <>
+                        Send inquiry
+                        <span
+                          aria-hidden
+                          className="transition-transform duration-200 group-hover:translate-x-0.5"
+                        >
+                          →
+                        </span>
+                      </>
+                    )}
                   </button>
                 </form>
               )}

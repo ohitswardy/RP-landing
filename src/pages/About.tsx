@@ -798,7 +798,7 @@ export default function About() {
           <Reveal className="max-w-3xl mb-12">
             <div className="eyebrow mb-6">Recognition</div>
             <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.05] tracking-[-0.02em]">
-              Selected awards & rankings.
+              Awards and accolades from industry peers and institutions.
             </h2>
           </Reveal>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12">

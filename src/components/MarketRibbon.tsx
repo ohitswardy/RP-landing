@@ -1,9 +1,21 @@
-import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { useTicker } from '../hooks/useTicker';
 
 export default function MarketRibbon() {
   const { entries, status } = useTicker();
-  const row = [...entries, ...entries];
+  // Four copies: ensures content is always wider than any viewport so
+  // the seamless -25% CSS loop never shows empty space.
+  const row = [...entries, ...entries, ...entries, ...entries];
+
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  // Mobile: 25 s (fast), Desktop: 60 s
+  const duration = isMobile ? 25 : 60;
 
   const isLive = status === 'live';
   const dotColor = isLive ? 'var(--color-signal)' : 'var(--color-amber)';
@@ -25,11 +37,22 @@ export default function MarketRibbon() {
             style={{ background: 'linear-gradient(to left, var(--color-navy-deep), transparent)' }}
           />
 
-          <motion.div
-            key={entries.map((e) => e.sym + e.last).join('|')}
+          {/* Inject the keyframe once via a <style> tag scoped to this element */}
+          <style>{`
+            @keyframes marquee-scroll {
+              from { transform: translate3d(0, 0, 0); }
+              to   { transform: translate3d(-25%, 0, 0); }
+            }
+          `}</style>
+
+          <div
             className="flex items-center gap-8 whitespace-nowrap h-full px-6 mono text-[11px] tracking-[0.04em]"
-            animate={{ x: ['0%', '-50%'] }}
-            transition={{ duration: 90, repeat: Infinity, ease: 'linear' }}
+            style={{
+              animation: `marquee-scroll ${duration}s linear infinite`,
+              willChange: 'transform',
+              backfaceVisibility: 'hidden',
+              WebkitFontSmoothing: 'subpixel-antialiased',
+            }}
           >
             {row.map((t, i) => (
               <span key={i} className="inline-flex items-center gap-2">
@@ -51,7 +74,7 @@ export default function MarketRibbon() {
                 <span className="text-paper/15 px-2" aria-hidden>/</span>
               </span>
             ))}
-          </motion.div>
+          </div>
         </div>
 
         {/* Live indicator */}
