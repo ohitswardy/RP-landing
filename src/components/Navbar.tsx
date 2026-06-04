@@ -85,12 +85,28 @@ export default function Navbar() {
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
   const [menuLeft, setMenuLeft] = useState(0);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const navItemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const navItemRefs = useRef<Record<string, HTMLElement | null>>({});
+  const headerRef = useRef<HTMLElement | null>(null);
+  const pointerIsTouch = useRef(false);
   const loc = useLocation();
 
   useEffect(() => { setOpen(null); setMobileOpen(false); }, [loc.pathname]);
 
+  // Close mega menu when tapping outside on touch devices
+  useEffect(() => {
+    if (!open) return;
+    const handleTouchOutside = (e: TouchEvent) => {
+      if (headerRef.current && !headerRef.current.contains(e.target as Node)) {
+        setOpen(null);
+      }
+    };
+    document.addEventListener('touchstart', handleTouchOutside, { passive: true });
+    return () => document.removeEventListener('touchstart', handleTouchOutside);
+  }, [open]);
+
   const scheduleClose = () => {
+    // Skip hover-close when the last interaction was a touch — click-outside handles it
+    if (pointerIsTouch.current) return;
     closeTimer.current = setTimeout(() => setOpen(null), 150);
   };
   const cancelClose = () => {
@@ -98,7 +114,7 @@ export default function Navbar() {
   };
 
   return (
-    <header id="site-navbar" className="sticky top-9 z-40" style={{ background: '#ffffff' }} onMouseLeave={scheduleClose}>
+    <header id="site-navbar" ref={headerRef} className="sticky top-9 z-40" style={{ background: '#ffffff' }} onPointerDown={(e) => { pointerIsTouch.current = e.pointerType === 'touch'; }} onMouseLeave={scheduleClose}>
       {/* ── Main bar ── */}
       <div className="border-b rule">
         <div className="container-fluid flex items-center justify-between h-16">
@@ -110,33 +126,46 @@ export default function Navbar() {
           <nav className="hidden md:flex items-center">
             {NAV.map((n) => {
               const isActive = open === n.key;
+              const openMenu = () => {
+                cancelClose();
+                const el = navItemRefs.current[n.key];
+                if (el) {
+                  const rect = el.getBoundingClientRect();
+                  const center = rect.left + rect.width / 2;
+                  const menuWidth = window.innerWidth * 0.4;
+                  setMenuLeft(Math.max(0, Math.min(center - menuWidth / 2, window.innerWidth - menuWidth)));
+                }
+                setOpen(n.key);
+              };
               return (
-                <Link
+                <div
                   key={n.key}
-                  to={n.href}
                   ref={(el) => { navItemRefs.current[n.key] = el; }}
-                  onMouseEnter={() => {
-                    cancelClose();
-                    setOpen(n.key);
-                    const el = navItemRefs.current[n.key];
-                    if (el) {
-                      const rect = el.getBoundingClientRect();
-                      const center = rect.left + rect.width / 2;
-                      const menuWidth = window.innerWidth * 0.4;
-                      setMenuLeft(Math.max(0, Math.min(center - menuWidth / 2, window.innerWidth - menuWidth)));
-                    }
-                  }}
-                  onClick={() => setOpen(null)}
-                  className="relative flex items-center gap-1.5 px-4 h-16 text-[13.5px] tracking-[-0.005em] transition-colors"
-                  style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-slate)' }}
+                  className="relative flex items-center h-16"
+                  onMouseEnter={openMenu}
                 >
-                  {n.label}
-                  {/* Chevron */}
-                  <svg width="9" height="9" viewBox="0 0 10 10" fill="none"
-                    className="transition-transform duration-250"
-                    style={{ transform: isActive ? 'rotate(180deg)' : 'rotate(0deg)', color: isActive ? 'var(--color-amber)' : 'inherit' }}>
-                    <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  {/* Label — always navigates on click */}
+                  <Link
+                    to={n.href}
+                    onClick={() => setOpen(null)}
+                    className="flex items-center pl-4 h-full text-[13.5px] tracking-[-0.005em] transition-colors"
+                    style={{ color: isActive ? 'var(--color-ink)' : 'var(--color-slate)' }}
+                  >
+                    {n.label}
+                  </Link>
+                  {/* Chevron — separate button so touch can toggle menu without navigating */}
+                  <button
+                    onClick={() => { if (open === n.key) setOpen(null); else openMenu(); }}
+                    aria-label={`${isActive ? 'Close' : 'Open'} ${n.label} menu`}
+                    className="flex items-center justify-center h-full px-4 pl-2"
+                    style={{ color: isActive ? 'var(--color-amber)' : 'var(--color-slate)' }}
+                  >
+                    <svg width="9" height="9" viewBox="0 0 10 10" fill="none"
+                      className="transition-transform duration-250"
+                      style={{ transform: isActive ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                      <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
                   {/* Amber underline */}
                   <motion.span
                     className="absolute bottom-0 left-4 right-4 h-[2px]"
@@ -144,7 +173,7 @@ export default function Navbar() {
                     animate={{ scaleX: isActive ? 1 : 0 }}
                     transition={{ duration: 0.28, ease }}
                   />
-                </Link>
+                </div>
               );
             })}
           </nav>
@@ -300,17 +329,26 @@ export default function Navbar() {
             <div className="container-fluid py-4 flex flex-col">
               {NAV.map((n) => (
                 <div key={n.key} className="border-b rule">
-                  <button
-                    onClick={() => setMobileExpanded(mobileExpanded === n.key ? null : n.key)}
-                    className="w-full flex items-center justify-between py-4 text-left text-lg tracking-[-0.02em]"
-                  >
-                    {n.label}
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none"
-                      className="transition-transform duration-200"
-                      style={{ transform: mobileExpanded === n.key ? 'rotate(180deg)' : 'none' }}>
-                      <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                  <div className="w-full flex items-center justify-between py-4">
+                    <Link
+                      to={n.href}
+                      onClick={() => setMobileOpen(false)}
+                      className="flex-1 text-left text-lg tracking-[-0.02em] text-ink"
+                    >
+                      {n.label}
+                    </Link>
+                    <button
+                      onClick={() => setMobileExpanded(mobileExpanded === n.key ? null : n.key)}
+                      aria-label={`Expand ${n.label}`}
+                      className="p-2 -mr-2"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 10 10" fill="none"
+                        className="transition-transform duration-200"
+                        style={{ transform: mobileExpanded === n.key ? 'rotate(180deg)' : 'none' }}>
+                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
                   <AnimatePresence>
                     {mobileExpanded === n.key && (
                       <motion.div
