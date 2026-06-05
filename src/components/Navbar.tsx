@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import SearchModal, { computeResults, SEARCH_PANEL_WIDTH, TRENDING } from './SearchModal';
 
 const ease = [0.25, 1, 0.5, 1] as const;
 
@@ -23,9 +24,7 @@ const MENUS: Record<string, MenuDef> = {
           { label: 'Research Advisory',    desc: 'Original equity research across 120+ PSE names.',      href: '/services/research' },
           { label: 'Sales Advisory',       desc: 'High-touch institutional sales and idea generation.',  href: '/services/sales' },
           { label: 'Trading & Execution',  desc: 'Block, agency, and algorithmic execution on the PSE.', href: '/services/trading' },
-          { label: 'Corporate Access',     desc: 'Conferences, NDRs, and C-suite engagement.',           href: '/services/corporate' },
-          { label: 'Capital Markets',      desc: 'Equity issuance, follow-ons, and placements.',         href: '/services' },
-          { label: 'Advisory',             desc: 'Strategic and corporate finance counsel.',              href: '/services' },
+          { label: 'Corporate Access',     desc: 'Conferences, NDRs, and C-suite engagement.',           href: '/services/corporate' }
         ],
       },
     ],
@@ -50,7 +49,7 @@ const MENUS: Record<string, MenuDef> = {
         links: [
           { label: 'Our Heritage',          desc: 'Founded 1999. Twenty-five years of milestones.',   href: '/about#heritage' },
           { label: 'Leadership',            desc: 'Senior partners who run the desk.',                href: '/about#leadership' },
-          { label: 'Awards & Rankings',     desc: 'Asiamoney, II, and FinanceAsia recognition.',     href: '/about#awards' },
+          { label: 'Awards',     desc: 'Asiamoney, II, and FinanceAsia recognition.',     href: '/about#awards' },
         ],
       },
     ],
@@ -62,8 +61,7 @@ const MENUS: Record<string, MenuDef> = {
         heading: 'Get in Touch',
         links: [
           { label: 'Send an Enquiry',       desc: 'Qualified institutional inquiries welcome.',      href: '/contact#enquiry' },
-          { label: 'Our Offices',           desc: 'Makati HQ and regional locations.',               href: '/contact#offices' },
-          { label: 'Compliance & KYC',      desc: 'Regulatory and compliance contact.',              href: '/contact#compliance' },
+          { label: 'Contact Us',           desc: 'Address, Contact Numbers, and Email.',               href: '/contact#offices' }
         ],
       },
     ],
@@ -84,11 +82,20 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
   const [menuLeft, setMenuLeft] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [mobileQuery, setMobileQuery] = useState('');
+  const [mobileActiveIndex, setMobileActiveIndex] = useState(0);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navItemRefs = useRef<Record<string, HTMLElement | null>>({});
   const headerRef = useRef<HTMLElement | null>(null);
   const pointerIsTouch = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const mobileInputRef = useRef<HTMLInputElement>(null);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
   const loc = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => { setOpen(null); setMobileOpen(false); }, [loc.pathname]);
 
@@ -103,6 +110,67 @@ export default function Navbar() {
     document.addEventListener('touchstart', handleTouchOutside, { passive: true });
     return () => document.removeEventListener('touchstart', handleTouchOutside);
   }, [open]);
+
+  // Reset mobile search when drawer closes
+  useEffect(() => {
+    if (!mobileOpen) {
+      setMobileQuery('');
+      setMobileActiveIndex(0);
+    }
+  }, [mobileOpen]);
+
+  const mobileResults = useMemo(() => computeResults(mobileQuery), [mobileQuery]);
+
+  // Focus + reset on open
+  useEffect(() => {
+    if (searchOpen) {
+      setQuery('');
+      setActiveIndex(0);
+      const t = setTimeout(() => inputRef.current?.focus(), 60);
+      return () => clearTimeout(t);
+    }
+  }, [searchOpen]);
+
+  // Ctrl+K / ⌘K + Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+      if (e.key === 'Escape') setSearchOpen(false);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  // Click-outside to close search
+  useEffect(() => {
+    if (!searchOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [searchOpen]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const results = computeResults(query);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && results.length > 0) {
+      e.preventDefault();
+      const href = results[activeIndex]?.href ?? results[0].href;
+      setSearchOpen(false);
+      navigate(href);
+    }
+  };
 
   const scheduleClose = () => {
     // Skip hover-close when the last interaction was a touch — click-outside handles it
@@ -180,11 +248,85 @@ export default function Navbar() {
 
           {/* Right cluster */}
           <div className="hidden md:flex items-center gap-5">
-            <button className="text-slate hover:text-ink transition-colors" aria-label="Search">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-              </svg>
-            </button>
+            {/* Search — inline expanding input */}
+            <div ref={searchWrapRef} className="relative self-stretch flex items-center">
+              <AnimatePresence mode="wait">
+                {searchOpen ? (
+                  <motion.div
+                    key="search-input"
+                    initial={{ width: 32, opacity: 0 }}
+                    animate={{ width: SEARCH_PANEL_WIDTH, opacity: 1 }}
+                    exit={{ width: 32, opacity: 0 }}
+                    transition={{ duration: 0.22, ease }}
+                    className="flex items-center gap-2 overflow-hidden"
+                    style={{ borderBottom: '1.5px solid var(--color-amber)' }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" style={{ flexShrink: 0, color: 'var(--color-graphite)' }}>
+                      <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+                    </svg>
+                    <input
+                      ref={inputRef}
+                      value={query}
+                      onChange={(e) => { setQuery(e.target.value); setActiveIndex(0); }}
+                      onKeyDown={handleSearchKeyDown}
+                      placeholder="Search…"
+                      className="flex-1 py-1 text-[13.5px] tracking-[-0.01em] outline-none bg-transparent"
+                      style={{ color: 'var(--color-ink)', minWidth: 0 }}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    {query && (
+                      <button
+                        onClick={() => { setQuery(''); inputRef.current?.focus(); }}
+                        style={{ color: 'var(--color-graphite)', flexShrink: 0 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-ink)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-graphite)')}
+                        aria-label="Clear"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                          <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setSearchOpen(false)}
+                      className="mono text-[9.5px] tracking-[0.12em] uppercase ml-1 transition-colors"
+                      style={{ color: 'var(--color-silver)', flexShrink: 0 }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-graphite)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-silver)')}
+                    >
+                      esc
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.button
+                    key="search-btn"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => setSearchOpen(true)}
+                    className="flex items-center gap-2 text-slate hover:text-ink transition-colors"
+                    aria-label="Search"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+                    </svg>
+                  </motion.button>
+                )}
+              </AnimatePresence>
+
+              {/* Dropdown — anchored below this wrapper */}
+              <SearchModal
+                open={searchOpen}
+                query={query}
+                onQueryChange={(q) => { setQuery(q); setActiveIndex(0); inputRef.current?.focus(); }}
+                activeIndex={activeIndex}
+                onActiveIndex={setActiveIndex}
+                onSelect={(href) => { setSearchOpen(false); navigate(href); }}
+              />
+            </div>
+
             <span className="h-4 w-px bg-ink/15" />
             <Link to="/login" className="mono text-[11px] tracking-[0.18em] uppercase text-slate hover:text-ink transition-colors">
               Client Login
@@ -327,6 +469,120 @@ export default function Navbar() {
             className="md:hidden overflow-hidden border-t rule" style={{ background: '#ffffff' }}
           >
             <div className="container-fluid py-4 flex flex-col">
+
+              {/* ── Mobile Search ── */}
+              <div className="border-b rule pb-5 mb-1">
+                {/* Input */}
+                <div
+                  className="flex items-center gap-2.5 px-3 py-3 rounded-sm"
+                  style={{
+                    background: 'var(--color-bone)',
+                    border: '1px solid color-mix(in oklab, var(--color-ink) 8%, transparent)',
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" style={{ flexShrink: 0, color: 'var(--color-graphite)' }}>
+                    <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    ref={mobileInputRef}
+                    value={mobileQuery}
+                    onChange={(e) => { setMobileQuery(e.target.value); setMobileActiveIndex(0); }}
+                    placeholder="Search…"
+                    className="flex-1 text-[15px] tracking-[-0.01em] outline-none bg-transparent"
+                    style={{ color: 'var(--color-ink)' }}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                  {mobileQuery && (
+                    <button
+                      onClick={() => { setMobileQuery(''); mobileInputRef.current?.focus(); }}
+                      aria-label="Clear search"
+                      style={{ color: 'var(--color-graphite)', flexShrink: 0 }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                {/* Trending / Results / Empty */}
+                <AnimatePresence mode="wait">
+                  {mobileQuery.trim() === '' ? (
+                    <motion.div
+                      key="trending"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="mt-3.5"
+                    >
+                      <div className="mono text-[10px] tracking-[0.18em] uppercase mb-2.5" style={{ color: 'var(--color-graphite)' }}>
+                        Trending
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {TRENDING.map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => { setMobileQuery(t); mobileInputRef.current?.focus(); }}
+                            className="px-2.5 py-1 text-[12px] tracking-[-0.005em] rounded-sm border rule transition-colors duration-150"
+                            style={{ background: 'var(--color-paper)', color: 'var(--color-slate)' }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-ink)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-slate)')}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  ) : mobileResults.length > 0 ? (
+                    <motion.div
+                      key="results"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.18 }}
+                      className="mt-2 max-h-60 overflow-y-auto"
+                    >
+                      {mobileResults.map((r, i) => (
+                        <button
+                          key={r.href + r.title}
+                          onClick={() => { setMobileOpen(false); navigate(r.href); }}
+                          onMouseEnter={() => setMobileActiveIndex(i)}
+                          className="w-full flex items-center justify-between px-2 py-3 text-left rounded-sm transition-colors duration-150"
+                          style={{
+                            background: i === mobileActiveIndex ? 'var(--color-bone)' : 'transparent',
+                            borderBottom: i < mobileResults.length - 1
+                              ? '1px solid color-mix(in oklab, var(--color-ink) 6%, transparent)'
+                              : 'none',
+                          }}
+                        >
+                          <span className="text-[14px] tracking-[-0.01em]" style={{ color: 'var(--color-ink)' }}>
+                            {r.title}
+                          </span>
+                          <span className="mono text-[10px] tracking-[0.12em] uppercase ml-3 shrink-0" style={{ color: 'var(--color-silver)' }}>
+                            {r.category}
+                          </span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="mt-3 text-[13px]"
+                      style={{ color: 'var(--color-graphite)' }}
+                    >
+                      No results for &ldquo;{mobileQuery}&rdquo;
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* ── Nav links ── */}
               {NAV.map((n) => (
                 <div key={n.key} className="border-b rule">
                   <div className="w-full flex items-center justify-between py-4">
@@ -380,6 +636,7 @@ export default function Navbar() {
                   </AnimatePresence>
                 </div>
               ))}
+
               <div className="py-5">
                 <Link to="/login" onClick={() => setMobileOpen(false)} className="mono text-[11px] tracking-[0.18em] uppercase text-slate">
                   Client Login

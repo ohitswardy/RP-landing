@@ -6,7 +6,7 @@ const stats = [
   { k: '25+',  v: 'Years of partnership' },
   { k: '120+', v: 'PSE names under coverage' },
   { k: '300+', v: 'Institutional counterparties' },
-  { k: '₱1T+', v: 'In flow facilitated' },
+  { k: 'PSE', v: 'Trusted since 1999' },
 ];
 
 export default function Hero() {

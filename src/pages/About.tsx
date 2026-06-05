@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import Reveal from '../components/Reveal';
 import Newsletter from '../components/Newsletter';
@@ -744,7 +745,10 @@ function AboutHero() {
 }
 
 function LeadershipSection() {
-  const [activeLabel, setActiveLabel] = useState(teamTabs[0]?.label ?? '');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') ?? undefined;
+  const initial = teamTabs.find((t) => t.id === initialTab) ?? teamTabs[0];
+  const [activeLabel, setActiveLabel] = useState(initial?.label ?? '');
 
   return (
     <>
@@ -754,7 +758,7 @@ function LeadershipSection() {
           The people behind the platform.
         </h2>
       </Reveal>
-      <TeamTabs tabs={teamTabs} onTabChange={setActiveLabel} />
+      <TeamTabs tabs={teamTabs} onTabChange={setActiveLabel} initialTab={initialTab} />
     </>
   );
 }

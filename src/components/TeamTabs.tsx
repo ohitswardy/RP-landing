@@ -13,10 +13,17 @@ export interface TeamTab {
 interface TeamTabsProps {
   tabs: TeamTab[];
   onTabChange?: (label: string) => void;
+  initialTab?: string;
 }
 
-export default function TeamTabs({ tabs, onTabChange }: TeamTabsProps) {
-  const [activeId, setActiveId] = useState(tabs[0]?.id ?? '');
+export default function TeamTabs({ tabs, onTabChange, initialTab }: TeamTabsProps) {
+  const [activeId, setActiveId] = useState(() => {
+    if (initialTab) {
+      const match = tabs.find((t) => t.id === initialTab);
+      if (match) return match.id;
+    }
+    return tabs[0]?.id ?? '';
+  });
   const uid = useId();
 
   const activeTab = tabs.find((t) => t.id === activeId) ?? tabs[0];

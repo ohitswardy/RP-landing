@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 export default function ScrollToTop() {
-  const { pathname, hash } = useLocation();
+  const { pathname, hash, key: locationKey } = useLocation();
 
   useEffect(() => {
     if (!hash) {
@@ -23,7 +23,7 @@ export default function ScrollToTop() {
     attempt();
     const raf = requestAnimationFrame(attempt);
     return () => cancelAnimationFrame(raf);
-  }, [pathname, hash]);
+  }, [pathname, hash, locationKey]);
 
   return null;
 }

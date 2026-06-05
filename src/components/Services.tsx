@@ -6,9 +6,7 @@ const services = [
   { t: 'Research Advisory',   d: 'Original equity research across 120+ PSE names',     to: '/services/research' },
   { t: 'Sales Advisory',      d: 'High-touch institutional sales and idea generation', to: '/services/sales' },
   { t: 'Trading & Execution', d: 'Block, agency, and algorithmic execution on the PSE',to: '/services/trading' },
-  { t: 'Corporate Access',    d: 'Conferences, NDRs, and C-suite engagement',          to: '/services/corporate' },
-  { t: 'Capital Markets',     d: 'Equity issuance, follow-ons, and placements',        to: '/services' },
-  { t: 'Advisory',            d: 'Strategic and corporate finance counsel',            to: '/services' },
+  { t: 'Corporate Access',    d: 'Conferences, NDRs, and C-suite engagement',          to: '/services/corporate' }
 ];
 
 export default function Services() {

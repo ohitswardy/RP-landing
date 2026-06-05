@@ -22,7 +22,7 @@ export default function Culture() {
             <div className="h-full bg-navy-deep text-paper p-10 md:p-14 flex flex-col justify-center">
               <div className="eyebrow eyebrow-paper mb-8">Culture & growth story</div>
               <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.1] tracking-[-0.02em] max-w-[22ch]">
-                From Makati to the institution global allocators call first.
+                From Makati to the premier institution for global allocators.
               </h2>
               <Link
                 to="/about"
