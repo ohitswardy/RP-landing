@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { fmtBytes, fmtDate, type Report } from '../cms/data';
-import { apiBlobUrl } from '../lib/api';
+import { stampedReportBlob } from './download';
 import { trackActivity } from './track';
 import { IconX, IconDownload, IconExternal } from '../cms/icons';
 
 const EASE = [0.25, 1, 0.5, 1] as const;
 
-/** Resolve a report to a browser-usable URL: public file, or a blob from the API. */
+/** Resolve a report to a browser-usable URL. The copy the viewer renders is
+    the stamped copy, so "New tab" and the PDF reader's own save button hand
+    over exactly what the Download button would. */
 function useReportUrl(report: Report | null) {
   const [state, setState] = useState<{ url: string | null; status: 'idle' | 'loading' | 'ready' | 'missing' }>({
     url: null, status: 'idle',
@@ -18,23 +20,15 @@ function useReportUrl(report: Report | null) {
     let objectUrl: string | null = null;
     let alive = true;
 
-    if (report.fileUrl) {
-      setState({ url: report.fileUrl, status: 'ready' });
-      return;
-    }
-
     setState({ url: null, status: 'loading' });
-    void apiBlobUrl(`/reports/${report.id}/file`, 'portal').then((url) => {
-      if (!alive) {
-        if (url) URL.revokeObjectURL(url);
+    void stampedReportBlob(report).then((blob) => {
+      if (!alive) return;
+      if (!blob) {
+        setState({ url: null, status: 'missing' });
         return;
       }
-      if (url) {
-        objectUrl = url;
-        setState({ url, status: 'ready' });
-      } else {
-        setState({ url: null, status: 'missing' });
-      }
+      objectUrl = URL.createObjectURL(blob);
+      setState({ url: objectUrl, status: 'ready' });
     });
 
     return () => {
@@ -104,7 +98,10 @@ export default function ReportViewer({ report, onClose }: { report: Report | nul
                   {report.pages ? <><span className="text-silver">·</span><span className="num">{report.pages}p</span></> : null}
                 </div>
                 <h2 className="truncate text-[16px] font-medium tracking-[-0.01em] text-ink md:text-[18px]">{report.title}</h2>
-                <p className="mono mt-1 text-[11px] tracking-[0.04em] text-graphite">{report.analyst} · {fmtBytes(report.fileSize)}</p>
+                {report.summary && (
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-slate">{report.summary}</p>
+                )}
+                <p className="mono mt-1.5 text-[11px] tracking-[0.04em] text-graphite">{report.analyst} · {fmtBytes(report.fileSize)}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {url && (
@@ -144,7 +141,7 @@ export default function ReportViewer({ report, onClose }: { report: Report | nul
                 <iframe title={report.title} src={`${url}#view=FitH`} className="h-full w-full" />
               ) : status === 'loading' ? (
                 <div className="grid h-full place-items-center">
-                  <span className="mono text-[11px] uppercase tracking-[0.2em] text-graphite">Loading document…</span>
+                  <span className="mono text-[11px] uppercase tracking-[0.2em] text-graphite">Watermarking your copy…</span>
                 </div>
               ) : (
                 <div className="grid h-full place-items-center px-6">

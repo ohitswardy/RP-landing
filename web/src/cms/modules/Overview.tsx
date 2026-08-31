@@ -824,8 +824,7 @@ const rise = {
 const KPI_CELL_BORDERS = [
   '',
   'rule border-t sm:border-t-0 sm:border-l',
-  'rule border-t lg:border-t-0 lg:border-l',
-  'rule border-t lg:border-t-0 sm:border-l',
+  'rule border-t sm:border-t-0 sm:border-l',
 ];
 
 type AccessSnapshot = { users: Account[] };
@@ -866,7 +865,6 @@ export default function Overview() {
     const noteDates = published.map((a) => a.date);
     const reportDates = reports.map((r) => r.date);
     const issueDates = newsletters.map((n) => n.date);
-    const joinDates = subscribers.map((s) => s.joined);
 
     const weekStarts = Array.from(
       { length: WEEKS_SHOWN },
@@ -905,16 +903,13 @@ export default function Overview() {
       notes30: countWithin(noteDates, now, 30, 0),
       reports30: countWithin(reportDates, now, 30, 0),
       issues30: countWithin(issueDates, now, 30, 0),
-      subs30: countWithin(joinDates, now, 30, 0),
       notesWeekly8: weeklyCounts(noteDates, 8, now),
       reportsWeekly8: weeklyCounts(reportDates, 8, now),
       issuesWeekly8: weeklyCounts(issueDates, 8, now),
-      subsWeekly8: weeklyCounts(joinDates, 8, now),
       categories,
       latestIssue,
       liveServices: services.filter((s) => s.live).length,
       visiblePeople: people.filter((p) => p.visible).length,
-      verifiedSubs: subscribers.filter((s) => s.verified).length,
     };
   }, [articles, reports, newsletters, subscribers, services, people, now]);
 
@@ -926,7 +921,7 @@ export default function Overview() {
   const {
     inReview, drafts, queue, mostRead, weekStarts,
     notesWeekly, reportsWeekly, issuesWeekly, shipped30, shippedPrev30,
-    categories, latestIssue, liveServices, visiblePeople, verifiedSubs,
+    categories, latestIssue, liveServices, visiblePeople,
   } = derived;
 
   /* ── Copy ────────────────────────────────────────────────── */
@@ -973,7 +968,6 @@ export default function Overview() {
     { label: 'Published notes', value: derived.published.length, delta30: derived.notes30, weekly: derived.notesWeekly8, to: can('insights.manage') ? '/cms/insights' : undefined, index: 0 },
     { label: 'Research reports', value: reports.length, delta30: derived.reports30, weekly: derived.reportsWeekly8, to: can('reports.manage') ? '/cms/reports' : undefined, index: 1 },
     { label: 'Newsletter issues', value: newsletters.length, delta30: derived.issues30, weekly: derived.issuesWeekly8, to: can('newsletter.manage') ? '/cms/newsletter' : undefined, index: 2 },
-    { label: 'Subscribers', value: subscribers.length, delta30: derived.subs30, weekly: derived.subsWeekly8, to: can('newsletter.manage') ? '/cms/newsletter' : undefined, index: 3 },
   ];
 
   const topCategories = categories.slice(0, 4);
@@ -1015,7 +1009,7 @@ export default function Overview() {
       {/* Instrument row */}
       <motion.section
         variants={rise} initial={reduce ? false : 'hidden'} animate="show" custom={1}
-        className="grid grid-cols-1 border-y rule sm:grid-cols-2 lg:grid-cols-4"
+        className="grid grid-cols-1 border-y rule sm:grid-cols-3"
       >
         {kpis.map((k, i) => (
           <div key={k.label} className={KPI_CELL_BORDERS[i]}>
@@ -1155,29 +1149,6 @@ export default function Overview() {
               </div>
             ) : (
               <p className="border-y rule py-5 text-[13px] text-graphite">No issues drafted yet.</p>
-            )}
-            <div className="mt-4 flex items-baseline justify-between gap-4">
-              <span className="text-[13px] text-slate">Verified subscribers</span>
-              <span className="mono num text-[12.5px] text-ink">
-                {verifiedSubs} of {subscribers.length}
-              </span>
-            </div>
-            {subscribers.length > 0 && (
-              <div aria-hidden className="mt-2.5 flex gap-[3px]">
-                {Array.from({ length: 14 }).map((_, i) => {
-                  const lit = i < Math.round((verifiedSubs / Math.max(1, subscribers.length)) * 14);
-                  return (
-                    <motion.span
-                      key={i}
-                      className="h-[5px] flex-1 rounded-[1px]"
-                      style={{ background: lit ? 'var(--color-signal)' : 'color-mix(in oklab, var(--color-ink) 10%, transparent)' }}
-                      initial={reduce ? false : { opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3, delay: 0.25 + i * 0.03 }}
-                    />
-                  );
-                })}
-              </div>
             )}
           </section>
         </motion.aside>

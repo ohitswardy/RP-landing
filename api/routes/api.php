@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\BootstrapController;
 use App\Http\Controllers\Api\CareerController;
 use App\Http\Controllers\Api\ClientLogController;
 use App\Http\Controllers\Api\CompanyController;
+use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\NewsletterController;
@@ -35,6 +36,7 @@ Route::get('/content/insights', [SiteContentController::class, 'insights']);
 Route::get('/content/people', [SiteContentController::class, 'people']);
 Route::get('/content/about', [SiteContentController::class, 'about']);
 Route::get('/content/legal', [SiteContentController::class, 'legal']);
+Route::get('/content/contact', [SiteContentController::class, 'contact']);
 Route::get('/media/{path}', [MediaController::class, 'show'])->where('path', '.+');
 
 /* ── Public onboarding links (emailed to clients) ─────────────── */
@@ -120,6 +122,9 @@ Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
 
     Route::middleware('permission:pages.manage')->group(function () {
         Route::put('/pages/{page}', [PageController::class, 'update']);
+        // The Contact page copy lives with the legal documents (same permission).
+        Route::put('/contact-page', [ContactController::class, 'update']);
+        Route::post('/contact/upload', [ContactController::class, 'upload']);
     });
 
     // Tamper-evident ledger of client portal consumption (views, downloads, clicks).

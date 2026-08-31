@@ -7,6 +7,7 @@ use App\Models\Article;
 use App\Models\AuditEntry;
 use App\Models\CareerPost;
 use App\Models\Company;
+use App\Models\ContactPage;
 use App\Models\MediaAsset;
 use App\Models\PageBlock;
 use App\Models\Report;
@@ -16,6 +17,7 @@ use App\Models\StaffMember;
 use App\Models\Subscriber;
 use App\Models\WatchSymbol;
 use App\Support\AboutDefaults;
+use App\Support\ContactDefaults;
 use App\Support\LegalDefaults;
 use App\Support\PeopleDefaults;
 use App\Support\ServiceDefaults;
@@ -31,6 +33,7 @@ class ContentSeeder extends Seeder
         $this->reports();
         $this->people();
         $this->about();
+        $this->contact();
         $this->services();
         $this->careers();
         $this->watchlist();
@@ -119,6 +122,11 @@ class ContentSeeder extends Seeder
     private function about(): void
     {
         AboutPage::create(['content' => AboutDefaults::content()]);
+    }
+
+    private function contact(): void
+    {
+        ContactPage::create(['content' => ContactDefaults::content()]);
     }
 
     private function services(): void

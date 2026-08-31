@@ -126,9 +126,9 @@ export default function NewsletterModule() {
             <div className="border-y rule">
               <div className="mono grid grid-cols-12 gap-4 border-b rule py-2.5 text-[9.5px] uppercase tracking-[0.2em] text-graphite">
                 <span className="col-span-3 md:col-span-2">Date</span>
-                <span className="col-span-9 md:col-span-6">Subject</span>
-                <span className="hidden md:block md:col-span-2">Last edited</span>
-                <span className="hidden md:block md:col-span-2" />
+                <span className="col-span-9 md:col-span-6 lg:col-span-5">Subject</span>
+                <span className="hidden lg:block lg:col-span-2">Last edited</span>
+                <span className="hidden md:block md:col-span-4 lg:col-span-3" />
               </div>
               <ul className="divide-y rule">
                 <AnimatePresence initial={false}>
@@ -142,7 +142,7 @@ export default function NewsletterModule() {
                       className="group grid grid-cols-12 items-center gap-4 py-4"
                     >
                       <span className="mono num col-span-3 text-[12px] text-graphite md:col-span-2">{fmtDate(n.date)}</span>
-                      <div className="col-span-9 min-w-0 md:col-span-6">
+                      <div className="col-span-9 min-w-0 md:col-span-6 lg:col-span-5">
                         <button
                           type="button"
                           onClick={() => setViewing(n)}
@@ -155,8 +155,8 @@ export default function NewsletterModule() {
                           {n.sections.slice(0, 3).filter((s) => s.badge).map((s) => ` · ${s.badge}`).join('')}
                         </p>
                       </div>
-                      <span className="mono hidden text-[11.5px] text-graphite md:block md:col-span-2">{timeAgo(n.updated)}</span>
-                      <div className="col-span-12 flex items-center justify-end gap-1.5 md:col-span-2 md:opacity-0 md:transition-opacity md:duration-300 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                      <span className="mono hidden text-[11.5px] text-graphite lg:block lg:col-span-2">{timeAgo(n.updated)}</span>
+                      <div className="col-span-12 flex items-center justify-end gap-1.5 md:col-span-4 lg:col-span-3">
                         <RowAction label="View issue" onClick={() => setViewing(n)}><IconEye /></RowAction>
                         <RowAction
                           label={preparing === n.id ? 'Preparing PDF…' : 'Download PDF'}

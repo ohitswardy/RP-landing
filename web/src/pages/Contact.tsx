@@ -1,22 +1,34 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import emailjs from '@emailjs/browser';
 import Reveal from '../components/Reveal';
 import Newsletter from '../components/Newsletter';
+import { useContactContent, type ContactCopy } from '../lib/contactContent';
 
 const EMAILJS_PUBLIC_KEY      = import.meta.env.VITE_EMAILJS_PUBLIC_KEY      as string;
 const EMAILJS_SERVICE_ID      = import.meta.env.VITE_EMAILJS_SERVICE_ID      as string;
 const EMAILJS_ADMIN_TEMPLATE  = import.meta.env.VITE_EMAILJS_ADMIN_TEMPLATE_ID as string;
 const EMAILJS_USER_TEMPLATE   = import.meta.env.VITE_EMAILJS_USER_TEMPLATE_ID  as string;
 
+/** Authored line breaks survive from the CMS into the rendered heading. */
+function multiline(text: string): ReactNode {
+  return text.split('\n').map((line, i) => (
+    <span key={i}>
+      {i > 0 && <br />}
+      {line}
+    </span>
+  ));
+}
+
 /* ─────────────────────────────────────────────────────────────
    Contact Hero — cinematic split-panel with sunray image
    Mirrors the AboutHero pattern: blueprint grid left, image
    right with parallax + multi-layer vignettes, mobile full-bleed.
+   The caption and the photo are authored in the CMS Pages module.
 ───────────────────────────────────────────────────────────── */
 const heroEase = [0.25, 1, 0.5, 1] as const;
 
-function ContactHero() {
+function ContactHero({ hero }: { hero: ContactCopy['hero'] }) {
   const sectionRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -60,129 +72,136 @@ function ContactHero() {
       />
 
       {/* ── RIGHT PANEL: sunray image — desktop only ─────────── */}
-      <div
-        aria-hidden
-        className="hidden lg:block absolute right-0 top-0 bottom-0"
-        style={{ width: '44%' }}
-      >
-        <div className="absolute inset-0 overflow-hidden">
+      {hero.image && (
+        <div
+          aria-hidden
+          className="hidden lg:block absolute right-0 top-0 bottom-0"
+          style={{ width: '44%' }}
+        >
+          <div className="absolute inset-0 overflow-hidden">
 
-          {/* Parallax image — oversized for travel headroom */}
-          <motion.div
-            className="absolute"
-            style={{ top: '-8%', bottom: '-8%', left: 0, right: 0, y: imgY }}
-          >
-            <img
-              src="/sunray.jpg"
-              alt=""
+            {/* Parallax image — oversized for travel headroom */}
+            <motion.div
+              className="absolute"
+              style={{ top: '-8%', bottom: '-8%', left: 0, right: 0, y: imgY }}
+            >
+              <img
+                src={hero.image}
+                alt=""
+                aria-hidden
+                className="w-full h-full object-cover"
+                style={{ objectPosition: '55% 28%' }}
+              />
+            </motion.div>
+
+            {/* Sunburst echo — warm radial at image upper-right where sun sits */}
+            <div
               aria-hidden
-              className="w-full h-full object-cover"
-              style={{ objectPosition: '55% 28%' }}
+              className="absolute pointer-events-none"
+              style={{
+                right: 0,
+                top: 0,
+                width: '65%',
+                height: '55%',
+                background: 'radial-gradient(ellipse at 82% 18%, oklch(0.80 0.16 78 / 0.24) 0%, transparent 52%)',
+              }}
             />
-          </motion.div>
 
-          {/* Sunburst echo — warm radial at image upper-right where sun sits */}
-          <div
-            aria-hidden
-            className="absolute pointer-events-none"
-            style={{
-              right: 0,
-              top: 0,
-              width: '65%',
-              height: '55%',
-              background: 'radial-gradient(ellipse at 82% 18%, oklch(0.80 0.16 78 / 0.24) 0%, transparent 52%)',
-            }}
-          />
+            {/* Left-edge hard blend: navy → image (the panel seam) */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(to right,' +
+                    'oklch(0.215 0.048 260 / 1.00)  0%,' +
+                    'oklch(0.215 0.048 260 / 0.84) 10%,' +
+                    'oklch(0.215 0.048 260 / 0.46) 26%,' +
+                    'oklch(0.215 0.048 260 / 0.10) 46%,' +
+                    'transparent 68%)',
+              }}
+            />
 
-          {/* Left-edge hard blend: navy → image (the panel seam) */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                'linear-gradient(to right,' +
-                  'oklch(0.215 0.048 260 / 1.00)  0%,' +
-                  'oklch(0.215 0.048 260 / 0.84) 10%,' +
-                  'oklch(0.215 0.048 260 / 0.46) 26%,' +
-                  'oklch(0.215 0.048 260 / 0.10) 46%,' +
-                  'transparent 68%)',
-            }}
-          />
+            {/* Right-edge fade to deep navy */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(to left,' +
+                    'oklch(0.165 0.040 260 / 0.72) 0%,' +
+                    'oklch(0.165 0.040 260 / 0.22) 30%,' +
+                    'transparent 58%)',
+              }}
+            />
 
-          {/* Right-edge fade to deep navy */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                'linear-gradient(to left,' +
-                  'oklch(0.165 0.040 260 / 0.72) 0%,' +
-                  'oklch(0.165 0.040 260 / 0.22) 30%,' +
-                  'transparent 58%)',
-            }}
-          />
+            {/* Top vignette */}
+            <div
+              className="absolute inset-x-0 top-0 pointer-events-none"
+              style={{
+                height: '38%',
+                background: 'linear-gradient(to bottom, oklch(0.215 0.048 260 / 0.84) 0%, transparent 100%)',
+              }}
+            />
 
-          {/* Top vignette */}
-          <div
-            className="absolute inset-x-0 top-0 pointer-events-none"
-            style={{
-              height: '38%',
-              background: 'linear-gradient(to bottom, oklch(0.215 0.048 260 / 0.84) 0%, transparent 100%)',
-            }}
-          />
+            {/* Bottom vignette — blends to next section */}
+            <div
+              className="absolute inset-x-0 bottom-0 pointer-events-none"
+              style={{
+                height: '50%',
+                background:
+                  'linear-gradient(to top,' +
+                    'oklch(0.165 0.040 260 / 0.96) 0%,' +
+                    'oklch(0.165 0.040 260 / 0.48) 50%,' +
+                    'transparent 100%)',
+              }}
+            />
 
-          {/* Bottom vignette — blends to next section */}
-          <div
-            className="absolute inset-x-0 bottom-0 pointer-events-none"
-            style={{
-              height: '50%',
-              background:
-                'linear-gradient(to top,' +
-                  'oklch(0.165 0.040 260 / 0.96) 0%,' +
-                  'oklch(0.165 0.040 260 / 0.48) 50%,' +
-                  'transparent 100%)',
-            }}
-          />
-
-          {/* Navy tint for OKLCH colour-space harmony */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: 'oklch(0.215 0.048 260 / 0.14)', mixBlendMode: 'multiply' }}
-          />
+            {/* Navy tint for OKLCH colour-space harmony */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'oklch(0.215 0.048 260 / 0.14)', mixBlendMode: 'multiply' }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── MOBILE: full-bleed image backdrop ────────────────── */}
-      <div aria-hidden className="lg:hidden absolute inset-0">
-        <img
-          src="/sunray.jpg"
-          alt=""
-          className="w-full h-full object-cover"
-          style={{ objectPosition: '62% 28%' }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(155deg,' +
-                'oklch(0.165 0.040 260 / 0.97)  0%,' +
-                'oklch(0.165 0.040 260 / 0.92) 42%,' +
-                'oklch(0.215 0.048 260 / 0.80) 72%,' +
-                'oklch(0.215 0.048 260 / 0.68) 100%)',
-          }}
-        />
-      </div>
+      {hero.image && (
+        <div aria-hidden className="lg:hidden absolute inset-0">
+          <img
+            src={hero.image}
+            alt=""
+            className="w-full h-full object-cover"
+            style={{ objectPosition: '62% 28%' }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(155deg,' +
+                  'oklch(0.165 0.040 260 / 0.97)  0%,' +
+                  'oklch(0.165 0.040 260 / 0.92) 42%,' +
+                  'oklch(0.215 0.048 260 / 0.80) 72%,' +
+                  'oklch(0.215 0.048 260 / 0.68) 100%)',
+            }}
+          />
+        </div>
+      )}
 
       {/* ── Content ───────────────────────────────────────────── */}
       <div className="container-fluid relative w-full py-10">
         <motion.div style={{ y: contentY }}>
 
-          {/* Eyebrow */}
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: heroEase }}
-            className="eyebrow eyebrow-paper mb-6"
-          >
-          </motion.div>
+          {/* Eyebrow — optional; the banner runs caption-only without it */}
+          {hero.eyebrow && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: heroEase }}
+              className="eyebrow eyebrow-paper mb-6"
+            >
+              {hero.eyebrow}
+            </motion.div>
+          )}
 
           {/* Headline */}
           <motion.h1
@@ -192,7 +211,7 @@ function ContactHero() {
             className="text-[clamp(2.2rem,4.5vw,4rem)] leading-[1.04] tracking-[-0.026em] font-medium"
             style={{ maxWidth: '18ch' }}
           >
-            Open a conversation.
+            {multiline(hero.title)}
           </motion.h1>
 
           {/* Amber gradient divider rule */}
@@ -218,8 +237,17 @@ function ContactHero() {
 type SubmitStatus = 'idle' | 'sending' | 'success' | 'error';
 
 export default function Contact() {
-  const [form, setForm] = useState({ name: '', firm: '', email: '', interest: 'Research', message: '' });
+  const copy = useContactContent();
+  const { hero, inquiry, offices } = copy;
+
+  const [form, setForm] = useState({ name: '', firm: '', email: '', interest: '', message: '' });
   const [status, setStatus] = useState<SubmitStatus>('idle');
+
+  // The chip list is CMS-authored, so a selection is only honoured while it
+  // is still on the list; otherwise the first chip stands, as on first load.
+  const interest = inquiry.interests.includes(form.interest)
+    ? form.interest
+    : inquiry.interests[0] ?? '';
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -232,7 +260,7 @@ export default function Contact() {
       from_name:  form.name,
       from_firm:  form.firm || '—',
       from_email: form.email,
-      interest:   form.interest,
+      interest,
       message:    form.message,
       // User confirmation template variables
       to_name:    form.name,
@@ -259,7 +287,7 @@ export default function Contact() {
 
   return (
     <>
-      <ContactHero />
+      <ContactHero hero={hero} />
 
       <section id="enquiry" className="bg-paper scroll-mt-16">
         <div className="container-fluid py-24 md:py-32">
@@ -267,26 +295,32 @@ export default function Contact() {
 
             {/* ── Left: context panel ─────────────────────────────── */}
             <Reveal className="col-span-12 lg:col-span-4">
-              <div className="eyebrow mb-8">Inquiry</div>
+              {inquiry.eyebrow && <div className="eyebrow mb-8">{inquiry.eyebrow}</div>}
               <h2
                 className="font-medium tracking-tight leading-[1.05] mb-6"
                 style={{ fontSize: 'clamp(1.75rem, 2.8vw, 2.75rem)' }}
               >
-                Let's start<br />a&nbsp;conversation.
+                {multiline(inquiry.heading)}
               </h2>
-              <p className="text-slate leading-relaxed text-[15px]" style={{ maxWidth: '36ch' }}>
-                Reach our team directly. We respond to all institutional
-                inquiries within one business day.
-              </p>
-              <div className="mt-10 pt-8 border-t rule">
-                <div className="mono text-[11px] tracking-[0.18em] uppercase text-slate/70 mb-3">
-                  Market-hours dealing
-                </div>
-                <p className="text-ink text-[14px]">
-                  Trading Desk&ensp;&mdash;&ensp;
-                  <span className="text-slate">+63&nbsp;2&nbsp;8848&nbsp;0000</span>
+              {inquiry.blurb && (
+                <p className="text-slate leading-relaxed text-[15px]" style={{ maxWidth: '36ch' }}>
+                  {inquiry.blurb}
                 </p>
-              </div>
+              )}
+              {(inquiry.deskLabel || inquiry.deskName || inquiry.deskPhone) && (
+                <div className="mt-10 pt-8 border-t rule">
+                  {inquiry.deskLabel && (
+                    <div className="mono text-[11px] tracking-[0.18em] uppercase text-slate/70 mb-3">
+                      {inquiry.deskLabel}
+                    </div>
+                  )}
+                  <p className="text-ink text-[14px]">
+                    {inquiry.deskName}
+                    {inquiry.deskName && inquiry.deskPhone && <>&ensp;&mdash;&ensp;</>}
+                    <span className="text-slate whitespace-nowrap">{inquiry.deskPhone}</span>
+                  </p>
+                </div>
+              )}
             </Reveal>
 
             {/* ── Right: form panel ───────────────────────────────── */}
@@ -306,13 +340,14 @@ export default function Contact() {
                     className="font-medium tracking-[-0.02em] mb-4"
                     style={{ fontSize: 'clamp(1.5rem, 2.5vw, 2rem)' }}
                   >
-                    Thank you.
+                    {inquiry.successHeading}
                   </h3>
                   <p className="text-slate leading-relaxed" style={{ maxWidth: '52ch' }}>
-                    Your inquiry has been received. A confirmation has been sent
-                    to <span className="text-ink">{form.email}</span>. A partner
-                    will reach out within one business day. For urgent matters,
-                    call the trading desk on +63&nbsp;2&nbsp;8848&nbsp;0000.
+                    <Confirmation
+                      body={inquiry.successBody}
+                      email={form.email}
+                      desk={inquiry.deskPhone}
+                    />
                   </p>
                 </motion.div>
               ) : (
@@ -338,27 +373,29 @@ export default function Contact() {
                     required
                   />
 
-                  <div>
-                    <div className="mono text-[11px] tracking-[0.18em] uppercase text-slate mb-4">
-                      Area of interest
+                  {inquiry.interests.length > 0 && (
+                    <div>
+                      <div className="mono text-[11px] tracking-[0.18em] uppercase text-slate mb-4">
+                        Area of interest
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {inquiry.interests.map((o) => (
+                          <button
+                            key={o}
+                            type="button"
+                            onClick={() => setForm({ ...form, interest: o })}
+                            className={`px-4 py-2 text-[13px] border outline-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                              interest === o
+                                ? 'bg-navy text-paper border-navy'
+                                : 'bg-transparent text-ink border-ink/20 hover:border-ink/50 hover:bg-ink/3'
+                            }`}
+                          >
+                            {o}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(['Research', 'Sales', 'Trading', 'Corporate Access', 'Other'] as const).map((o) => (
-                        <button
-                          key={o}
-                          type="button"
-                          onClick={() => setForm({ ...form, interest: o })}
-                          className={`px-4 py-2 text-[13px] border outline-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                            form.interest === o
-                              ? 'bg-navy text-paper border-navy'
-                              : 'bg-transparent text-ink border-ink/20 hover:border-ink/50 hover:bg-ink/3'
-                          }`}
-                        >
-                          {o}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  )}
 
                   <Textarea
                     label="Message"
@@ -378,10 +415,10 @@ export default function Contact() {
                       Something went wrong — please try again or email us
                       directly at{' '}
                       <a
-                        href="mailto:info@regis.ph"
+                        href={`mailto:${offices.email}`}
                         className="underline underline-offset-2"
                       >
-                        info@regis.ph
+                        {offices.email}
                       </a>
                       .
                     </motion.p>
@@ -402,7 +439,7 @@ export default function Contact() {
                       </>
                     ) : (
                       <>
-                        Send inquiry
+                        {inquiry.submitLabel}
                         <span
                           aria-hidden
                           className="transition-transform duration-200 group-hover:translate-x-0.5"
@@ -423,50 +460,48 @@ export default function Contact() {
       <section id="offices" className="bg-bone scroll-mt-16">
         <div className="container-fluid py-24 md:py-32">
           <Reveal className="max-w-3xl mb-12">
-            <div className="eyebrow mb-6">Contact Us </div>
+            {offices.eyebrow && <div className="eyebrow mb-6">{offices.eyebrow}</div>}
             <h2 className="text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] tracking-tight">
-              Every channel. One dedicated team.
+              {offices.heading}
             </h2>
           </Reveal>
           <div className="grid grid-cols-1 md:grid-cols-3 border-t border-l rule">
 
             {/* Address */}
             <Reveal className="border-r border-b rule p-10 md:p-12">
-              <div className="eyebrow eyebrow-lg mb-5">Address</div>
+              {offices.addressLabel && <div className="eyebrow eyebrow-lg mb-5">{offices.addressLabel}</div>}
               <address className="not-italic text-ink leading-[1.75] text-[17px]">
-                Regis Partners, Inc.<br />
-                23/F Tower One,<br />
-                Ayala Triangle, Ayala Avenue<br />
-                1226 Makati City, Philippines
+                {offices.address.map((line, i) => (
+                  <span key={i}>
+                    {i > 0 && <br />}
+                    {line}
+                  </span>
+                ))}
               </address>
             </Reveal>
 
             {/* Contact */}
             <Reveal className="border-r border-b rule p-10 md:p-12">
-              <div className="eyebrow eyebrow-lg mb-5">Contact</div>
+              {offices.contactLabel && <div className="eyebrow eyebrow-lg mb-5">{offices.contactLabel}</div>}
               <dl className="mono text-[15px] text-ink space-y-2.5">
-                <div className="flex gap-4">
-                  <dt className="w-9 shrink-0 text-slate">TEL</dt>
-                  <dd>+63 2 8894 6600</dd>
-                </div>
-                <div className="flex gap-4">
-                  <dt className="w-9 shrink-0 text-slate">FAX</dt>
-                  <dd className="leading-[1.75]">
-                    +63 2 8894 6605<br />
-                    +63 2 8894 6622
-                  </dd>
-                </div>
+                {offices.channels.map((row, i) => (
+                  <div key={i} className="flex gap-4">
+                    <dt className="w-9 shrink-0 text-slate">{row.label}</dt>
+                    {/* A line break in the value stacks a second number, the way FAX prints. */}
+                    <dd className="leading-[1.75] whitespace-pre-line">{row.value}</dd>
+                  </div>
+                ))}
               </dl>
             </Reveal>
 
             {/* Email */}
             <Reveal className="border-r border-b rule p-10 md:p-12">
-              <div className="eyebrow eyebrow-lg mb-5">Email</div>
+              {offices.emailLabel && <div className="eyebrow eyebrow-lg mb-5">{offices.emailLabel}</div>}
               <a
-                href="mailto:info@regis.ph"
+                href={`mailto:${offices.email}`}
                 className="mono text-[15px] text-ink hover:text-amber transition-colors duration-150 block"
               >
-                info@regis.ph
+                {offices.email}
               </a>
             </Reveal>
 
@@ -474,7 +509,20 @@ export default function Contact() {
         </div>
       </section>
 
-      <Newsletter />
+      {copy.newsletter.enabled && <Newsletter />}
+    </>
+  );
+}
+
+/** The confirmation copy, with {email} and {desk} wired to the live values. */
+function Confirmation({ body, email, desk }: { body: string; email: string; desk: string }) {
+  return (
+    <>
+      {body.split(/(\{email\}|\{desk\})/g).map((part, i) => {
+        if (part === '{email}') return <span key={i} className="text-ink">{email}</span>;
+        if (part === '{desk}') return <span key={i} className="whitespace-nowrap">{desk}</span>;
+        return <span key={i}>{part}</span>;
+      })}
     </>
   );
 }

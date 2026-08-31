@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AboutPage;
 use App\Models\Article;
+use App\Models\ContactPage;
 use App\Models\InsightPage;
 use App\Models\PageBlock;
 use App\Models\ServiceLine;
@@ -86,6 +87,12 @@ class SiteContentController extends Controller
         }
 
         return response()->json(['documents' => $documents]);
+    }
+
+    /** The Contact page: hero caption, inquiry panel, and office ledger. */
+    public function contact(): JsonResponse
+    {
+        return response()->json(['copy' => ContactPage::current()->toWire()]);
     }
 
     public function people(): JsonResponse

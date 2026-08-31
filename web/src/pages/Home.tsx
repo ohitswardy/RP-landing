@@ -32,7 +32,6 @@ export default function Home() {
           style={{ aspectRatio: '2.6 / 1' }}
         />
       </ScrollExpand>
-      <Services />
       <PhotoWheel />
       <LeadershipQuote />
       <section className="bg-navy-deep">

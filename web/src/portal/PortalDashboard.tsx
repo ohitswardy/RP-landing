@@ -67,6 +67,9 @@ export default function PortalDashboard() {
 
   const greetingLine = `${greeting()}, ${client ? firstName(client.name) : 'there'}.`;
 
+  // Excludes any unnamed/placeholder company row from the headline count.
+  const listedCompanies = useMemo(() => companies.filter((c) => c.name?.trim()), [companies]);
+
   const sorted = useMemo(
     () => reports.slice().sort((a, b) => b.date.localeCompare(a.date)),
     [reports],
@@ -91,14 +94,6 @@ export default function PortalDashboard() {
     const m = new Map<string, number>();
     for (const r of reports) {
       if (r.companyId) m.set(r.companyId, (m.get(r.companyId) ?? 0) + 1);
-    }
-    return m;
-  }, [reports]);
-
-  const typeCounts = useMemo(() => {
-    const m = new Map<ReportCompany, number>();
-    for (const r of reports) {
-      if (r.company) m.set(r.company, (m.get(r.company) ?? 0) + 1);
     }
     return m;
   }, [reports]);
@@ -216,11 +211,18 @@ export default function PortalDashboard() {
             <p className="mono mt-3 text-[11px] font-semibold uppercase tracking-[0.20em] text-slate">
               Provided for the exclusive use of Regis Clients. Do not redistribute.
             </p>
+            <p className="mono mt-1.5 text-[10.5px] uppercase tracking-[0.16em] text-graphite">
+              Every copy you open or download is watermarked with your name and the time it was taken.
+            </p>
           </div>
           <div className="flex shrink-0 items-end gap-8">
             <div>
               <div className="mono num text-[clamp(1.8rem,3vw,2.4rem)] leading-none tracking-[-0.02em] text-ink">{reports.length}</div>
               <div className="mono mt-1.5 text-[10px] uppercase tracking-[0.18em] text-graphite">Reports</div>
+            </div>
+            <div>
+              <div className="mono num text-[clamp(1.8rem,3vw,2.4rem)] leading-none tracking-[-0.02em] text-ink">{listedCompanies.length}</div>
+              <div className="mono mt-1.5 text-[10px] uppercase tracking-[0.18em] text-graphite">Companies</div>
             </div>
             <div>
               <div className="mono num text-[clamp(1.8rem,3vw,2.4rem)] leading-none tracking-[-0.02em] text-ink">{REPORT_CATEGORIES.length}</div>
@@ -314,7 +316,7 @@ export default function PortalDashboard() {
                           <span className="mono flex items-center gap-2.5 text-[10.5px] uppercase tracking-[0.2em] text-graphite">
                             <span aria-hidden className="block h-[2px] w-5" style={{ background: typeActive ? 'var(--color-amber)' : 'var(--color-silver)' }} />
                             {g.label}
-                            <span className="num text-silver">{typeCounts.get(g.value) ?? 0}</span>
+                            <span className="num text-silver">{group.length}</span>
                           </span>
                           <button
                             type="button"
@@ -495,6 +497,40 @@ export default function PortalDashboard() {
   );
 }
 
+/* ── Download control ────────────────────────────────────────── */
+
+/** Download toggle. Stamping the client's name and the timestamp into every
+    page takes a beat, so the button holds a busy state until the file lands. */
+function DownloadButton({ report, context, className, size = 15 }: {
+  report: Report; context: string; className: string; size?: number;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        void downloadReport(report, context).finally(() => setBusy(false));
+      }}
+      aria-label={busy ? `Watermarking ${report.title}` : `Download ${report.title}`}
+      title={busy ? 'Watermarking your copy…' : 'Download watermarked PDF'}
+      className={`grid shrink-0 place-items-center border rule text-slate transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px disabled:cursor-wait ${className}`}
+    >
+      {/* Pulses amber while the stamp is applied — the same beat as the save tick */}
+      <motion.span
+        animate={busy ? { opacity: [1, 0.3, 1] } : { opacity: 1 }}
+        transition={busy ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
+        className="grid place-items-center"
+        style={busy ? { color: 'var(--color-amber-deep)' } : undefined}
+      >
+        <IconDownload size={size} />
+      </motion.span>
+    </button>
+  );
+}
+
 /* ── Bookmark control ────────────────────────────────────────── */
 
 /** Save toggle. Sits beside download on every card, so the geometry is caller-set. */
@@ -616,15 +652,7 @@ function FeaturedCard({ report, onView }: { report: Report; onView: () => void }
               <IconEye size={15} /> View report
             </button>
             <BookmarkButton report={report} className="w-12" />
-            <button
-              type="button"
-              onClick={() => void downloadReport(report, 'featured')}
-              aria-label="Download PDF"
-              title="Download PDF"
-              className="grid w-12 shrink-0 place-items-center border rule text-slate transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px"
-            >
-              <IconDownload size={16} />
-            </button>
+            <DownloadButton report={report} context="featured" className="w-12" size={16} />
           </div>
         </div>
       </div>
@@ -673,15 +701,7 @@ const ReportCard = memo(function ReportCard({ report, index, onView }: { report:
           <IconEye size={14} /> View
         </button>
         <BookmarkButton report={report} className="h-[38px] w-[38px]" />
-        <button
-          type="button"
-          onClick={() => void downloadReport(report)}
-          aria-label="Download PDF"
-          title="Download PDF"
-          className="grid h-[38px] w-[38px] shrink-0 place-items-center border rule text-slate transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px"
-        >
-          <IconDownload size={15} />
-        </button>
+        <DownloadButton report={report} context="card" className="h-[38px] w-[38px]" />
       </div>
     </motion.article>
   );

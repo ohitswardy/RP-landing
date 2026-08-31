@@ -61,6 +61,17 @@
     --color-slate:    oklch(0.320 0.014 260);
     --color-graphite: oklch(0.470 0.010 260);
     --color-silver:   oklch(0.680 0.006 260);
+
+    /* Live height of the sticky CMS header, measured by CMSLayout and
+       written back onto the shell. Module toolbars that stick park at
+       top: var(--cms-header-h) so they never slide under it. The value
+       here is only the first-paint fallback. */
+    --cms-header-h: 65px;
+
+    /* Where a sticky toolbar inside a module parks. Defaults to just under
+       the CMS header; a container that already pins its own bar above the
+       content overrides this with that bar's height added on. */
+    --cms-sticky-top: var(--cms-header-h);
   }
 }
 

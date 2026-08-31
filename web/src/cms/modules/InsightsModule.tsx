@@ -294,7 +294,7 @@ export default function InsightsModule() {
                   >
                     <div className="grid grid-cols-12 items-center gap-x-4 gap-y-2 py-5">
                       <span className="mono col-span-6 order-1 text-[10.5px] uppercase tracking-[0.16em] text-graphite md:col-span-1">{a.tag}</span>
-                      <div className="col-span-12 order-3 md:col-span-5 md:order-2">
+                      <div className="col-span-12 order-3 md:col-span-6 md:order-2 lg:col-span-4">
                         <p className="flex items-center gap-2 text-[15px] leading-snug text-ink">
                           {a.featured && (
                             <span className="shrink-0" style={{ color: 'var(--color-amber-deep)' }} title="Lead note">
@@ -305,15 +305,15 @@ export default function InsightsModule() {
                         </p>
                         {a.excerpt && <p className="mt-1 line-clamp-1 text-[12.5px] text-graphite">{a.excerpt}</p>}
                       </div>
-                      <span className="col-span-4 order-4 hidden text-[13px] text-slate md:col-span-2 md:block">{a.author}</span>
-                      <span className="mono num col-span-3 order-5 hidden text-[12px] text-graphite md:col-span-1 md:block">{fmtDate(a.date)}</span>
-                      <span className="mono num col-span-2 order-6 hidden text-right text-[12px] text-graphite md:col-span-1 md:block">
+                      <span className="col-span-4 order-4 hidden text-[13px] text-slate lg:col-span-2 lg:block">{a.author}</span>
+                      <span className="mono num col-span-3 order-5 hidden whitespace-nowrap text-[12px] text-graphite lg:col-span-1 lg:block">{fmtDate(a.date)}</span>
+                      <span className="mono num col-span-2 order-6 hidden text-right text-[12px] text-graphite xl:col-span-1 xl:block">
                         {a.status === 'published' ? a.reads.toLocaleString('en-PH') : '—'}
                       </span>
-                      <span className="col-span-6 order-2 md:col-span-1 md:order-7 md:justify-self-end">
+                      <span className="col-span-6 order-2 md:col-span-2 md:order-7 md:justify-self-end lg:col-span-1">
                         <Chip tone={STATUS_TONE[a.status]}>{a.status}</Chip>
                       </span>
-                      <div className="col-span-12 order-8 flex items-center gap-2 md:col-span-1 md:justify-self-end md:opacity-0 md:transition-opacity md:duration-300 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                      <div className="col-span-12 order-8 flex items-center gap-1.5 md:col-span-3 md:justify-end md:justify-self-end xl:col-span-2">
                         <RowAction
                           label={a.featured ? 'Clear lead note' : 'Lead the journal with this note'}
                           onClick={() => toggleLead(a)}
@@ -363,7 +363,7 @@ export default function InsightsModule() {
                       </div>
                     )}
                     <div
-                      className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 p-2 opacity-0 transition-opacity duration-300 focus-within:opacity-100 group-hover:opacity-100"
+                      className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-1.5 p-2"
                       style={{ background: 'linear-gradient(to top, oklch(0.165 0.040 260 / 0.85), transparent)' }}
                     >
                       <TinyBtn onClick={() => setPicking(true)} tone="accent">

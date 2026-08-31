@@ -37,6 +37,8 @@ const TABS: Array<{ value: AccessTab; label: string }> = [
 type ItemResponse<T> = { item: T; audit?: AuditEntry };
 type DeleteResponse = { audit?: AuditEntry };
 
+const AUDIT_PAGE_SIZE = 10;
+
 type AccountForm = {
   name: string; email: string; password: string;
   kind: AccountKind; roleId: string; firm: string;
@@ -222,6 +224,7 @@ export default function AccessModule() {
   const [roleError, setRoleError] = useState<string | null>(null);
   const [savingRole, setSavingRole] = useState(false);
   const [armedRole, confirmRole] = useConfirm(4000);
+  const [auditPage, setAuditPage] = useState(1);
 
   const setRole = (item: RoleDef) => {
     setData((d) => d && ({
@@ -322,6 +325,12 @@ export default function AccessModule() {
   /* ── Render ────────────────────────────────────────────────── */
 
   const isSelf = (u: Account) => session?.email === u.email;
+  const auditPages = Math.max(1, Math.ceil(audit.length / AUDIT_PAGE_SIZE));
+  const auditPageSafe = Math.min(auditPage, auditPages);
+  const auditShown = useMemo(
+    () => audit.slice((auditPageSafe - 1) * AUDIT_PAGE_SIZE, auditPageSafe * AUDIT_PAGE_SIZE),
+    [audit, auditPageSafe],
+  );
   const permGroups = useMemo(() => {
     const order: string[] = [];
     const byGroup = new Map<string, PermissionDef[]>();
@@ -520,7 +529,7 @@ export default function AccessModule() {
                       <Chip tone="live">Active</Chip>
                     )}
                   </span>
-                  <div className="col-span-8 flex items-center justify-end gap-2 md:col-span-3">
+                  <div className="col-span-8 flex flex-wrap items-center justify-end gap-2 md:col-span-3">
                     {!isSelf(u) && (
                       <BtnGhost danger={!u.suspended} onClick={() => void toggleSuspend(u)}>
                         {u.suspended ? 'Restore' : 'Suspend'}
@@ -577,7 +586,7 @@ export default function AccessModule() {
                         <span className="num">{r.users}</span>
                         <span>{r.users === 1 ? 'account' : 'accounts'}</span>
                       </div>
-                      <div className="mt-2 flex items-center gap-1">
+                      <div className="mt-2 flex flex-wrap items-center gap-1">
                         <RowAction label={`Edit ${r.name}`} onClick={() => openRoleEditor(r)}><IconPen size={12} /></RowAction>
                         {!r.system && r.users === 0 && (
                           <RowAction
@@ -653,24 +662,62 @@ export default function AccessModule() {
             <span className="col-span-6 md:col-span-3">Action</span>
             <span className="col-span-12 md:col-span-5">Target</span>
           </div>
-          <ul className="divide-y rule">
-            {audit.map((e, i) => (
-              <motion.li
-                key={e.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.4, ease: EASE, delay: Math.min(i * 0.03, 0.25) }}
-                className="grid grid-cols-12 items-baseline gap-4 py-3"
-              >
-                <span className="mono num col-span-3 text-[11px] text-graphite md:col-span-2" title={new Date(e.at).toLocaleString('en-PH')}>
-                  {timeAgo(e.at)}
+          {audit.length === 0 ? (
+            <div className="py-6">
+              <EmptyState title="No audit entries yet." hint="Actions taken across this module will be logged here." />
+            </div>
+          ) : (
+            <ul className="divide-y rule">
+              <AnimatePresence initial={false} mode="popLayout">
+                {auditShown.map((e, i) => (
+                  <motion.li
+                    key={e.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.4, ease: EASE, delay: Math.min(i * 0.03, 0.25) }}
+                    className="grid grid-cols-12 items-baseline gap-4 py-3"
+                  >
+                    <span className="mono num col-span-3 text-[11px] text-graphite md:col-span-2" title={new Date(e.at).toLocaleString('en-PH')}>
+                      {timeAgo(e.at)}
+                    </span>
+                    <span className="col-span-3 text-[13px] text-ink md:col-span-2">{e.actor}</span>
+                    <span className="col-span-6 text-[13px] text-slate md:col-span-3">{e.action}</span>
+                    <span className="col-span-12 truncate text-[12.5px] text-graphite md:col-span-5">{e.target}</span>
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+            </ul>
+          )}
+
+          {audit.length > 0 && (
+            <div className="flex items-center justify-between border-t rule py-3">
+              <span className="mono num text-[10.5px] uppercase tracking-[0.14em] text-graphite">
+                {(auditPageSafe - 1) * AUDIT_PAGE_SIZE + 1}–{Math.min(auditPageSafe * AUDIT_PAGE_SIZE, audit.length)} of {audit.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
+                  disabled={auditPageSafe <= 1}
+                  className="mono border rule px-3.5 py-1.5 text-[10px] uppercase tracking-[0.14em] text-slate transition-colors hover:border-[color:var(--color-amber-deep)] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ← Prev
+                </button>
+                <span className="mono num px-1 text-[10.5px] text-graphite">
+                  {auditPageSafe} / {auditPages}
                 </span>
-                <span className="col-span-3 text-[13px] text-ink md:col-span-2">{e.actor}</span>
-                <span className="col-span-6 text-[13px] text-slate md:col-span-3">{e.action}</span>
-                <span className="col-span-12 truncate text-[12.5px] text-graphite md:col-span-5">{e.target}</span>
-              </motion.li>
-            ))}
-          </ul>
+                <button
+                  type="button"
+                  onClick={() => setAuditPage((p) => Math.min(auditPages, p + 1))}
+                  disabled={auditPageSafe >= auditPages}
+                  className="mono border rule px-3.5 py-1.5 text-[10px] uppercase tracking-[0.14em] text-slate transition-colors hover:border-[color:var(--color-amber-deep)] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

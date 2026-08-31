@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
 import {
-  EMPTY_ABOUT, EMPTY_INSIGHTS,
-  type AboutCopy, type Article, type ArticleStatus, type InsightsPage, type StaffMember, type ServiceLine,
+  EMPTY_ABOUT, EMPTY_CONTACT, EMPTY_INSIGHTS,
+  type AboutCopy, type ContactCopy, type Article, type ArticleStatus, type InsightsPage, type StaffMember, type ServiceLine,
   type ServicePage, type ServicePillar, type ServiceProof,
   type Subscriber, type PageBlock, type AuditEntry, type Report, type MediaAsset, type ReportCategory, type ReportCompany, type Company,
   type NewsletterCadence, type NewsletterIssue, type NewsletterSection,
@@ -22,6 +22,7 @@ type CmsState = {
   services: ServiceLine[];
   servicePage: ServicePage;
   aboutPage: AboutCopy;
+  contactPage: ContactCopy;
   insightsPage: InsightsPage;
   newsletters: NewsletterIssue[];
   subscribers: Subscriber[];
@@ -67,7 +68,7 @@ export type NewsletterPayload = {
 };
 
 /** Which module's upload route a picker posts to — permissions differ per module. */
-export type UploadScope = 'services' | 'people' | 'insights' | 'newsletters';
+export type UploadScope = 'services' | 'people' | 'insights' | 'newsletters' | 'contact';
 export type ServicePayload = Partial<{
   eyebrow: string; title: string; dek: string; introHeading: string;
   img: string; heroImages: string[]; pillars: ServicePillar[]; proof: ServiceProof[]; live: boolean;
@@ -114,6 +115,8 @@ type CmsStore = CmsState & {
   removeSubscriber: (id: string) => Promise<void>;
 
   updatePage: (id: string, value: string) => Promise<void>;
+  /** Replace the Contact page copy; resolves to the saved document. */
+  updateContactPage: (p: ContactCopy) => Promise<ContactCopy>;
 };
 
 const EMPTY_SERVICE_PAGE: ServicePage = {
@@ -122,7 +125,7 @@ const EMPTY_SERVICE_PAGE: ServicePage = {
 
 const EMPTY: CmsState = {
   articles: [], reports: [], companies: [], people: [], services: [], servicePage: EMPTY_SERVICE_PAGE,
-  aboutPage: EMPTY_ABOUT, insightsPage: EMPTY_INSIGHTS,
+  aboutPage: EMPTY_ABOUT, contactPage: EMPTY_CONTACT, insightsPage: EMPTY_INSIGHTS,
   newsletters: [], subscribers: [], pages: [], media: [], audit: [],
 };
 
@@ -400,6 +403,14 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     apply('pages', (prev) => upsert(prev, res.item), res.audit);
   }, [apply]);
 
+  const updateContactPage = useCallback(async (p: ContactCopy) => {
+    const res = await apiFetch<ItemResponse<ContactCopy>>('/cms/contact-page', {
+      method: 'PUT', body: p, audience: 'cms',
+    });
+    apply('contactPage', () => res.item, res.audit);
+    return res.item;
+  }, [apply]);
+
   const value = useMemo<CmsStore>(() => ({
     ...state,
     status,
@@ -413,7 +424,7 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     updateService, reorderServices, updateServicePage, uploadImage,
     createNewsletter, updateNewsletter, deleteNewsletter,
     removeSubscriber,
-    updatePage,
+    updatePage, updateContactPage,
   }), [
     state, status, error, load, appendAudit,
     createArticle, updateArticle, deleteArticle, updateInsightsPage,
@@ -423,7 +434,7 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     updateService, reorderServices, updateServicePage, uploadImage,
     createNewsletter, updateNewsletter, deleteNewsletter,
     removeSubscriber,
-    updatePage,
+    updatePage, updateContactPage,
   ]);
 
   return <CmsContext.Provider value={value}>{children}</CmsContext.Provider>;

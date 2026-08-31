@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useCms } from '../../store';
 import { useAuth } from '../../auth';
@@ -6,6 +6,7 @@ import { BtnGhost, BtnPrimary, EASE, useConfirm } from '../../ui';
 import { Field, MiniBtn, TinyBtn, move } from '../../kit/parts';
 import ImagePicker from '../../kit/ImagePicker';
 import RichTextField from '../../kit/RichTextField';
+import { usePublishedHeight } from '../../kit/stickyOffset';
 import {
   IconArrowDown, IconArrowUp, IconCheck, IconDownload, IconImage, IconPlus, IconTrash, IconX,
 } from '../../icons';
@@ -52,10 +53,20 @@ export default function IssueComposer({
   const [sections, setSections] = useState<DraftSection[]>(() =>
     (base?.sections ?? []).map((s) => ({ ...s, uid: crypto.randomUUID() })));
   const [picking, setPicking] = useState<string | null>(null); // section uid
+  // Sections append to the bottom, which is off-screen once the issue is long,
+  // so a new one is scrolled to instead of silently landing below the fold.
+  const [focus, setFocus] = useState<string | null>(null); // freshly added uid
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [armed, confirm] = useConfirm();
+
+  // The Sections bar pins under the CMS header, and the toolbars of the
+  // fields inside each card pin under that — so its height is measured and
+  // published rather than guessed at.
+  const sectionsRef = useRef<HTMLDivElement>(null);
+  const sectionsBarRef = useRef<HTMLDivElement>(null);
+  usePublishedHeight(sectionsBarRef, sectionsRef, '--cms-bar-h');
 
   const preview = useMemo(
     () => sections.map(({ uid: _uid, ...s }) => s),
@@ -66,6 +77,18 @@ export default function IssueComposer({
     setDate(next);
     if (autoName) setSubject(defaultNewsletterSubject(cadence, next));
   }
+
+  function addSection() {
+    const section = BLANK_SECTION();
+    setSections((l) => [...l, section]);
+    setFocus(section.uid);
+  }
+
+  useEffect(() => {
+    if (!focus) return;
+    document.getElementById(`section-${focus}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setFocus(null);
+  }, [focus]);
 
   function patch(uid: string, p: Partial<NewsletterSection>) {
     setSections((list) => list.map((s) => (s.uid === uid ? { ...s, ...p } : s)));
@@ -101,31 +124,7 @@ export default function IssueComposer({
             {editingId ? subject || 'Untitled issue' : `New ${CADENCE_LABEL[cadence]} issue`}
           </h2>
         </div>
-        <div className="flex items-center gap-3">
-          <BtnGhost
-            disabled={preparing}
-            onClick={() => {
-              setPreparing(true);
-              void downloadIssuePdf(
-                { cadence, date, subject, intro, sections: preview },
-                session ? { name: session.name, email: session.email } : null,
-              ).finally(() => setPreparing(false));
-            }}
-          >
-            <IconDownload size={14} /> {preparing ? 'Preparing…' : 'Download PDF'}
-          </BtnGhost>
-          <BtnGhost onClick={onClose}>Discard</BtnGhost>
-          <BtnPrimary onClick={() => void save()} disabled={saving}>
-            {saving ? 'Saving…' : editingId ? 'Save changes' : 'Save issue'}
-          </BtnPrimary>
-        </div>
       </div>
-
-      {error && (
-        <p className="border-l-2 pl-3 text-[12.5px] leading-relaxed" style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}>
-          {error}
-        </p>
-      )}
 
       <div className="grid gap-10 lg:grid-cols-2">
         {/* ── Editor rail ── */}
@@ -158,12 +157,18 @@ export default function IssueComposer({
             hint="A paragraph holding only +++ separates the lead stories, exactly as the mailer prints it."
           />
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b rule pb-2.5">
+          <div
+            ref={sectionsRef}
+            className="space-y-4 [--cms-sticky-top:calc(var(--cms-header-h)_+_var(--cms-bar-h,3rem))]"
+          >
+            <div
+              ref={sectionsBarRef}
+              className="sticky top-[var(--cms-header-h)] z-20 flex items-center justify-between border-b rule bg-bone py-2.5"
+            >
               <span className="mono text-[10px] uppercase tracking-[0.2em] text-graphite">
                 Sections <span className="text-silver">{sections.length}</span>
               </span>
-              <TinyBtn tone="accent" onClick={() => setSections((l) => [...l, BLANK_SECTION()])}>
+              <TinyBtn tone="accent" onClick={addSection}>
                 <IconPlus size={11} /> Add section
               </TinyBtn>
             </div>
@@ -176,7 +181,11 @@ export default function IssueComposer({
             )}
 
             {sections.map((s, i) => (
-              <div key={s.uid} className="border rule bg-white">
+              <div
+                key={s.uid}
+                id={`section-${s.uid}`}
+                className="scroll-mt-[calc(var(--cms-header-h)_+_var(--cms-bar-h,3rem)_+_1rem)] border rule bg-white"
+              >
                 <div className="flex items-center justify-between border-b rule px-4 py-2.5">
                   <span className="mono num text-[10px] tracking-[0.14em] text-graphite">
                     {String(i + 1).padStart(2, '0')}{s.badge ? ` · ${s.badge}` : ''}
@@ -240,9 +249,9 @@ export default function IssueComposer({
                             type="button"
                             aria-label="Remove chart"
                             onClick={() => patch(s.uid, { images: s.images.filter((x) => x !== src) })}
-                            className="absolute inset-0 grid place-items-center bg-navy/60 text-paper opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                            className="absolute right-0 top-0 grid h-5 w-5 place-items-center bg-navy/80 text-paper transition-colors duration-200 hover:bg-[color:var(--color-warn)]"
                           >
-                            <IconX size={13} />
+                            <IconX size={11} />
                           </button>
                         </span>
                       ))}
@@ -263,7 +272,7 @@ export default function IssueComposer({
 
         {/* ── Live template preview ── */}
         <div className="min-w-0">
-          <div className="sticky top-6">
+          <div className="sticky top-[calc(var(--cms-header-h)_+_1.5rem)]">
             <div className="mb-3 flex items-baseline justify-between">
               <span className="mono text-[10px] uppercase tracking-[0.2em] text-graphite">Template preview</span>
               <span className="mono text-[10px] uppercase tracking-[0.2em] text-silver">{CADENCE_LABEL[cadence]} mailer</span>
@@ -274,6 +283,44 @@ export default function IssueComposer({
             <p className="mt-3 text-[11.5px] leading-relaxed text-graphite">
               This is the exact layout recipients get. It updates as you type.
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Action bar — rides the bottom of the composer so saving, discarding and
+          the PDF export stay in reach however far down the section list you are.
+          The error lives here too: it is raised by Save, so it belongs next to it. */}
+      <div className="sticky bottom-4 z-30 border rule bg-paper/95 shadow-[0_10px_30px_-12px_oklch(0.165_0.040_260_/_0.4)] backdrop-blur-md">
+        <div className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            {error ? (
+              <p className="text-[13px] leading-snug" style={{ color: 'var(--color-warn)' }}>{error}</p>
+            ) : (
+              <p className="truncate text-[13px] text-slate">
+                <span className="mono num mr-2 text-[10px] uppercase tracking-[0.16em] text-graphite">
+                  {sections.length} {sections.length === 1 ? 'section' : 'sections'}
+                </span>
+                {editingId ? subject || 'Untitled issue' : `New ${CADENCE_LABEL[cadence]} issue`}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
+            <BtnGhost
+              disabled={preparing}
+              onClick={() => {
+                setPreparing(true);
+                void downloadIssuePdf(
+                  { cadence, date, subject, intro, sections: preview },
+                  session ? { name: session.name, email: session.email } : null,
+                ).finally(() => setPreparing(false));
+              }}
+            >
+              <IconDownload size={14} /> {preparing ? 'Preparing…' : 'Download PDF'}
+            </BtnGhost>
+            <BtnGhost onClick={onClose}>Discard</BtnGhost>
+            <BtnPrimary onClick={() => void save()} disabled={saving}>
+              {saving ? 'Saving…' : editingId ? 'Save changes' : 'Save issue'}
+            </BtnPrimary>
           </div>
         </div>
       </div>

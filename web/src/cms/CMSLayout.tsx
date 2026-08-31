@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth';
 import { useCms } from './store';
 import { Chip } from './ui';
 import RailBrandCanvas from './RailBrandCanvas';
+import { usePublishedHeight } from './kit/stickyOffset';
 import {
   Sidebar,
   SidebarBody,
@@ -40,7 +41,7 @@ const CONTENT_NAV: NavItem[] = [
   { to: '/cms/reports', label: 'Reports', code: '02', icon: (p) => <ScrollIcon {...p} weight="bold" />, perm: 'reports.manage' },
   { to: '/cms/services', label: 'Services', code: '03', icon: (p) => <SuitcaseIcon {...p} weight="bold" />, perm: 'services.manage' },
   { to: '/cms/people', label: 'People', code: '04', icon: (p) => <UsersThreeIcon {...p} weight="bold" />, perm: 'people.manage' },
-  { to: '/cms/pages', label: 'Legal', code: '05', icon: (p) => <FileIcon {...p} weight="bold" />, perm: 'pages.manage' },
+  { to: '/cms/pages', label: 'Pages', code: '05', icon: (p) => <FileIcon {...p} weight="bold" />, perm: 'pages.manage' },
 ];
 
 const SITE_NAV: NavItem[] = [
@@ -225,6 +226,13 @@ export default function CMSLayout() {
     });
   };
 
+  // The header is sticky and modules park their own sticky toolbars under it,
+  // so its live height is published as --cms-header-h rather than hard-coded —
+  // it changes with the breakpoint (the rail toggle is lg:hidden) and wraps.
+  const shellRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  usePublishedHeight(headerRef, shellRef, '--cms-header-h');
+
   const all = [OVERVIEW, ...CONTENT_NAV, ...SITE_NAV];
   const current =
     all.filter((i) => location.pathname === i.to || (i.to !== '/cms' && location.pathname.startsWith(i.to))).pop() ??
@@ -233,7 +241,7 @@ export default function CMSLayout() {
   const lastEdit = audit[0];
 
   return (
-    <div className="cms-scope flex min-h-[100dvh] bg-bone">
+    <div ref={shellRef} className="cms-scope flex min-h-[100dvh] bg-bone">
       {/* Rail — hover-expands on desktop, drawer on mobile */}
       <Sidebar open={open} setOpen={setOpen} animate={!pinned}>
         <SidebarBody>
@@ -243,7 +251,7 @@ export default function CMSLayout() {
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b rule bg-paper/90 backdrop-blur-md">
+        <header ref={headerRef} className="sticky top-0 z-30 border-b rule bg-paper/90 backdrop-blur-md">
           <div className="flex items-center gap-4 px-5 py-3.5 md:px-9">
             <button
               type="button"

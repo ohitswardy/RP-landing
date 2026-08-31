@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { IconX } from './icons';
 
@@ -38,7 +39,7 @@ export type ChipTone = keyof typeof CHIP_TONES;
 export function Chip({ tone, children, pulse = false }: { tone: ChipTone; children: ReactNode; pulse?: boolean }) {
   const t = CHIP_TONES[tone];
   return (
-    <span className="mono inline-flex items-center gap-2 text-[10.5px] uppercase tracking-[0.14em]" style={{ color: t.text }}>
+    <span className="mono inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-[10.5px] uppercase tracking-[0.14em]" style={{ color: t.text }}>
       <span className="relative flex h-1.5 w-1.5">
         {pulse && (
           <span
@@ -100,7 +101,7 @@ export function RowAction({ label, onClick, children, danger = false, disabled =
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className={`grid h-8 w-8 place-items-center border rule transition-colors duration-200 active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`grid h-8 w-8 shrink-0 place-items-center border rule transition-colors duration-200 active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-40 ${
         danger ? 'text-graphite hover:border-[color:var(--color-warn)] hover:text-[color:var(--color-warn)]'
                : 'text-graphite hover:border-[color:var(--color-amber-deep)] hover:text-ink'
       }`}
@@ -186,7 +187,11 @@ export function Drawer({ open, title, onClose, children, footer }: {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  return (
+  // Portalled to <body> so the backdrop is always sized to the real viewport —
+  // nested inside the page it could get clipped to whatever ancestor happens
+  // to establish a containing block (transform/overflow), leaving bits of the
+  // rail undimmed.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -224,7 +229,8 @@ export function Drawer({ open, title, onClose, children, footer }: {
           </motion.aside>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

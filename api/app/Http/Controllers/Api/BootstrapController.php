@@ -8,6 +8,7 @@ use App\Models\Article;
 use App\Models\AuditEntry;
 use App\Models\CareerPost;
 use App\Models\Company;
+use App\Models\ContactPage;
 use App\Models\InsightPage;
 use App\Models\MediaAsset;
 use App\Models\NewsletterIssue;
@@ -34,6 +35,7 @@ class BootstrapController extends Controller
             'services' => ServiceLine::orderBy('position')->orderBy('id')->get()->map->toWire()->values(),
             'servicePage' => ServicePage::current()->toWire(),
             'aboutPage' => AboutPage::current()->toWire(),
+            'contactPage' => ContactPage::current()->toWire(),
             'insightsPage' => InsightPage::current()->toWire(),
             'careers' => CareerPost::orderByDesc('posted')->orderByDesc('id')->get()->map->toWire()->values(),
             'watchlist' => WatchSymbol::orderBy('position')->orderBy('id')->get()->map->toWire()->values(),

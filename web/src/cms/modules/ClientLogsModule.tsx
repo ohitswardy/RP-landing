@@ -43,6 +43,7 @@ type Filters = {
 };
 
 const BLANK_FILTERS: Filters = { event: 'all', clientId: '', from: '', to: '', q: '' };
+const PAGE_SIZE = 10;
 
 const EVENT_TABS: Array<{ value: EventFilter; label: string }> = [
   { value: 'all', label: 'All activity' },
@@ -71,6 +72,7 @@ function buildQuery(f: Filters, sort: SortKey, dir: 'asc' | 'desc', page: number
   if (f.q.trim()) p.set('q', f.q.trim());
   if (sort !== 'at') p.set('sort', sort);
   if (dir !== 'desc') p.set('dir', dir);
+  p.set('perPage', String(PAGE_SIZE));
   if (page > 1) p.set('page', String(page));
   return p.toString();
 }

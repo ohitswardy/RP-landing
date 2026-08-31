@@ -95,6 +95,56 @@ export const EMPTY_ABOUT: AboutCopy = {
   awards: { eyebrow: '', heading: '', groups: [] },
 };
 
+/* ── Contact page copy ─────────────────────────────────────── */
+
+/** One row in the office ledger's contact column — TEL, FAX, and so on. */
+export type ContactChannel = { label: string; value: string };
+
+/** Every text block on /contact. The enquiry form's plumbing stays in code. */
+export type ContactCopy = {
+  hero: { eyebrow: string; title: string; image: string };
+  inquiry: {
+    eyebrow: string;
+    /** A newline here breaks the heading on the page. */
+    heading: string;
+    blurb: string;
+    deskLabel: string;
+    deskName: string;
+    deskPhone: string;
+    /** The chips above the message box; the first is selected by default. */
+    interests: string[];
+    submitLabel: string;
+    successHeading: string;
+    /** Supports the {email} and {desk} tokens. */
+    successBody: string;
+  };
+  offices: {
+    eyebrow: string;
+    heading: string;
+    addressLabel: string;
+    /** One line of the postal address per entry. */
+    address: string[];
+    contactLabel: string;
+    channels: ContactChannel[];
+    emailLabel: string;
+    email: string;
+  };
+  newsletter: { enabled: boolean };
+};
+
+export const EMPTY_CONTACT: ContactCopy = {
+  hero: { eyebrow: '', title: '', image: '' },
+  inquiry: {
+    eyebrow: '', heading: '', blurb: '', deskLabel: '', deskName: '', deskPhone: '',
+    interests: [], submitLabel: '', successHeading: '', successBody: '',
+  },
+  offices: {
+    eyebrow: '', heading: '', addressLabel: '', address: [],
+    contactLabel: '', channels: [], emailLabel: '', email: '',
+  },
+  newsletter: { enabled: true },
+};
+
 /** One numbered row in the "what the practice delivers" ledger. */
 export type ServicePillar = { title: string; body: string };
 

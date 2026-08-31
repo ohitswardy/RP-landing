@@ -93,6 +93,13 @@ export function usePortal(): PortalContextValue {
   return ctx;
 }
 
+/** The signed-in client as a plain record, for code that runs outside the
+    React tree — the download stamper needs a name without prop-drilling. */
+export function portalIdentity(): { name: string; email: string } | null {
+  const session = readSession();
+  return session ? { name: session.name, email: session.email } : null;
+}
+
 export function RequirePortal({ children }: { children: ReactNode }) {
   const { client } = usePortal();
   const location = useLocation();

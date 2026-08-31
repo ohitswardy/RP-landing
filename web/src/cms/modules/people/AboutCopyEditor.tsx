@@ -164,7 +164,7 @@ export default function AboutCopyEditor({
                 </div>
               )}
               <div
-                className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 p-2 opacity-0 transition-opacity duration-300 focus-within:opacity-100 group-hover:opacity-100"
+                className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-1.5 p-2"
                 style={{ background: 'linear-gradient(to top, oklch(0.165 0.040 260 / 0.85), transparent)' }}
               >
                 <TinyBtn onClick={() => setPickingHero(true)} tone="accent">

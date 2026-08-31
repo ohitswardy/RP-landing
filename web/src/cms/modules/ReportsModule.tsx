@@ -62,15 +62,6 @@ export default function ReportsModule() {
     return m;
   }, [reports]);
 
-  const companyCounts = useMemo(() => {
-    const m = new Map<ReportCompany, number>();
-    for (const r of reports) {
-      if (!r.company) continue;
-      m.set(r.company, (m.get(r.company) ?? 0) + 1);
-    }
-    return m;
-  }, [reports]);
-
   /** company id → number of reports filed under it. */
   const usage = useMemo(() => {
     const m = new Map<string, number>();
@@ -262,7 +253,7 @@ export default function ReportsModule() {
                         <span className="mono flex items-center gap-2.5 text-[10px] uppercase tracking-[0.18em] text-graphite">
                           <span aria-hidden className="block h-[2px] w-5" style={{ background: typeActive ? 'var(--color-amber)' : 'var(--color-silver)' }} />
                           {g.label}
-                          <span className="num text-silver">{companyCounts.get(g.value) ?? 0}</span>
+                          <span className="num text-silver">{group.length}</span>
                         </span>
                         <button
                           type="button"
@@ -343,18 +334,18 @@ export default function ReportsModule() {
                       {r.companyName ? `${r.companyName} · ${r.company}` : 'No company'}
                     </span>
                   </span>
-                  <div className="col-span-12 order-3 md:col-span-5 md:order-2">
+                  <div className="col-span-12 order-3 md:col-span-5 md:order-2 lg:col-span-4">
                     <p className="text-[15px] leading-snug text-ink">{r.title}</p>
                     <p className="mono mt-1 text-[11px] tracking-[0.04em] text-graphite">
                       {r.fileName} · {fmtBytes(r.fileSize)}{r.pages ? ` · ${r.pages}p` : ''}
                     </p>
                   </div>
-                  <span className="col-span-6 order-4 hidden text-[13px] text-slate md:col-span-2 md:block">{r.analyst}</span>
-                  <span className="mono num col-span-3 order-5 hidden text-[12px] text-graphite md:col-span-1 md:block">{fmtDate(r.date)}</span>
-                  <span className="col-span-6 order-2 md:col-span-1 md:order-6 md:justify-self-end">
+                  <span className="col-span-6 order-4 hidden text-[13px] text-slate lg:col-span-2 lg:block">{r.analyst}</span>
+                  <span className="mono num col-span-3 order-5 hidden whitespace-nowrap text-[12px] text-graphite lg:col-span-1 lg:block">{fmtDate(r.date)}</span>
+                  <span className="col-span-6 order-2 md:col-span-2 md:order-6 md:justify-self-end lg:col-span-1">
                     <Chip tone="amber">PDF</Chip>
                   </span>
-                  <div className="col-span-12 order-8 flex items-center gap-2 md:col-span-1 md:justify-self-end md:opacity-0 md:transition-opacity md:duration-300 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                  <div className="col-span-12 order-8 flex items-center gap-2 md:col-span-3 md:justify-end md:justify-self-end lg:col-span-2">
                     <RowAction label="Preview PDF" onClick={() => preview(r)}><IconEye /></RowAction>
                     <RowAction label="Edit report" onClick={() => openEditor(r)}><IconPen /></RowAction>
                     <RowAction label={armed === r.id ? 'Confirm delete' : 'Delete report'} danger onClick={() => confirm(r.id, () => { void remove(r); })}>

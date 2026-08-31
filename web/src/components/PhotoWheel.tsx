@@ -19,18 +19,18 @@ export interface PhotoWheelProps {
 }
 
 const ACCENT = "#5980a6";
-const BG = "#f2f2f3";
+const BG = "#ffffff"; // matches the navbar
 const TEXT = "#1d1f20";
 
 const DEFAULT_IMAGES = [
   "/AiBG.jpg",
-  "/insight-exit.jpg",
-  "/insight-meeting.jpg",
-  "/insight-presenting.jpg",
-  "/AiBG.jpg",
-  "/insight-exit.jpg",
-  "/insight-meeting.jpg",
-  "/insight-presenting.jpg",
+  "/Wheel.jpg",
+  "/Wheel1.jpg",
+  "/Wheel2.jpg",
+  "/Wheel3.jpg",
+  "/Wheel4.jpg",
+  "/Wheel5.jpg",
+  "/Wheel.jpg",
   "/AiBG.jpg",
   "/insight-exit.jpg",
   "/insight-meeting.jpg",
@@ -102,12 +102,12 @@ export default function PhotoWheel({
     // The orbit slowly advances while the cards pop into their slots.
     tl.to(ring, { rotationX: -100, duration: n * 0.8 + 2, ease: "none" }, 0);
     cards.forEach((card, i) => {
-      tl.fromTo(
-        card,
-        { autoAlpha: 0, scale: 0.2 },
-        { autoAlpha: 1, scale: 1, duration: 0.9, ease: "back.out(1.6)" },
-        i * 0.8
-      );
+      // Fade the faces, never the <figure>: opacity on a preserve-3d element flattens it,
+      // which drops the z-sorting and mirrors far-side cards mid-pop.
+      const faces = Array.from(card.children).filter((el) => !el.hasAttribute("data-shade"));
+      tl.set(card, { visibility: "visible" }, i * 0.8);
+      tl.fromTo(card, { scale: 0.2 }, { scale: 1, duration: 0.9, ease: "back.out(1.6)" }, i * 0.8);
+      tl.fromTo(faces, { opacity: 0 }, { opacity: 1, duration: 0.9, ease: "back.out(1.6)" }, i * 0.8);
     });
 
     // Depth cue: shade each card by how far it currently faces away from the viewer.
@@ -160,9 +160,6 @@ export default function PhotoWheel({
         >
           {label}
         </div>
-        <div style={{ fontSize: 13, color: "#5f6467", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          {images.length} 
-        </div>
       </div>
 
       <div
@@ -179,7 +176,7 @@ export default function PhotoWheel({
           color: ACCENT,
         }}
       >
-        Scroll ↓
+        
       </div>
 
       {/* Perspective stage → tilted axis → 3D ring */}
@@ -207,20 +204,7 @@ export default function PhotoWheel({
                     visibility: "hidden",
                   }}
                 >
-                  {/* extruded slab — stacked slices give the card physical thickness and a gray back */}
-                  {[-14, -9, -4.5].map((z) => (
-                    <span
-                      key={z}
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        background: z === -4.5 ? "#ccd2d8" : "#9aa4ad",
-                        borderRadius: 6,
-                        transform: `translateZ(${z}px)`,
-                      }}
-                    />
-                  ))}
-                  {/* white frame face */}
+                  {/* white frame — mirrored on the back so the card reads flat from either side */}
                   <span
                     style={{
                       position: "absolute",
@@ -229,37 +213,40 @@ export default function PhotoWheel({
                       border: "1px solid #d8dadd",
                       borderRadius: 6,
                       boxShadow: "0 16px 34px rgba(29, 31, 32, 0.2)",
+                      backfaceVisibility: "hidden",
                     }}
                   />
-                  {/* photo floats above the frame on its own Z-layer */}
-                  <img
-                    src={src}
-                    alt=""
-                    style={{
-                      position: "absolute",
-                      left: 5,
-                      top: 5,
-                      width: "calc(100% - 10px)",
-                      height: "calc(100% - 10px)",
-                      objectFit: "cover",
-                      display: "block",
-                      filter: "grayscale(1) contrast(1.06)",
-                      borderRadius: 3,
-                      transform: "translateZ(9px)",
-                    }}
-                  />
-                  {/* duotone tint */}
                   <span
                     style={{
                       position: "absolute",
-                      inset: 5,
-                      background: ACCENT,
-                      mixBlendMode: "color",
-                      pointerEvents: "none",
-                      borderRadius: 3,
-                      transform: "translateZ(9px)",
+                      inset: 0,
+                      background: "#fff",
+                      border: "1px solid #d8dadd",
+                      borderRadius: 6,
+                      backfaceVisibility: "hidden",
+                      transform: "translateZ(-1px) rotateX(180deg)",
                     }}
                   />
+                  {/* photo sits flush on the frame and repeats on the back face */}
+                  {[1, -2].map((z) => (
+                    <img
+                      key={z}
+                      src={src}
+                      alt=""
+                      style={{
+                        position: "absolute",
+                        left: 5,
+                        top: 5,
+                        width: "calc(100% - 10px)",
+                        height: "calc(100% - 10px)",
+                        objectFit: "cover",
+                        display: "block",
+                        borderRadius: 3,
+                        backfaceVisibility: "hidden",
+                        transform: z > 0 ? "translateZ(1px)" : "translateZ(-2px) rotateX(180deg)",
+                      }}
+                    />
+                  ))}
                   {/* glossy sheen */}
                   <span
                     style={{
@@ -268,7 +255,8 @@ export default function PhotoWheel({
                       background: "linear-gradient(115deg, rgba(255,255,255,0.35), rgba(255,255,255,0) 45%)",
                       pointerEvents: "none",
                       borderRadius: 3,
-                      transform: "translateZ(10px)",
+                      backfaceVisibility: "hidden",
+                      transform: "translateZ(2px)",
                     }}
                   />
                   {/* depth shade — opacity driven per-frame by how far the card faces away */}
@@ -281,7 +269,7 @@ export default function PhotoWheel({
                       opacity: 0,
                       pointerEvents: "none",
                       borderRadius: 6,
-                      transform: "translateZ(11px)",
+                      transform: "translateZ(3px)",
                     }}
                   />
                 </figure>

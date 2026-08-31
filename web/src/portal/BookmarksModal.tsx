@@ -245,9 +245,7 @@ function SavedRow({
           <RowAction label="Open report" onClick={onView}>
             <IconEye size={15} />
           </RowAction>
-          <RowAction label="Download PDF" onClick={() => void downloadReport(report, 'bookmarks')}>
-            <IconDownload size={15} />
-          </RowAction>
+          <ShelfDownload report={report} />
           <button
             type="button"
             onClick={onRemove}
@@ -270,17 +268,45 @@ function SavedRow({
   );
 }
 
-function RowAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function RowAction({ label, onClick, disabled = false, children }: {
+  label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       title={label}
-      className="grid h-[34px] w-[34px] shrink-0 place-items-center border rule text-slate transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px"
+      className="grid h-[34px] w-[34px] shrink-0 place-items-center border rule text-slate transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px disabled:cursor-wait"
     >
       {children}
     </button>
+  );
+}
+
+/** Shelf download. Mirrors the dashboard control: the copy is watermarked
+    with the client's name before it is handed over. */
+function ShelfDownload({ report }: { report: Report }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <RowAction
+      label={busy ? 'Watermarking your copy…' : 'Download watermarked PDF'}
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        void downloadReport(report, 'bookmarks').finally(() => setBusy(false));
+      }}
+    >
+      <motion.span
+        animate={busy ? { opacity: [1, 0.3, 1] } : { opacity: 1 }}
+        transition={busy ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
+        className="grid place-items-center"
+        style={busy ? { color: 'var(--color-amber-deep)' } : undefined}
+      >
+        <IconDownload size={15} />
+      </motion.span>
+    </RowAction>
   );
 }
 

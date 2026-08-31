@@ -79,12 +79,18 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
 }
 
 /** Fetch a protected binary (report PDFs) as an object URL. Caller revokes. */
-export async function apiBlobUrl(path: string, audience: Audience): Promise<string | null> {
+/** Raw bytes from an authenticated endpoint, for callers that transform the
+    file before handing it over (see portal/watermark.ts). */
+export async function apiBlob(path: string, audience: Audience): Promise<Blob | null> {
   const token = getToken(audience);
   const res = await fetch(`/api${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   if (!res.ok) return null;
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
+  return res.blob();
+}
+
+export async function apiBlobUrl(path: string, audience: Audience): Promise<string | null> {
+  const blob = await apiBlob(path, audience);
+  return blob ? URL.createObjectURL(blob) : null;
 }

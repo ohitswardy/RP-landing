@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useCms } from '../store';
-import { BtnGhost, BtnPrimary, Chip, EmptyState, ModuleHeader, SkeletonRows, EASE } from '../ui';
+import { BtnGhost, BtnPrimary, EmptyState, ModuleHeader, SkeletonRows, EASE } from '../ui';
 import { Field, Modal, Panel } from '../kit/parts';
 import { fmtDate, type PageBlock } from '../data';
+import ContactCopyEditor from './pages/ContactCopyEditor';
+import SaveBar from './pages/SaveBar';
+
+/* ─────────────────────────────────────────────────────────────
+   The standing pages: the Contact page's copy, and the two legal
+   documents behind the footer links. One target is open at a
+   time and each publishes on its own.
+   ───────────────────────────────────────────────────────────── */
 
 /** The two documents this module governs, in the order they are published. */
 const DOCUMENTS = ['Terms & Conditions', 'Privacy & Cookies Policy'] as const;
@@ -14,6 +22,9 @@ const DOCUMENT = 'Document';
 
 const MAX = 40000;
 
+/** Which editor the module is showing. Legal keeps its own selected title. */
+type View = 'contact' | 'legal';
+
 type Doc = {
   title: string;
   effective: PageBlock | null;
@@ -21,6 +32,9 @@ type Doc = {
 };
 
 type Draft = { effective: string; body: string };
+
+/** Where a discard-or-stay decision is heading, once it is answered. */
+type Pending = { view: 'contact' } | { view: 'legal'; title: string };
 
 /** Clause count, so the editor can see the `## ` markers are landing. */
 function countClauses(body: string): number {
@@ -42,15 +56,18 @@ export default function PagesModule() {
     return out;
   }, [pages]);
 
+  const [view, setView] = useState<View>('contact');
   const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
+  const [contactDirty, setContactDirty] = useState(false);
   const [draft, setDraft] = useState<Draft>({ effective: '', body: '' });
-  const [pending, setPending] = useState<string | null>(null);   // tab waiting on a discard decision
+  const [pending, setPending] = useState<Pending | null>(null);  // target waiting on a discard decision
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const savedTimer = useRef<number | null>(null);
 
-  const loading = status === 'loading' && docs.length === 0;
+  const booting = status === 'loading';
+  const loading = booting && docs.length === 0;
   const selected = useMemo(
     () => docs.find((d) => d.title === selectedTitle) ?? docs[0] ?? null,
     [docs, selectedTitle],
@@ -72,30 +89,40 @@ export default function PagesModule() {
 
   const dirtyBody = draft.body !== stored.body;
   const dirtyEffective = draft.effective !== stored.effective;
-  const dirty = dirtyBody || dirtyEffective;
+  const legalDirty = dirtyBody || dirtyEffective;
+
+  /** Whatever is on screen right now, and whether it has unpublished edits. */
+  const openDirty = view === 'contact' ? contactDirty : legalDirty;
+  const openLabel = view === 'contact' ? 'The Contact page' : selected?.title ?? 'This document';
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!legalDirty) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  }, [legalDirty]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setError(null);
     setDraft((d) => ({ ...d, [key]: value }));
   };
 
-  function selectDoc(title: string) {
-    if (title === selected?.title) return;
-    if (dirty) { setPending(title); return; }
-    setError(null);
-    setSelectedTitle(title);
+  /** Move the module to another target, asking first if edits would be lost. */
+  function go(target: Pending) {
+    if (target.view === view && (target.view === 'contact' || target.title === selected?.title)) return;
+    if (openDirty) { setPending(target); return; }
+    apply(target);
   }
 
-  function discard() {
+  function apply(target: Pending) {
     setError(null);
-    setDraft(stored);
+    if (target.view === 'contact') {
+      // The Contact editor unmounts, so its draft is discarded with it.
+      setView('contact');
+    } else {
+      setView('legal');
+      setSelectedTitle(target.title);
+    }
   }
 
   async function save() {
@@ -122,53 +149,82 @@ export default function PagesModule() {
   return (
     <div className="space-y-9 pb-4">
       <ModuleHeader
-        code="05 / Legal"
-        title="Legal"
-        blurb="The Terms & Conditions and the Privacy & Cookies Policy — the two documents behind the footer links and every login portal. Each is edited whole, as one body of text; nothing else on the site is edited here."
+        code="05 / Pages"
+        title="Pages"
+        blurb="The standing pages: the Contact page's copy, and the Terms & Conditions and Privacy & Cookies Policy behind the footer links and every login portal. Pick a page below; each one publishes on its own."
       />
 
-      {loading && <SkeletonRows rows={4} />}
+      {/* ── Target selector ──────────────────────────────────── */}
+      <div>
+        <div className="mono mb-3 flex items-center gap-3 text-[10px] uppercase tracking-[0.18em] text-graphite">
+          <span>Pages</span>
+          <span className="h-px flex-1" style={{ background: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }} />
+        </div>
 
-      {!loading && docs.length === 0 && (
+        <ul className="grid gap-3 md:grid-cols-3">
+          <li>
+            <TargetCard
+              on={view === 'contact'}
+              where="/contact"
+              title="Contact"
+              state={view === 'contact' && contactDirty ? 'Editing · unsaved' : 'Hero, inquiry, offices'}
+              unit="5 sections"
+              onClick={() => go({ view: 'contact' })}
+            />
+          </li>
+
+          {loading && docs.length === 0 && (
+            <li className="md:col-span-2">
+              <div className="h-full border rule border-dashed px-4 py-3.5">
+                <span className="mono text-[9.5px] uppercase tracking-[0.2em] text-silver">Loading documents…</span>
+              </div>
+            </li>
+          )}
+
+          {docs.map((d) => {
+            const on = view === 'legal' && d.title === selected?.title;
+            return (
+              <li key={d.title}>
+                <TargetCard
+                  on={on}
+                  where="Footer + portals"
+                  title={d.title}
+                  state={on && legalDirty ? 'Editing · unsaved' : `Updated ${fmtDate(d.document.updated)}`}
+                  unit={`${countClauses(d.document.value)} clauses`}
+                  onClick={() => go({ view: 'legal', title: d.title })}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {/* ── Contact page ─────────────────────────────────────── */}
+      {view === 'contact' && booting && <SkeletonRows rows={5} />}
+
+      {view === 'contact' && !booting && (
+        <motion.div
+          key="contact"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: EASE }}
+        >
+          <ContactCopyEditor onDirty={setContactDirty} />
+        </motion.div>
+      )}
+
+      {/* ── Legal documents ──────────────────────────────────── */}
+      {view === 'legal' && loading && <SkeletonRows rows={4} />}
+
+      {view === 'legal' && !loading && !selected && (
         <EmptyState
           title="The legal documents are not provisioned."
           hint="Both are planted with the database. Ask systems administration to run the content seeder."
         />
       )}
 
-      {!loading && selected && (
+      {view === 'legal' && !loading && selected && (
         <>
-          {/* ── Document selector ────────────────────────────── */}
-          <div>
-            <div className="mono mb-3 flex items-center gap-3 text-[10px] uppercase tracking-[0.18em] text-graphite">
-              <span>Documents</span>
-              <span className="h-px flex-1" style={{ background: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }} />
-            </div>
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {docs.map((d) => {
-                const on = d.title === selected.title;
-                return (
-                  <li key={d.title}>
-                    <button
-                      type="button"
-                      onClick={() => selectDoc(d.title)}
-                      aria-pressed={on}
-                      className={`flex w-full flex-col gap-1.5 border px-4 py-3.5 text-left transition-colors duration-300 ${
-                        on ? 'border-navy bg-navy text-paper' : 'rule bg-paper hover:border-[color:var(--color-amber-deep)]'
-                      }`}
-                    >
-                      <span className={`mono text-[9.5px] uppercase tracking-[0.2em] ${on ? 'text-paper/55' : 'text-graphite'}`}>
-                        {on && dirty ? 'Editing · unsaved' : `Updated ${fmtDate(d.document.updated)}`}
-                      </span>
-                      <span className={`text-[14px] leading-snug ${on ? 'text-paper' : 'text-ink'}`}>{d.title}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {/* ── The document ─────────────────────────────────── */}
           <motion.div
             key={selected.title}
             initial={{ opacity: 0, y: 10 }}
@@ -215,20 +271,19 @@ export default function PagesModule() {
             </Panel>
           </motion.div>
 
-          {/* ── Sticky save bar ──────────────────────────────── */}
           <SaveBar
-            dirty={dirty}
+            dirty={legalDirty}
             saving={saving}
             justSaved={justSaved}
             error={error}
             scope={selected.title}
-            onDiscard={discard}
+            onDiscard={() => { setError(null); setDraft(stored); }}
             onSave={() => void save()}
           />
         </>
       )}
 
-      {/* Leaving an edited document behind */}
+      {/* Leaving an edited page behind */}
       <Modal
         open={pending !== null}
         title="Unsaved changes"
@@ -238,10 +293,11 @@ export default function PagesModule() {
             <BtnGhost onClick={() => setPending(null)}>Stay here</BtnGhost>
             <BtnPrimary
               onClick={() => {
-                setDraft(stored);
-                setSelectedTitle(pending);
+                if (pending) {
+                  setDraft(stored);   // the legal draft; the Contact draft goes with its unmount
+                  apply(pending);
+                }
                 setPending(null);
-                setError(null);
               }}
             >
               Discard and switch
@@ -250,57 +306,41 @@ export default function PagesModule() {
         }
       >
         <p className="text-[13.5px] leading-relaxed text-slate">
-          {selected?.title} has edits that have not been published. Switching documents now throws them away.
+          {openLabel} has edits that have not been published. Switching now throws them away.
         </p>
       </Modal>
     </div>
   );
 }
 
-/* ── Save bar ──────────────────────────────────────────────── */
+/* ── Target card ───────────────────────────────────────────── */
 
-function SaveBar({
-  dirty, saving, justSaved, error, scope, onDiscard, onSave,
+function TargetCard({
+  on, where, title, state, unit, onClick,
 }: {
-  dirty: boolean; saving: boolean; justSaved: boolean; error: string | null;
-  scope: string; onDiscard: () => void; onSave: () => void;
+  on: boolean; where: string; title: string; state: string; unit: string; onClick: () => void;
 }) {
-  const show = dirty || saving || justSaved || Boolean(error);
-
   return (
-    <AnimatePresence>
-      {show && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          transition={{ duration: 0.32, ease: EASE }}
-          className="sticky bottom-4 z-30 border rule bg-paper/95 shadow-[0_10px_30px_-12px_oklch(0.165_0.040_260_/_0.4)] backdrop-blur-md"
-        >
-          <div className="flex w-full flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              {error ? (
-                <p className="text-[13px] leading-snug" style={{ color: 'var(--color-warn)' }}>{error}</p>
-              ) : justSaved && !dirty ? (
-                <Chip tone="live">Published to the live site</Chip>
-              ) : (
-                <p className="truncate text-[13px] text-slate">
-                  <span className="mono mr-2 text-[10px] uppercase tracking-[0.16em]" style={{ color: 'var(--color-amber-deep)' }}>
-                    Unsaved
-                  </span>
-                  {scope}
-                </p>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <BtnGhost onClick={onDiscard}>Discard</BtnGhost>
-              <BtnPrimary onClick={onSave} disabled={saving || !dirty}>
-                {saving ? 'Publishing…' : 'Save & publish'}
-              </BtnPrimary>
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={`flex h-full w-full flex-col gap-1.5 border px-4 py-3.5 text-left transition-colors duration-300 ${
+        on ? 'border-navy bg-navy text-paper' : 'rule bg-paper hover:border-[color:var(--color-amber-deep)]'
+      }`}
+    >
+      <span className="flex items-baseline justify-between gap-3">
+        <span className={`mono text-[9.5px] uppercase tracking-[0.2em] ${on ? 'text-paper/70' : 'text-graphite'}`}>
+          {where}
+        </span>
+        <span className={`mono num shrink-0 text-[9.5px] uppercase tracking-[0.14em] ${on ? 'text-paper/45' : 'text-silver'}`}>
+          {unit}
+        </span>
+      </span>
+      <span className={`text-[14px] leading-snug ${on ? 'text-paper' : 'text-ink'}`}>{title}</span>
+      <span className={`mono truncate text-[9.5px] uppercase tracking-[0.16em] ${on ? 'text-paper/55' : 'text-graphite'}`}>
+        {state}
+      </span>
+    </button>
   );
 }
