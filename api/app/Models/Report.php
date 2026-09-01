@@ -10,12 +10,12 @@ class Report extends Model
 {
     protected $fillable = [
         'title', 'category', 'company_id', 'analyst', 'date', 'pages', 'summary',
-        'file_name', 'file_size', 'file_url', 'file_path',
+        'spotlight', 'file_name', 'file_size', 'file_url', 'file_path',
     ];
 
     protected function casts(): array
     {
-        return ['date' => 'date:Y-m-d', 'pages' => 'integer', 'file_size' => 'integer'];
+        return ['date' => 'date:Y-m-d', 'pages' => 'integer', 'file_size' => 'integer', 'spotlight' => 'boolean'];
     }
 
     public function bookmarks(): HasMany
@@ -42,6 +42,8 @@ class Report extends Model
             'date' => $this->date->format('Y-m-d'),
             'pages' => $this->pages,
             'summary' => $this->summary,
+            // The one report showcased on the portal dashboard's Spotlight card.
+            'spotlight' => (bool) $this->spotlight,
             'fileName' => $this->file_name,
             'fileSize' => $this->file_size,
             // Public catalog URL, or null when the PDF streams from the API.

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\PortalSetting;
 use App\Models\Report;
 use App\Support\Audit;
+use App\Support\Trending;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class ReportController extends Controller
@@ -79,6 +82,74 @@ class ReportController extends Controller
         ])->save();
 
         $audit = Audit::log($replaced ? 'Replaced report PDF' : 'Updated report', $report->title);
+
+        return response()->json(['item' => $report->load('company')->toWire(), 'audit' => $audit->toWire()]);
+    }
+
+    /** Ranking-rule fields shared by the update and preview endpoints. */
+    private static function trendingRules(): array
+    {
+        return [
+            'metric' => ['required', Rule::in(Trending::METRICS)],
+            'windowMonths' => ['required', 'integer', 'min:0', 'max:24'],
+            'limit' => ['required', 'integer', 'min:1', 'max:6'],
+            'minEvents' => ['required', 'integer', 'min:1', 'max:10000'],
+        ];
+    }
+
+    /** One line for the audit trail — "Top 3 · views · trailing 3 months". */
+    private static function describeTrending(PortalSetting $s): string
+    {
+        $window = $s->trending_window_months > 0 ? "trailing {$s->trending_window_months} mo" : 'all time';
+        $min = $s->trending_min_events > 1 ? " · {$s->trending_min_events}+ to qualify" : '';
+
+        return "Top {$s->trending_limit} · {$s->trending_metric} · {$window}{$min}"
+            .($s->trending_enabled ? '' : ' · hidden');
+    }
+
+    /** Rewrite how the portal dashboard ranks Trending Content. */
+    public function updateTrending(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            ...self::trendingRules(),
+        ]);
+
+        $settings = PortalSetting::current();
+        $settings->fill([
+            'trending_enabled' => $data['enabled'],
+            'trending_metric' => $data['metric'],
+            'trending_window_months' => $data['windowMonths'],
+            'trending_limit' => $data['limit'],
+            'trending_min_events' => $data['minEvents'],
+        ])->save();
+
+        $audit = Audit::log('Updated trending rules', self::describeTrending($settings));
+
+        return response()->json(['item' => $settings->trendingToWire(), 'audit' => $audit->toWire()]);
+    }
+
+    /** Dry-run a rule set against the live ledger — what would rank right now. */
+    public function previewTrending(Request $request): JsonResponse
+    {
+        $data = $request->validate(self::trendingRules());
+
+        return response()->json(['entries' => Trending::rank($data)]);
+    }
+
+    /** Make this report the portal's Spotlight showcase (or clear it). */
+    public function spotlight(Request $request, Report $report): JsonResponse
+    {
+        $data = $request->validate(['spotlight' => ['required', 'boolean']]);
+
+        if ($data['spotlight']) {
+            // Single showcase slot — flagging one report unflags the rest.
+            Report::where('spotlight', true)->where('id', '!=', $report->id)->update(['spotlight' => false]);
+        }
+        $report->spotlight = $data['spotlight'];
+        $report->save();
+
+        $audit = Audit::log($report->spotlight ? 'Spotlighted report' : 'Cleared report spotlight', $report->title);
 
         return response()->json(['item' => $report->load('company')->toWire(), 'audit' => $audit->toWire()]);
     }

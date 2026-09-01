@@ -286,11 +286,71 @@ export type Report = {
   date: string;        // ISO (yyyy-mm-dd)
   pages: number;       // 0 when unknown
   summary: string;
+  /** The one report showcased on the portal dashboard's Spotlight card. */
+  spotlight: boolean;
   fileName: string;
   fileSize: number;    // bytes
   /** Public URL for catalog PDFs; null when the PDF is stored behind the API. */
   fileUrl: string | null;
 };
+
+/* ── Trending Content ──────────────────────────────────────── */
+
+/** What counts as a "read" when the portal ranks Trending Content. */
+export type TrendingMetric = 'views' | 'downloads' | 'engagement';
+
+/** One rung of the portal's most-read ladder. */
+export type TrendingEntry = {
+  reportId: string;
+  count: number;
+};
+
+/** The ranking + the rules it was computed under, as /portal/reports sends it. */
+export type TrendingBlock = {
+  metric: TrendingMetric;
+  /** 0 = all time. */
+  windowMonths: number;
+  entries: TrendingEntry[];
+};
+
+/** How the portal ranks Trending Content — edited in the CMS Reports module. */
+export type TrendingRules = {
+  enabled: boolean;
+  metric: TrendingMetric;
+  /** 0 = all time. */
+  windowMonths: number;
+  /** How many rungs the ladder shows (1–6). */
+  limit: number;
+  /** A report needs at least this many events to qualify. */
+  minEvents: number;
+};
+
+export const EMPTY_TRENDING_RULES: TrendingRules = {
+  enabled: true, metric: 'views', windowMonths: 3, limit: 3, minEvents: 1,
+};
+
+export const TRENDING_METRICS: Array<{ value: TrendingMetric; label: string; heading: string; unit: [string, string] }> = [
+  { value: 'views', label: 'Viewer opens', heading: 'Most viewed', unit: ['view', 'views'] },
+  { value: 'downloads', label: 'Downloads', heading: 'Most downloaded', unit: ['download', 'downloads'] },
+  { value: 'engagement', label: 'Opens + downloads', heading: 'Most read', unit: ['read', 'reads'] },
+];
+
+export const TRENDING_WINDOWS: Array<{ value: number; label: string }> = [
+  { value: 1, label: 'Trailing month' },
+  { value: 3, label: 'Trailing 3 months' },
+  { value: 6, label: 'Trailing 6 months' },
+  { value: 12, label: 'Trailing 12 months' },
+  { value: 0, label: 'All time' },
+];
+
+export const trendingMetricDef = (m: TrendingMetric) =>
+  TRENDING_METRICS.find((x) => x.value === m) ?? TRENDING_METRICS[0];
+
+/** "last 3 months" / "last month" / "all time", for portal-facing copy. */
+export function trendingWindowLabel(months: number): string {
+  if (months === 0) return 'all time';
+  return months === 1 ? 'last month' : `last ${months} months`;
+}
 
 export type AuditEntry = {
   id: string;

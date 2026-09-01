@@ -2,7 +2,10 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReports } from './reports';
-import { REPORT_CATEGORIES, REPORT_COMPANIES, fmtBytes, fmtDate, type Company, type Report, type ReportCategory, type ReportCompany } from '../cms/data';
+import {
+  REPORT_CATEGORIES, REPORT_COMPANIES, fmtBytes, fmtDate, trendingMetricDef, trendingWindowLabel,
+  type Company, type Report, type ReportCategory, type ReportCompany, type TrendingMetric,
+} from '../cms/data';
 import { usePortal } from './auth';
 import { useBookmarks } from './bookmarks';
 import { downloadReport } from './download';
@@ -13,15 +16,21 @@ import LineSidebar from '../components/LineSidebar';
 import TextType from '../components/TextType';
 import {
   IconSearch, IconDownload, IconEye, IconSignOut, IconBookmark, IconBookmarkFilled,
-  IconMenu, IconX,
+  IconMenu, IconX, IconArrowRight, IconCalendar,
 } from '../cms/icons';
 
 const EASE = [0.25, 1, 0.5, 1] as const;
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 
 const companyLabel = (v: ReportCompany) => REPORT_COMPANIES.find((c) => c.value === v)?.label ?? v;
 
 /** Active companies filter: a whole classification, one company, or nothing. */
 type CompanySel = { kind: 'type'; type: ReportCompany } | { kind: 'company'; company: Company } | null;
+
+/** Active period filter: a whole year, or one month inside it. Both halves are
+    the raw ISO fragments ("2026", "08") so nothing is re-parsed into a Date. */
+type DateSel = { year: string; month: string | null } | null;
 
 function greeting(): string {
   const hour = Number(new Date().toLocaleString('en-PH', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' }));
@@ -52,13 +61,15 @@ function ManilaClock() {
 }
 
 export default function PortalDashboard() {
-  const { reports, companies, status } = useReports();
+  const { reports, companies, trending, status } = useReports();
   const { client, signOut } = usePortal();
   const saved = useBookmarks();
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'latest' | 'all' | ReportCategory>('latest');
   const [companySel, setCompanySel] = useState<CompanySel>(null);
   const [companiesOpen, setCompaniesOpen] = useState(false);
+  const [dateSel, setDateSel] = useState<DateSel>(null);
+  const [dateOpen, setDateOpen] = useState(false);
   const [sidebarKey, setSidebarKey] = useState(0);
   const [active, setActive] = useState<Report | null>(null);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
@@ -67,8 +78,18 @@ export default function PortalDashboard() {
 
   const greetingLine = `${greeting()}, ${client ? firstName(client.name) : 'there'}.`;
 
-  // Excludes any unnamed/placeholder company row from the headline count.
-  const listedCompanies = useMemo(() => companies.filter((c) => c.name?.trim()), [companies]);
+  /** The most-read ladder, resolved against the live catalog. The API ranks
+      under whatever rules the desk set in the CMS; a deleted report simply
+      drops off its rung. */
+  const trendingRows = useMemo(() => {
+    const byId = new Map(reports.map((r) => [r.id, r]));
+    return trending.entries
+      .map((t) => ({ count: t.count, report: byId.get(t.reportId) }))
+      .filter((t): t is { count: number; report: Report } => Boolean(t.report));
+  }, [reports, trending]);
+
+  /** The one report the desk flagged for the Spotlight card in the CMS. */
+  const spotlightReport = useMemo(() => reports.find((r) => r.spotlight) ?? null, [reports]);
 
   const sorted = useMemo(
     () => reports.slice().sort((a, b) => b.date.localeCompare(a.date)),
@@ -98,6 +119,31 @@ export default function PortalDashboard() {
     return m;
   }, [reports]);
 
+  /** The published years, newest first, each carrying its month tallies. Read
+      straight off the ISO string — parsing to a Date would shunt a Jan 1 report
+      into the previous year for anyone west of Manila. */
+  const dateIndex = useMemo(() => {
+    const years = new Map<string, { total: number; months: Map<string, number> }>();
+    for (const r of reports) {
+      const year = r.date?.slice(0, 4);
+      const month = r.date?.slice(5, 7);
+      if (!year || year.length !== 4 || !month) continue;
+      let entry = years.get(year);
+      if (!entry) years.set(year, (entry = { total: 0, months: new Map() }));
+      entry.total += 1;
+      entry.months.set(month, (entry.months.get(month) ?? 0) + 1);
+    }
+    return [...years.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([year, e]) => ({ year, total: e.total, months: e.months }));
+  }, [reports]);
+
+  /** month → count for the year on screen; empty until a year is picked. */
+  const monthsInYear = useMemo(
+    () => dateIndex.find((y) => y.year === dateSel?.year)?.months ?? new Map<string, number>(),
+    [dateIndex, dateSel],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return sorted
@@ -107,16 +153,24 @@ export default function PortalDashboard() {
         if (companySel.kind === 'type') return r.company === companySel.type;
         return r.companyId === companySel.company.id;
       })
+      .filter((r) => {
+        if (!dateSel) return true;
+        if (r.date.slice(0, 4) !== dateSel.year) return false;
+        return !dateSel.month || r.date.slice(5, 7) === dateSel.month;
+      })
       .filter((r) => !q || r.title.toLowerCase().includes(q) || r.analyst.toLowerCase().includes(q) || (r.category ?? '').toLowerCase().includes(q) || r.summary.toLowerCase().includes(q) || (r.companyName ?? '').toLowerCase().includes(q));
-  }, [sorted, view, companySel, query]);
+  }, [sorted, view, companySel, dateSel, query]);
 
   const companySelLabel = companySel
     ? companySel.kind === 'type' ? companyLabel(companySel.type) : companySel.company.name
     : null;
-  const heading = query.trim()
+  const dateSelLabel = dateSel
+    ? dateSel.month ? `${MONTHS[Number(dateSel.month) - 1]} ${dateSel.year}` : dateSel.year
+    : null;
+  const heading = query.trim() || dateSel
     ? 'Results'
     : companySelLabel ?? (view === 'latest' ? 'Latest reports' : view === 'all' ? 'All reports' : 'Results');
-  const showHero = view === 'latest' && query.trim() === '' && companySel === null;
+  const showHero = view === 'latest' && query.trim() === '' && companySel === null && dateSel === null;
   const featured = showHero ? filtered[0] : null;
   const grid = showHero ? filtered.slice(1, 7) : filtered;
 
@@ -184,7 +238,7 @@ export default function PortalDashboard() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: EASE }}
-          className="flex flex-col gap-4 border-b rule pb-9 md:flex-row md:items-end md:justify-between"
+          className="border-b rule pb-9"
         >
           <div>
             <div className="eyebrow mb-4">
@@ -208,28 +262,59 @@ export default function PortalDashboard() {
                 style={{ letterSpacing: 'inherit' }}
               />
             </h1>
-            <p className="mono mt-3 text-[11px] font-semibold uppercase tracking-[0.20em] text-slate">
-              Provided for the exclusive use of Regis Clients. Do not redistribute.
-            </p>
-            <p className="mono mt-1.5 text-[10.5px] uppercase tracking-[0.16em] text-graphite">
-              Every copy you open or download is watermarked with your name and the time it was taken.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-end gap-8">
-            <div>
-              <div className="mono num text-[clamp(1.8rem,3vw,2.4rem)] leading-none tracking-[-0.02em] text-ink">{reports.length}</div>
-              <div className="mono mt-1.5 text-[10px] uppercase tracking-[0.18em] text-graphite">Reports</div>
-            </div>
-            <div>
-              <div className="mono num text-[clamp(1.8rem,3vw,2.4rem)] leading-none tracking-[-0.02em] text-ink">{listedCompanies.length}</div>
-              <div className="mono mt-1.5 text-[10px] uppercase tracking-[0.18em] text-graphite">Companies</div>
-            </div>
-            <div>
-              <div className="mono num text-[clamp(1.8rem,3vw,2.4rem)] leading-none tracking-[-0.02em] text-ink">{REPORT_CATEGORIES.length}</div>
-              <div className="mono mt-1.5 text-[10px] uppercase tracking-[0.18em] text-graphite">Sectors</div>
-            </div>
           </div>
         </motion.section>
+
+        {/* ── Trending + Spotlight ──────────────────────────── */}
+        {(trendingRows.length > 0 || spotlightReport) && (
+          <motion.section
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: EASE, delay: 0.05 }}
+            className={`mt-9 grid grid-cols-1 gap-9 ${
+              trendingRows.length > 0 && spotlightReport ? 'xl:grid-cols-[2.05fr_1fr] xl:gap-12' : ''
+            }`}
+          >
+            {trendingRows.length > 0 && (
+              <div className="flex min-w-0 flex-col">
+                <div className="mb-5 flex items-baseline justify-between gap-4">
+                  <h2 className="text-[18px] font-medium tracking-[-0.01em] text-ink">Trending Content</h2>
+                  <span className="mono flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-graphite">
+                    <LiveDot />
+                    {trendingMetricDef(trending.metric).heading} · {trendingWindowLabel(trending.windowMonths)}
+                  </span>
+                </div>
+                <div
+                  className={`grid flex-1 grid-cols-1 gap-5 ${
+                    trendingRows.length >= 3 ? 'sm:grid-cols-3' : trendingRows.length === 2 ? 'sm:grid-cols-2' : ''
+                  }`}
+                >
+                  {trendingRows.map((t, i) => (
+                    <TrendingCard
+                      key={t.report.id}
+                      report={t.report}
+                      rank={i + 1}
+                      count={t.count}
+                      maxCount={trendingRows[0].count}
+                      metric={trending.metric}
+                      index={i}
+                      onView={() => setActive(t.report)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {spotlightReport && (
+              <div className="flex min-w-0 flex-col">
+                <div className="mb-5 flex items-baseline justify-between gap-4">
+                  <h2 className="text-[18px] font-medium tracking-[-0.01em] text-ink">Spotlight</h2>
+                  <span className="mono text-[10px] uppercase tracking-[0.16em] text-graphite">From the desk</span>
+                </div>
+                <SpotlightCard report={spotlightReport} onView={() => setActive(spotlightReport)} />
+              </div>
+            )}
+          </motion.section>
+        )}
 
         {/* ── Search ────────────────────────────────────────── */}
         <motion.section
@@ -242,7 +327,7 @@ export default function PortalDashboard() {
             {/* Companies panel toggle */}
             <button
               type="button"
-              onClick={() => setCompaniesOpen((o) => !o)}
+              onClick={() => { setCompaniesOpen((o) => !o); setDateOpen(false); }}
               aria-expanded={companiesOpen}
               aria-controls="companies-panel"
               aria-label="Browse local and foreign companies"
@@ -265,6 +350,37 @@ export default function PortalDashboard() {
                   {companiesOpen ? <IconX size={18} /> : <IconMenu size={18} />}
                 </motion.span>
               </AnimatePresence>
+            </button>
+
+            {/* Period panel toggle — carries the active period as its label on wider screens */}
+            <button
+              type="button"
+              onClick={() => { setDateOpen((o) => !o); setCompaniesOpen(false); }}
+              aria-expanded={dateOpen}
+              aria-controls="calendar-panel"
+              aria-label="Filter reports by year and month"
+              title="Filter by period"
+              className={`mono flex shrink-0 items-center justify-center border text-[10.5px] uppercase tracking-[0.14em] transition-colors duration-300 active:scale-[0.96] ${
+                dateSelLabel ? 'w-[54px] sm:w-auto sm:gap-2.5 sm:px-4' : 'w-[54px]'
+              } ${
+                dateOpen || dateSel !== null
+                  ? 'border-[color:var(--color-amber-deep)] bg-white text-[color:var(--color-amber-deep)]'
+                  : 'rule bg-white text-graphite hover:border-[color:var(--color-amber-deep)] hover:text-ink'
+              }`}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={dateOpen ? 'close' : 'open'}
+                  initial={{ rotate: -90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: 90, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: EASE }}
+                  className="grid place-items-center"
+                >
+                  {dateOpen ? <IconX size={18} /> : <IconCalendar size={18} />}
+                </motion.span>
+              </AnimatePresence>
+              {dateSelLabel && <span className="num hidden sm:inline">{dateSelLabel}</span>}
             </button>
 
             <label className="relative block flex-1">
@@ -366,6 +482,133 @@ export default function PortalDashboard() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Calendar panel — pick a year, then optionally a month inside it */}
+          <AnimatePresence initial={false}>
+            {dateOpen && (
+              <motion.div
+                id="calendar-panel"
+                key="calendar-panel"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.45, ease: EASE }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 grid grid-cols-1 divide-y rule border rule bg-white md:grid-cols-[0.8fr_1.6fr] md:divide-x md:divide-y-0">
+                  {/* Years */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: EASE, delay: 0.1 }}
+                    className="flex min-w-0 flex-col p-6"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-3 border-b rule pb-4">
+                      <span className="mono flex items-center gap-2.5 text-[10.5px] uppercase tracking-[0.2em] text-graphite">
+                        <span aria-hidden className="block h-[2px] w-5" style={{ background: dateSel ? 'var(--color-amber)' : 'var(--color-silver)' }} />
+                        Year
+                        <span className="num text-silver">{dateIndex.length}</span>
+                      </span>
+                      {dateSel && (
+                        <button
+                          type="button"
+                          onClick={() => setDateSel(null)}
+                          className="mono border rule px-3 py-1.5 text-[9.5px] uppercase tracking-[0.14em] text-graphite transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    {dateIndex.length === 0 ? (
+                      <p className="text-[13px] leading-relaxed text-graphite">No dated reports yet.</p>
+                    ) : (
+                      <ul className="max-h-[280px] divide-y rule overflow-y-auto">
+                        {dateIndex.map((y) => {
+                          const active = dateSel?.year === y.year;
+                          return (
+                            <li key={y.year}>
+                              <button
+                                type="button"
+                                onClick={() => setDateSel(active ? null : { year: y.year, month: null })}
+                                className="group/item flex w-full items-baseline justify-between gap-4 py-3 text-left transition-colors duration-200"
+                              >
+                                <span
+                                  className={`mono num block text-[14px] leading-snug transition-colors group-hover/item:text-[color:var(--color-amber-deep)] ${active ? '' : 'text-ink'}`}
+                                  style={active ? { color: 'var(--color-amber-deep)' } : undefined}
+                                >
+                                  {y.year}
+                                </span>
+                                <span className="mono num shrink-0 text-[10.5px] text-silver">
+                                  {y.total} {y.total === 1 ? 'report' : 'reports'}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </motion.div>
+
+                  {/* Months of the selected year */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: EASE, delay: 0.18 }}
+                    className="flex min-w-0 flex-col p-6"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-3 border-b rule pb-4">
+                      <span className="mono flex items-center gap-2.5 text-[10.5px] uppercase tracking-[0.2em] text-graphite">
+                        <span aria-hidden className="block h-[2px] w-5" style={{ background: dateSel?.month ? 'var(--color-amber)' : 'var(--color-silver)' }} />
+                        Month
+                        {dateSel && <span className="num text-silver">{dateSel.year}</span>}
+                      </span>
+                      {dateSel?.month && (
+                        <button
+                          type="button"
+                          onClick={() => setDateSel({ year: dateSel.year, month: null })}
+                          className="mono border rule px-3 py-1.5 text-[9.5px] uppercase tracking-[0.14em] text-graphite transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px"
+                        >
+                          Whole year
+                        </button>
+                      )}
+                    </div>
+                    {!dateSel ? (
+                      <p className="text-[13px] leading-relaxed text-graphite">Pick a year to narrow down to a month.</p>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                        {MONTHS.map((label, i) => {
+                          const key = String(i + 1).padStart(2, '0');
+                          const count = monthsInYear.get(key) ?? 0;
+                          const active = dateSel.month === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              disabled={count === 0}
+                              onClick={() => { setDateSel({ year: dateSel.year, month: active ? null : key }); if (!active) setDateOpen(false); }}
+                              title={count === 0 ? `No reports in ${label} ${dateSel.year}` : `${count} ${count === 1 ? 'report' : 'reports'} in ${label} ${dateSel.year}`}
+                              className={`mono flex flex-col items-start gap-1 border px-3 py-2.5 text-[10.5px] uppercase tracking-[0.12em] transition-colors duration-300 ${
+                                active
+                                  ? 'border-navy bg-navy text-paper'
+                                  : count === 0
+                                    ? 'rule text-silver opacity-55'
+                                    : 'rule text-slate hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px'
+                              }`}
+                            >
+                              {label}
+                              <span className={`num text-[10px] ${active ? 'opacity-60' : 'text-silver'}`}>
+                                {count || '—'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.section>
 
         {/* ── Sidebar + Reports ─────────────────────────────── */}
@@ -426,6 +669,17 @@ export default function PortalDashboard() {
                     <IconX size={11} />
                   </button>
                 )}
+                {dateSelLabel && (
+                  <button
+                    type="button"
+                    onClick={() => setDateSel(null)}
+                    className="mono inline-flex items-center gap-1.5 border px-2.5 py-1 text-[9.5px] uppercase tracking-[0.14em] transition-colors duration-300 hover:text-ink"
+                    style={{ borderColor: 'color-mix(in oklab, var(--color-amber-deep) 55%, transparent)', color: 'var(--color-amber-deep)' }}
+                  >
+                    <span className="num">{dateSelLabel}</span>
+                    <IconX size={11} />
+                  </button>
+                )}
               </div>
               <span className="mono text-[11px] uppercase tracking-[0.16em] text-graphite">
                 {filtered.length} {filtered.length === 1 ? 'report' : 'reports'}
@@ -452,7 +706,7 @@ export default function PortalDashboard() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => { setQuery(''); setView('latest'); setCompanySel(null); setSidebarKey(k => k + 1); }}
+                  onClick={() => { setQuery(''); setView('latest'); setCompanySel(null); setDateSel(null); setSidebarKey(k => k + 1); }}
                   className="mono mt-2 border rule px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] text-slate transition-colors hover:border-[color:var(--color-amber-deep)] hover:text-ink"
                 >
                   Reset filters
@@ -589,6 +843,134 @@ function SavedTick({ shown }: { shown: boolean }) {
         />
       )}
     </AnimatePresence>
+  );
+}
+
+/* ── Trending + Spotlight ────────────────────────────────────── */
+
+/** The pulsing amber marker the portal uses to mean "this is live data". */
+function LiveDot() {
+  return (
+    <span className="relative flex h-1.5 w-1.5" aria-hidden>
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: 'var(--color-amber)' }} />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: 'var(--color-amber)' }} />
+    </span>
+  );
+}
+
+/** One rung of the most-read ladder. The whole card opens the viewer; the
+    2px bar underneath plots this rung's reads against the chart-topper's. */
+function TrendingCard({ report, rank, count, maxCount, metric, index, onView }: {
+  report: Report; rank: number; count: number; maxCount: number; metric: TrendingMetric; index: number; onView: () => void;
+}) {
+  const top = rank === 1;
+  const share = Math.max(count / Math.max(maxCount, 1), 0.08);
+  const unit = trendingMetricDef(metric).unit[count === 1 ? 0 : 1];
+  const CountIcon = metric === 'downloads' ? IconDownload : IconEye;
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: EASE, delay: 0.14 + index * 0.09 }}
+      className="group relative flex flex-col border rule bg-white transition-colors duration-300 hover:border-[color:var(--color-amber-deep)]"
+    >
+      <button
+        type="button"
+        onClick={onView}
+        aria-label={`Open ${report.title}`}
+        className="flex flex-1 flex-col p-5 text-left"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <span
+            className="mono num text-[26px] leading-none tracking-[-0.03em]"
+            style={{ color: top ? 'var(--color-amber-deep)' : 'var(--color-silver)' }}
+          >
+            {String(rank).padStart(2, '0')}
+          </span>
+          <span className="mono num flex items-center gap-1.5 pt-1 text-[10.5px] tracking-[0.06em] text-graphite">
+            <CountIcon size={12} className="text-silver" />
+            {count.toLocaleString('en-PH')} {unit}
+          </span>
+        </div>
+        <div className="mono mt-4 truncate text-[9.5px] uppercase tracking-[0.16em] text-graphite">
+          {[report.category ?? 'General', report.companyName].filter(Boolean).join(' · ')}
+        </div>
+        <h3 className="mt-2 line-clamp-2 text-[14.5px] font-medium leading-snug tracking-[-0.01em] text-ink transition-colors group-hover:text-[color:var(--color-amber-deep)]">
+          {report.title}
+        </h3>
+        <div className="mono mt-auto flex items-center justify-between gap-3 pt-4 text-[10.5px] tracking-[0.04em] text-graphite">
+          <span className="truncate">
+            {report.analyst}
+            <span className="text-silver"> · </span>
+            <span className="num">{fmtDate(report.date)}</span>
+          </span>
+          <IconArrowRight
+            size={13}
+            className="shrink-0 text-silver transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-[color:var(--color-amber-deep)]"
+          />
+        </div>
+      </button>
+      <div aria-hidden className="h-[2px] w-full">
+        <motion.div
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={{ duration: 0.7, ease: EASE, delay: 0.35 + index * 0.09 }}
+          className="h-full origin-left"
+          style={{ width: `${share * 100}%`, background: top ? 'var(--color-amber)' : 'var(--color-silver)' }}
+        />
+      </div>
+    </motion.article>
+  );
+}
+
+/** The desk's showcase, flagged in the CMS Reports module. Drenched navy so
+    it reads as an editorial choice, not another ranking. */
+function SpotlightCard({ report, onView }: { report: Report; onView: () => void }) {
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: EASE, delay: 0.22 }}
+      className="group relative flex-1 overflow-hidden bg-blueprint"
+    >
+      <span aria-hidden className="absolute left-0 top-0 z-10 block h-[2px] w-10" style={{ background: 'var(--color-amber)' }} />
+      <button
+        type="button"
+        onClick={onView}
+        aria-label={`Open ${report.title}`}
+        className="flex h-full w-full flex-col p-6 text-left md:p-7"
+      >
+        <span className="mono flex items-center gap-2.5 text-[10px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-amber)' }}>
+          <LiveDot />
+          Spotlight
+        </span>
+        <h3 className="mt-4 text-[clamp(1.15rem,1.8vw,1.45rem)] font-medium leading-[1.15] tracking-[-0.015em] text-paper transition-colors duration-300 group-hover:text-[color:var(--color-amber)]">
+          {report.title}
+        </h3>
+        {report.summary && (
+          <p className="mt-3 line-clamp-2 text-[13px] leading-relaxed" style={{ color: 'color-mix(in oklab, var(--color-paper) 66%, transparent)' }}>
+            {report.summary}
+          </p>
+        )}
+        <div
+          className="mono mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t rule-paper pt-4 text-[10.5px] tracking-[0.05em]"
+          style={{ color: 'color-mix(in oklab, var(--color-paper) 60%, transparent)' }}
+        >
+          <span>{report.analyst}</span>
+          <span>·</span>
+          <span className="num">{fmtDate(report.date)}</span>
+          {report.pages ? <><span>·</span><span className="num">{report.pages} pages</span></> : null}
+          <span>·</span>
+          <span className="num">{fmtBytes(report.fileSize)}</span>
+        </div>
+        <span className="mono mt-5 inline-flex items-center gap-3 text-[10.5px] uppercase tracking-[0.16em] text-paper">
+          <span className="grid h-8 w-8 place-items-center border rule-paper transition-colors duration-300 group-hover:border-[color:var(--color-amber)] group-hover:text-[color:var(--color-amber)]">
+            <IconArrowRight size={13} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+          </span>
+          View report
+        </span>
+      </button>
+    </motion.article>
   );
 }
 

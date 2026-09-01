@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
-import type { Company, Report } from '../cms/data';
+import type { Company, Report, TrendingBlock } from '../cms/data';
 
 /* ─────────────────────────────────────────────────────────────
    Client-portal research catalog, fed by /api/portal/reports.
@@ -11,6 +11,8 @@ type ReportsValue = {
   reports: Report[];
   /** The covered-companies registry, grouped local/foreign by the filter UI. */
   companies: Company[];
+  /** The most-read ladder plus the rules it ran under (set in the CMS). */
+  trending: TrendingBlock;
   status: 'loading' | 'ready' | 'error';
   error: string | null;
   reload: () => void;
@@ -21,6 +23,7 @@ const ReportsContext = createContext<ReportsValue | null>(null);
 export function PortalReportsProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState<Report[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [trending, setTrending] = useState<TrendingBlock>({ metric: 'views', windowMonths: 3, entries: [] });
   const [status, setStatus] = useState<ReportsValue['status']>('loading');
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
@@ -34,10 +37,11 @@ export function PortalReportsProvider({ children }: { children: ReactNode }) {
     setStatus('loading');
     setError(null);
     try {
-      const data = await apiFetch<{ reports: Report[]; companies?: Company[] }>('/portal/reports', { audience: 'portal' });
+      const data = await apiFetch<{ reports: Report[]; companies?: Company[]; trending?: TrendingBlock }>('/portal/reports', { audience: 'portal' });
       if (!alive.current) return;
       setReports(data.reports);
       setCompanies(data.companies ?? []);
+      setTrending(data.trending ?? { metric: 'views', windowMonths: 3, entries: [] });
       setStatus('ready');
     } catch (e) {
       if (!alive.current) return;
@@ -49,8 +53,8 @@ export function PortalReportsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void load(); }, [load]);
 
   const value = useMemo<ReportsValue>(
-    () => ({ reports, companies, status, error, reload: () => { void load(); } }),
-    [reports, companies, status, error, load],
+    () => ({ reports, companies, trending, status, error, reload: () => { void load(); } }),
+    [reports, companies, trending, status, error, load],
   );
 
   return <ReportsContext.Provider value={value}>{children}</ReportsContext.Provider>;

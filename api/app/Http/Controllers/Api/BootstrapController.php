@@ -13,6 +13,7 @@ use App\Models\InsightPage;
 use App\Models\MediaAsset;
 use App\Models\NewsletterIssue;
 use App\Models\PageBlock;
+use App\Models\PortalSetting;
 use App\Models\Report;
 use App\Models\ServiceLine;
 use App\Models\ServicePage;
@@ -31,6 +32,8 @@ class BootstrapController extends Controller
             'articles' => Article::orderByDesc('date')->orderByDesc('id')->get()->map->toWire()->values(),
             'reports' => Report::with('company')->orderByDesc('date')->orderByDesc('id')->get()->map->toWire()->values(),
             'companies' => Company::orderBy('name')->get()->map->toWire()->values(),
+            // How the portal dashboard ranks Trending Content (Reports module).
+            'trendingRules' => PortalSetting::current()->trendingToWire(),
             'people' => StaffMember::orderBy('position')->orderBy('id')->get()->map->toWire()->values(),
             'services' => ServiceLine::orderBy('position')->orderBy('id')->get()->map->toWire()->values(),
             'servicePage' => ServicePage::current()->toWire(),

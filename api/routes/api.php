@@ -73,6 +73,10 @@ Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
 
     Route::middleware('permission:reports.manage')->group(function () {
         Route::post('/reports', [ReportController::class, 'store']);
+        Route::put('/reports/{report}/spotlight', [ReportController::class, 'spotlight']);
+        // Trending Content ranking rules for the portal dashboard.
+        Route::put('/trending', [ReportController::class, 'updateTrending']);
+        Route::get('/trending/preview', [ReportController::class, 'previewTrending']);
         Route::match(['put', 'post'], '/reports/{report}', [ReportController::class, 'update']);
         Route::delete('/reports/{report}', [ReportController::class, 'destroy']);
 

@@ -297,6 +297,13 @@ export const IconTable = ({ size = 14, className }: IconProps) => (
   </svg>
 );
 
+export const IconCalendar = ({ size = 16, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="1.5" />
+    <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
+  </svg>
+);
+
 export const IconMinus = ({ size = 14, className }: IconProps) => (
   <svg {...base(size)} className={className}>
     <path d="M4 12h16" />
@@ -313,5 +320,18 @@ export const IconBookmark = ({ size = 16, className }: IconProps) => (
 export const IconBookmarkFilled = ({ size = 16, className }: IconProps) => (
   <svg {...base(size)} className={className} fill="currentColor">
     <path d="M6.5 3.75h11v16.5L12 16.1l-5.5 4.15z" />
+  </svg>
+);
+
+export const IconStar = ({ size = 16, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M12 3.9l2.45 4.96 5.48.8-3.97 3.86.94 5.46L12 16.4l-4.9 2.58.94-5.46-3.97-3.86 5.48-.8z" />
+  </svg>
+);
+
+/** Active state of IconStar — same silhouette, filled. */
+export const IconStarFilled = ({ size = 16, className }: IconProps) => (
+  <svg {...base(size)} className={className} fill="currentColor">
+    <path d="M12 3.9l2.45 4.96 5.48.8-3.97 3.86.94 5.46L12 16.4l-4.9 2.58.94-5.46-3.97-3.86 5.48-.8z" />
   </svg>
 );

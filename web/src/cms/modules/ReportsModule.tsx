@@ -1,25 +1,34 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCms } from '../store';
 import {
   BtnGhost, BtnPrimary, Chip, Drawer, EmptyState, ModuleHeader,
-  RowAction, SelectField, SkeletonRows, TextField, useConfirm, EASE,
+  RowAction, SelectField, SkeletonRows, Switch, TextField, useConfirm, EASE,
 } from '../ui';
-import { IconPen, IconPlus, IconSearch, IconTrash, IconCheck, IconUpload, IconEye, IconMenu, IconX } from '../icons';
-import { REPORT_CATEGORIES, REPORT_COMPANIES, fmtBytes, fmtDate, type Company, type Report, type ReportCategory, type ReportCompany } from '../data';
-import { apiBlobUrl } from '../../lib/api';
+import { IconPen, IconPlus, IconSearch, IconTrash, IconCheck, IconUpload, IconEye, IconMenu, IconX, IconStar, IconStarFilled, IconChart } from '../icons';
+import {
+  REPORT_CATEGORIES, REPORT_COMPANIES, TRENDING_METRICS, TRENDING_WINDOWS, fmtBytes, fmtDate, trendingMetricDef,
+  type Company, type Report, type ReportCategory, type ReportCompany, type TrendingEntry, type TrendingMetric,
+} from '../data';
+import { apiBlobUrl, apiFetch } from '../../lib/api';
 
 type Form = { title: string; category: '' | ReportCategory; companyId: string; analyst: string; pages: string; summary: string };
 
 const BLANK: Form = { title: '', category: '', companyId: '', analyst: '', pages: '', summary: '' };
 
+/** Drawer copy of the trending rules; minEvents stays a string while typed. */
+type TrendForm = { enabled: boolean; metric: TrendingMetric; windowMonths: number; limit: number; minEvents: string };
+
 const companyLabel = (v: ReportCompany) => REPORT_COMPANIES.find((c) => c.value === v)?.label ?? v;
+
+const windowLabel = (months: number) =>
+  TRENDING_WINDOWS.find((w) => w.value === months)?.label ?? `Trailing ${months} months`;
 
 /** Active companies filter: a whole classification, one company, or nothing. */
 type CompanySel = { kind: 'type'; type: ReportCompany } | { kind: 'company'; company: Company } | null;
 
 export default function ReportsModule() {
-  const { reports, companies, status, createReport, updateReport, deleteReport, createCompany, updateCompany, deleteCompany } = useCms();
+  const { reports, companies, trendingRules, status, createReport, updateReport, deleteReport, setReportSpotlight, updateTrendingRules, createCompany, updateCompany, deleteCompany } = useCms();
   const [category, setCategory] = useState<'all' | 'none' | ReportCategory>('all');
   const [companySel, setCompanySel] = useState<CompanySel>(null);
   const [companiesFilterOpen, setCompaniesFilterOpen] = useState(false);
@@ -31,6 +40,18 @@ export default function ReportsModule() {
   const [saving, setSaving] = useState(false);
   const [armed, confirm] = useConfirm();
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Spotlight — the one report showcased on the portal dashboard.
+  const [spotBusy, setSpotBusy] = useState<string | null>(null);
+
+  // Trending rules drawer, with a live dry-run against the activity ledger.
+  const [trendOpen, setTrendOpen] = useState(false);
+  const [trendForm, setTrendForm] = useState<TrendForm>({ ...trendingRules, minEvents: String(trendingRules.minEvents) });
+  const [trendSaving, setTrendSaving] = useState(false);
+  const [trendError, setTrendError] = useState<string | null>(null);
+  const [trendPreview, setTrendPreview] = useState<TrendingEntry[] | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const previewSeq = useRef(0);
 
   // Companies manager drawer
   const [companiesOpen, setCompaniesOpen] = useState(false);
@@ -74,6 +95,64 @@ export default function ReportsModule() {
   const companySelLabel = companySel
     ? companySel.kind === 'type' ? companyLabel(companySel.type) : companySel.company.name
     : null;
+
+  const spotlight = useMemo(() => reports.find((r) => r.spotlight) ?? null, [reports]);
+
+  async function toggleSpotlight(r: Report) {
+    setSpotBusy(r.id);
+    try {
+      await setReportSpotlight(r.id, !r.spotlight);
+    } finally {
+      setSpotBusy(null);
+    }
+  }
+
+  function openTrending() {
+    setTrendForm({ ...trendingRules, minEvents: String(trendingRules.minEvents) });
+    setTrendError(null);
+    setTrendPreview(null);
+    setTrendOpen(true);
+  }
+
+  /** Debounced dry-run of the drawer's rules against the live ledger, so the
+      desk sees exactly which reports would take the cards before saving. */
+  useEffect(() => {
+    if (!trendOpen) return;
+    setPreviewBusy(true);
+    const seq = ++previewSeq.current;
+    const t = setTimeout(() => {
+      const qs = new URLSearchParams({
+        metric: trendForm.metric,
+        windowMonths: String(trendForm.windowMonths),
+        limit: String(trendForm.limit),
+        minEvents: String(Math.max(1, Number.parseInt(trendForm.minEvents, 10) || 1)),
+      });
+      apiFetch<{ entries: TrendingEntry[] }>(`/cms/trending/preview?${qs}`, { audience: 'cms' })
+        .then((res) => { if (previewSeq.current === seq) setTrendPreview(res.entries); })
+        .catch(() => { if (previewSeq.current === seq) setTrendPreview(null); })
+        .finally(() => { if (previewSeq.current === seq) setPreviewBusy(false); });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [trendOpen, trendForm.metric, trendForm.windowMonths, trendForm.limit, trendForm.minEvents]);
+
+  async function saveTrending() {
+    setTrendSaving(true);
+    setTrendError(null);
+    try {
+      await updateTrendingRules({
+        enabled: trendForm.enabled,
+        metric: trendForm.metric,
+        windowMonths: trendForm.windowMonths,
+        limit: trendForm.limit,
+        minEvents: Math.max(1, Number.parseInt(trendForm.minEvents, 10) || 1),
+      });
+      setTrendOpen(false);
+    } catch (e) {
+      setTrendError(e instanceof Error ? e.message : 'Saving the rules failed. Try again.');
+    } finally {
+      setTrendSaving(false);
+    }
+  }
 
   function openEditor(target: Report | 'new') {
     setFormError(null);
@@ -168,6 +247,107 @@ export default function ReportsModule() {
           </>
         }
       />
+
+      {/* Portal dashboard band — the Spotlight card and the Trending rules */}
+      <section className="divide-y rule border rule bg-white">
+
+      {/* Spotlight slot — what the portal dashboard's showcase card runs */}
+      <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] md:items-stretch">
+        <div className={`flex items-center gap-3 border-b rule px-5 py-4 md:w-[168px] md:border-b-0 md:border-r ${spotlight ? 'bg-paper-grid' : ''}`}>
+          <span
+            className="grid h-9 w-9 shrink-0 place-items-center border"
+            style={
+              spotlight
+                ? { borderColor: 'color-mix(in oklab, var(--color-amber-deep) 55%, transparent)', color: 'var(--color-amber-deep)', background: 'color-mix(in oklab, var(--color-amber) 10%, white)' }
+                : { borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)', color: 'var(--color-silver)' }
+            }
+          >
+            {spotlight ? <IconStarFilled size={15} /> : <IconStar size={15} />}
+          </span>
+          <span className="mono text-[9.5px] uppercase leading-[1.5] tracking-[0.2em] text-graphite">
+            Spot<br />light
+          </span>
+        </div>
+        <div className="min-w-0 px-5 py-4">
+          {spotlight ? (
+            <>
+              <div className="flex items-center gap-3">
+                <p className="truncate text-[14.5px] leading-snug text-ink">{spotlight.title}</p>
+                <Chip tone="amber" pulse>Live</Chip>
+              </div>
+              <p className="mono mt-1.5 truncate text-[10.5px] tracking-[0.05em] text-graphite">
+                Showcased on the portal dashboard · {spotlight.analyst} · <span className="num">{fmtDate(spotlight.date)}</span>
+                {spotlight.category ? ` · ${spotlight.category}` : ''}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[13.5px] text-slate">No report in the spotlight.</p>
+              <p className="mono mt-1.5 text-[10.5px] tracking-[0.05em] text-graphite">
+                Star a report below to showcase it beside Trending Content on the portal dashboard.
+              </p>
+            </>
+          )}
+        </div>
+        {spotlight && (
+          <div className="flex items-center gap-2 border-t rule px-5 py-4 md:border-t-0 md:pl-0">
+            <BtnGhost onClick={() => openEditor(spotlight)}>Edit</BtnGhost>
+            <BtnGhost onClick={() => void toggleSpotlight(spotlight)} disabled={spotBusy !== null}>
+              {spotBusy === spotlight.id ? 'Clearing…' : 'Clear'}
+            </BtnGhost>
+          </div>
+        )}
+      </div>
+
+      {/* Trending rules — how the portal ranks its most-read cards */}
+      <div className="grid grid-cols-1 md:grid-cols-[auto_1fr_auto] md:items-stretch">
+        <div className={`flex items-center gap-3 border-b rule px-5 py-4 md:w-[168px] md:border-b-0 md:border-r ${trendingRules.enabled ? 'bg-paper-grid' : ''}`}>
+          <span
+            className="grid h-9 w-9 shrink-0 place-items-center border"
+            style={
+              trendingRules.enabled
+                ? { borderColor: 'color-mix(in oklab, var(--color-amber-deep) 55%, transparent)', color: 'var(--color-amber-deep)', background: 'color-mix(in oklab, var(--color-amber) 10%, white)' }
+                : { borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)', color: 'var(--color-silver)' }
+            }
+          >
+            <IconChart size={15} />
+          </span>
+          <span className="mono text-[9.5px] uppercase leading-[1.5] tracking-[0.2em] text-graphite">
+            Trend<br />ing
+          </span>
+        </div>
+        <div className="min-w-0 px-5 py-4">
+          {trendingRules.enabled ? (
+            <>
+              <div className="flex items-center gap-3">
+                <p className="truncate text-[14.5px] leading-snug text-ink">
+                  Top {trendingRules.limit} · {trendingMetricDef(trendingRules.metric).label.toLowerCase()} · {windowLabel(trendingRules.windowMonths).toLowerCase()}
+                  {trendingRules.minEvents > 1 ? ` · ${trendingRules.minEvents}+ to qualify` : ''}
+                </p>
+                <Chip tone="live" pulse>On</Chip>
+              </div>
+              <p className="mono mt-1.5 truncate text-[10.5px] tracking-[0.05em] text-graphite">
+                Ranked live from the client activity ledger, beside Spotlight on the portal dashboard.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <p className="text-[13.5px] text-slate">Trending Content is hidden from the portal.</p>
+                <Chip tone="muted">Off</Chip>
+              </div>
+              <p className="mono mt-1.5 text-[10.5px] tracking-[0.05em] text-graphite">
+                Configure to turn the most-read ladder back on.
+              </p>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2 border-t rule px-5 py-4 md:border-t-0 md:pl-0">
+          <BtnGhost onClick={openTrending}>Configure</BtnGhost>
+        </div>
+      </div>
+
+      </section>
 
       {/* Category rail */}
       <div className="flex flex-col gap-4">
@@ -343,9 +523,18 @@ export default function ReportsModule() {
                   <span className="col-span-6 order-4 hidden text-[13px] text-slate lg:col-span-2 lg:block">{r.analyst}</span>
                   <span className="mono num col-span-3 order-5 hidden whitespace-nowrap text-[12px] text-graphite lg:col-span-1 lg:block">{fmtDate(r.date)}</span>
                   <span className="col-span-6 order-2 md:col-span-2 md:order-6 md:justify-self-end lg:col-span-1">
-                    <Chip tone="amber">PDF</Chip>
+                    {r.spotlight ? <Chip tone="amber" pulse>Spotlight</Chip> : <Chip tone="amber">PDF</Chip>}
                   </span>
                   <div className="col-span-12 order-8 flex items-center gap-2 md:col-span-3 md:justify-end md:justify-self-end lg:col-span-2">
+                    <RowAction
+                      label={r.spotlight ? 'Remove from spotlight' : 'Set as spotlight'}
+                      onClick={() => void toggleSpotlight(r)}
+                      disabled={spotBusy !== null}
+                    >
+                      {r.spotlight
+                        ? <span className="grid place-items-center" style={{ color: 'var(--color-amber-deep)' }}><IconStarFilled size={15} /></span>
+                        : <IconStar size={15} />}
+                    </RowAction>
                     <RowAction label="Preview PDF" onClick={() => preview(r)}><IconEye /></RowAction>
                     <RowAction label="Edit report" onClick={() => openEditor(r)}><IconPen /></RowAction>
                     <RowAction label={armed === r.id ? 'Confirm delete' : 'Delete report'} danger onClick={() => confirm(r.id, () => { void remove(r); })}>
@@ -458,6 +647,118 @@ export default function ReportsModule() {
           {formError && (
             <p className="border-l-2 pl-3 text-[12.5px] leading-relaxed" style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}>
               {formError}
+            </p>
+          )}
+        </div>
+      </Drawer>
+
+      {/* ── Trending Content rules ─────────────────────────────── */}
+      <Drawer
+        open={trendOpen}
+        title="Trending Content rules"
+        onClose={() => setTrendOpen(false)}
+        footer={
+          <>
+            <BtnGhost onClick={() => setTrendOpen(false)}>Discard</BtnGhost>
+            <BtnPrimary onClick={() => void saveTrending()} disabled={trendSaving}>
+              {trendSaving ? 'Saving…' : 'Save rules'}
+            </BtnPrimary>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          <div className="flex items-center justify-between gap-4 border rule bg-white p-4">
+            <div>
+              <p className="text-[13.5px] text-ink">Show Trending Content</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-graphite">
+                The ranked most-read cards beside Spotlight on the portal dashboard.
+              </p>
+            </div>
+            <Switch
+              on={trendForm.enabled}
+              onToggle={() => setTrendForm((f) => ({ ...f, enabled: !f.enabled }))}
+              label="Show Trending Content"
+            />
+          </div>
+
+          <SelectField
+            label="Ranked by"
+            value={trendingMetricDef(trendForm.metric).label}
+            onChange={(v) => setTrendForm((f) => ({ ...f, metric: TRENDING_METRICS.find((m) => m.label === v)?.value ?? 'views' }))}
+            options={TRENDING_METRICS.map((m) => m.label)}
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <SelectField
+              label="Window"
+              value={windowLabel(trendForm.windowMonths)}
+              onChange={(v) => setTrendForm((f) => ({ ...f, windowMonths: TRENDING_WINDOWS.find((w) => w.label === v)?.value ?? 3 }))}
+              options={TRENDING_WINDOWS.map((w) => w.label)}
+            />
+            <SelectField
+              label="Cards"
+              value={`Top ${trendForm.limit}`}
+              onChange={(v) => setTrendForm((f) => ({ ...f, limit: Number.parseInt(v.replace(/\D/g, ''), 10) || 3 }))}
+              options={[3, 4, 5, 6].map((n) => `Top ${n}`)}
+            />
+          </div>
+          <TextField
+            label="Minimum to qualify"
+            value={trendForm.minEvents}
+            onChange={(v) => setTrendForm((f) => ({ ...f, minEvents: v.replace(/\D/g, '') }))}
+            placeholder="1"
+            helper="A report needs at least this many reads inside the window to take a card — keeps one stray open off the board."
+          />
+
+          {/* Dry-run of these rules against the real ledger */}
+          <div className="flex flex-col gap-2">
+            <div className="mono flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-graphite">
+              <span>Preview · live ledger</span>
+              {previewBusy && <span className="text-silver">Ranking…</span>}
+            </div>
+            <div className={`border rule bg-white transition-opacity duration-300 ${previewBusy ? 'opacity-60' : ''}`}>
+              {trendPreview === null ? (
+                <div className="space-y-3 p-4" aria-hidden>
+                  {Array.from({ length: Math.min(trendForm.limit, 3) }).map((_, i) => (
+                    <div key={i} className="h-4 skeleton-bar" style={{ width: `${88 - i * 14}%`, animationDelay: `${i * 90}ms` }} />
+                  ))}
+                </div>
+              ) : trendPreview.length === 0 ? (
+                <p className="px-4 py-6 text-[12.5px] leading-relaxed text-graphite">
+                  Nothing qualifies under these rules yet — widen the window or lower the minimum.
+                </p>
+              ) : (
+                <ul className="divide-y rule">
+                  {trendPreview.map((e, i) => {
+                    const report = reports.find((r) => r.id === e.reportId);
+                    const unit = trendingMetricDef(trendForm.metric).unit[e.count === 1 ? 0 : 1];
+                    return (
+                      <li key={e.reportId} className="flex items-baseline gap-3 px-4 py-3">
+                        <span
+                          className="mono num w-7 shrink-0 text-[15px] leading-none"
+                          style={{ color: i === 0 ? 'var(--color-amber-deep)' : 'var(--color-silver)' }}
+                        >
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink">
+                          {report?.title ?? `Report #${e.reportId}`}
+                        </span>
+                        <span className="mono num shrink-0 text-[10.5px] text-graphite">
+                          {e.count} {unit}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <p className="text-[12px] leading-relaxed text-graphite">
+              Exactly what clients would see right now under these rules. Deleted reports drop off on their own.
+            </p>
+          </div>
+
+          {trendError && (
+            <p className="border-l-2 pl-3 text-[12.5px] leading-relaxed" style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}>
+              {trendError}
             </p>
           )}
         </div>

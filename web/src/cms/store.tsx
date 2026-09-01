@@ -1,11 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
 import {
-  EMPTY_ABOUT, EMPTY_CONTACT, EMPTY_INSIGHTS,
+  EMPTY_ABOUT, EMPTY_CONTACT, EMPTY_INSIGHTS, EMPTY_TRENDING_RULES,
   type AboutCopy, type ContactCopy, type Article, type ArticleStatus, type InsightsPage, type StaffMember, type ServiceLine,
   type ServicePage, type ServicePillar, type ServiceProof,
   type Subscriber, type PageBlock, type AuditEntry, type Report, type MediaAsset, type ReportCategory, type ReportCompany, type Company,
-  type NewsletterCadence, type NewsletterIssue, type NewsletterSection,
+  type NewsletterCadence, type NewsletterIssue, type NewsletterSection, type TrendingRules,
 } from './data';
 
 /* ─────────────────────────────────────────────────────────────
@@ -18,6 +18,8 @@ type CmsState = {
   articles: Article[];
   reports: Report[];
   companies: Company[];
+  /** How the portal dashboard ranks Trending Content. */
+  trendingRules: TrendingRules;
   people: StaffMember[];
   services: ServiceLine[];
   servicePage: ServicePage;
@@ -90,6 +92,10 @@ type CmsStore = CmsState & {
   createReport: (p: ReportPayload, file: File) => Promise<void>;
   updateReport: (id: string, p: ReportPayload, file: File | null) => Promise<void>;
   deleteReport: (id: string) => Promise<void>;
+  /** Flag one report as the portal dashboard's Spotlight (the API keeps a single slot). */
+  setReportSpotlight: (id: string, on: boolean) => Promise<void>;
+  /** Replace the Trending Content ranking rules; resolves to the saved set. */
+  updateTrendingRules: (p: TrendingRules) => Promise<TrendingRules>;
 
   createCompany: (p: CompanyPayload) => Promise<Company>;
   updateCompany: (id: string, p: CompanyPayload) => Promise<void>;
@@ -124,7 +130,8 @@ const EMPTY_SERVICE_PAGE: ServicePage = {
 };
 
 const EMPTY: CmsState = {
-  articles: [], reports: [], companies: [], people: [], services: [], servicePage: EMPTY_SERVICE_PAGE,
+  articles: [], reports: [], companies: [], trendingRules: EMPTY_TRENDING_RULES,
+  people: [], services: [], servicePage: EMPTY_SERVICE_PAGE,
   aboutPage: EMPTY_ABOUT, contactPage: EMPTY_CONTACT, insightsPage: EMPTY_INSIGHTS,
   newsletters: [], subscribers: [], pages: [], media: [], audit: [],
 };
@@ -287,6 +294,22 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     apply('reports', (prev) => prev.filter((x) => x.id !== id), res.audit);
   }, [apply]);
 
+  const setReportSpotlight = useCallback(async (id: string, on: boolean) => {
+    const res = await apiFetch<ItemResponse<Report>>(`/cms/reports/${id}/spotlight`, {
+      method: 'PUT', body: { spotlight: on }, audience: 'cms',
+    });
+    // The API keeps a single spotlight slot; mirror the demotion locally.
+    apply('reports', (prev) => prev.map((r) => (r.id === id ? res.item : { ...r, spotlight: false })), res.audit);
+  }, [apply]);
+
+  const updateTrendingRules = useCallback(async (p: TrendingRules) => {
+    const res = await apiFetch<ItemResponse<TrendingRules>>('/cms/trending', {
+      method: 'PUT', body: p, audience: 'cms',
+    });
+    apply('trendingRules', () => res.item, res.audit);
+    return res.item;
+  }, [apply]);
+
   /* ── People ───────────────────────────────────────────────── */
 
   const createPerson = useCallback(async (p: PersonPayload) => {
@@ -418,7 +441,7 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     reload: () => { void load(); },
     appendAudit,
     createArticle, updateArticle, deleteArticle, updateInsightsPage,
-    createReport, updateReport, deleteReport,
+    createReport, updateReport, deleteReport, setReportSpotlight, updateTrendingRules,
     createCompany, updateCompany, deleteCompany,
     createPerson, updatePerson, deletePerson, reorderPeople, updateAboutPage,
     updateService, reorderServices, updateServicePage, uploadImage,
@@ -428,7 +451,7 @@ export function CmsProvider({ children }: { children: ReactNode }) {
   }), [
     state, status, error, load, appendAudit,
     createArticle, updateArticle, deleteArticle, updateInsightsPage,
-    createReport, updateReport, deleteReport,
+    createReport, updateReport, deleteReport, setReportSpotlight, updateTrendingRules,
     createCompany, updateCompany, deleteCompany,
     createPerson, updatePerson, deletePerson, reorderPeople, updateAboutPage,
     updateService, reorderServices, updateServicePage, uploadImage,
