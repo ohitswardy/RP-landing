@@ -4,6 +4,7 @@ import { fmtBytes, fmtDate, type Report } from '../cms/data';
 import { stampedReportBlob } from './download';
 import { trackActivity } from './track';
 import { IconX, IconDownload, IconExternal } from '../cms/icons';
+import RatingTag from './RatingTag';
 
 const EASE = [0.25, 1, 0.5, 1] as const;
 
@@ -91,17 +92,26 @@ export default function ReportViewer({ report, onClose }: { report: Report | nul
             {/* Header */}
             <div className="flex items-start justify-between gap-4 border-b rule px-5 py-4 md:px-7">
               <div className="min-w-0">
-                <div className="mono mb-1.5 flex items-center gap-2.5 text-[10px] uppercase tracking-[0.16em] text-graphite">
-                  <span className="truncate">{report.category ?? 'General'}</span>
+                <div className="mono mb-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] uppercase tracking-[0.16em] text-graphite">
+                  {report.companySymbol && (
+                    <>
+                      <span className="text-ink">{report.companySymbol}</span>
+                      <span className="text-silver">·</span>
+                    </>
+                  )}
+                  <span className="truncate">{report.reportType ?? report.category ?? 'General'}</span>
                   <span className="text-silver">·</span>
                   <span className="num">{fmtDate(report.date)}</span>
                   {report.pages ? <><span className="text-silver">·</span><span className="num">{report.pages}p</span></> : null}
+                  {report.rating && <><span className="text-silver">·</span><RatingTag rating={report.rating} /></>}
                 </div>
                 <h2 className="truncate text-[16px] font-medium tracking-[-0.01em] text-ink md:text-[18px]">{report.title}</h2>
                 {report.summary && (
                   <p className="mt-1.5 text-[12.5px] leading-relaxed text-slate">{report.summary}</p>
                 )}
-                <p className="mono mt-1.5 text-[11px] tracking-[0.04em] text-graphite">{report.analyst} · {fmtBytes(report.fileSize)}</p>
+                <p className="mono mt-1.5 text-[11px] tracking-[0.04em] text-graphite">
+                  {[report.analyst, report.companyName, fmtBytes(report.fileSize)].filter(Boolean).join(' · ')}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {url && (

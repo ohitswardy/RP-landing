@@ -269,21 +269,40 @@ export type ReportCompany = 'Local' | 'Foreign';
 export type Company = {
   id: string;
   name: string;
+  /** Exchange ticker, e.g. ALI. Null for unlisted names. */
+  symbol: string | null;
   type: ReportCompany;
 };
+
+/** One editorial classification from the editable registry — Results,
+    Rating Change, Initiation of Coverage, and whatever else the desk adds. */
+export type ReportType = {
+  id: string;
+  name: string;
+};
+
+/** House call on a covered name. Macro and strategy work carries none. */
+export type ReportRating = 'Buy' | 'Hold' | 'Sell';
 
 export type Report = {
   id: string;
   title: string;
   /** Sector filing; null = general / cross-sector research. */
   category: ReportCategory | null;
+  /** Registry classification; null when the report is unclassified. */
+  reportTypeId: string | null;
+  reportType: string | null;
   /** Linked registry company; null for macro / multi-name reports. */
   companyId: string | null;
   companyName: string | null;
+  /** Ticker of the linked company, mirrored so lists need no join. */
+  companySymbol: string | null;
   /** Classification derived from the linked company; null when unlinked. */
   company: ReportCompany | null;
   analyst: string;
-  date: string;        // ISO (yyyy-mm-dd)
+  /** House call; null on unrated research. */
+  rating: ReportRating | null;
+  date: string;        // ISO (yyyy-mm-dd) — the publication date
   pages: number;       // 0 when unknown
   summary: string;
   /** The one report showcased on the portal dashboard's Spotlight card. */
@@ -456,6 +475,21 @@ export const REPORT_COMPANIES: Array<{ value: ReportCompany; label: string }> = 
   { value: 'Local', label: 'Local Companies' },
   { value: 'Foreign', label: 'Foreign Companies' },
 ];
+
+/** The three house calls, with the colour each one carries in lists. */
+export const REPORT_RATINGS: Array<{ value: ReportRating; label: string; color: string }> = [
+  { value: 'Buy', label: 'Buy', color: 'var(--color-signal)' },
+  { value: 'Hold', label: 'Hold', color: 'var(--color-graphite)' },
+  { value: 'Sell', label: 'Sell', color: 'var(--color-warn)' },
+];
+
+export const ratingDef = (r: ReportRating) =>
+  REPORT_RATINGS.find((x) => x.value === r) ?? REPORT_RATINGS[1];
+
+/** "ALI · Ayala Land", or just the name for an unlisted company. */
+export function companyLine(symbol: string | null, name: string | null): string {
+  return [symbol, name].filter(Boolean).join(' · ');
+}
 
 export const TEAMS = ['Board of Directors', 'Research', 'Sales & Trading', 'Operations'] as const;
 

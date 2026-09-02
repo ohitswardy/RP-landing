@@ -4,6 +4,8 @@ import { useReports } from './reports';
 import { fmtBytes, fmtDate, timeAgo, type Report } from '../cms/data';
 import { useBookmarks } from './bookmarks';
 import { downloadReport } from './download';
+import RatingTag from './RatingTag';
+import { useReportSearch } from '../lib/reportSearch';
 import {
   IconX, IconEye, IconDownload, IconSearch, IconBookmark, IconBookmarkFilled,
 } from '../cms/icons';
@@ -31,16 +33,9 @@ export default function BookmarksModal({ open, onClose, onView }: Props) {
     return ids.map((id) => byId.get(id)).filter((r): r is Report => Boolean(r));
   }, [ids, reports]);
 
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return saved;
-    return saved.filter(
-      (r) =>
-        r.title.toLowerCase().includes(q) ||
-        r.analyst.toLowerCase().includes(q) ||
-        (r.category ?? '').toLowerCase().includes(q),
-    );
-  }, [saved, query]);
+  // Same engine as the catalog search, so one filter vocabulary covers both.
+  const search = useReportSearch(saved, query);
+  const shown = useMemo(() => search.rank(saved.filter(search.match)), [saved, search]);
 
   useEffect(() => {
     if (!open) return;
@@ -125,7 +120,7 @@ export default function BookmarksModal({ open, onClose, onView }: Props) {
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Filter by title, analyst, or sector"
+                    placeholder="Filter by title, ticker, company, analyst, type or date"
                     className="w-full bg-transparent py-3.5 pl-[3.1rem] pr-5 text-[13.5px] text-ink outline-none placeholder:text-silver md:pl-[4.4rem] md:pr-7"
                   />
                 </label>
@@ -222,9 +217,16 @@ function SavedRow({
       <div className="flex items-start gap-4 px-5 py-4 transition-colors duration-300 group-hover:bg-bone md:px-7">
         <div className="min-w-0 flex-1">
           <div className="mono mb-1.5 flex items-center gap-2.5 text-[10px] uppercase tracking-[0.14em] text-graphite">
-            <span className="truncate">{report.category ?? 'General'}</span>
+            {report.companySymbol && (
+              <>
+                <span className="shrink-0 text-ink">{report.companySymbol}</span>
+                <span className="text-silver">/</span>
+              </>
+            )}
+            <span className="truncate">{report.reportType ?? report.category ?? 'General'}</span>
             <span className="text-silver">/</span>
             <span className="num shrink-0">{fmtDate(report.date)}</span>
+            <span className="ml-auto"><RatingTag rating={report.rating} /></span>
           </div>
 
           <button type="button" onClick={onView} className="block w-full text-left">

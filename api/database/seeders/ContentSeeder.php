@@ -11,6 +11,7 @@ use App\Models\ContactPage;
 use App\Models\MediaAsset;
 use App\Models\PageBlock;
 use App\Models\Report;
+use App\Models\ReportType;
 use App\Models\ServiceLine;
 use App\Models\ServicePage;
 use App\Models\StaffMember;
@@ -63,44 +64,53 @@ class ContentSeeder extends Seeder
 
     private function reports(): void
     {
-        // Covered names, each classified local or foreign. Reports link by name below.
+        // Covered names with their tickers, each classified local or foreign.
+        // Reports link by name below.
         $companies = [
-            'Ayala Land' => 'Local',
-            'Meralco' => 'Local',
-            'International Container Terminal Services' => 'Local',
-            'Universal Robina' => 'Local',
-            'Ayala Corp' => 'Local',
-            'Nickel Asia' => 'Local',
-            'Bloomberry Resorts' => 'Local',
-            'Manila Water' => 'Local',
-            'SM Prime' => 'Local',
+            'Ayala Land' => ['ALI', 'Local'],
+            'Meralco' => ['MER', 'Local'],
+            'International Container Terminal Services' => ['ICT', 'Local'],
+            'Universal Robina' => ['URC', 'Local'],
+            'Ayala Corp' => ['AC', 'Local'],
+            'Nickel Asia' => ['NIKL', 'Local'],
+            'Bloomberry Resorts' => ['BLOOM', 'Local'],
+            'Manila Water' => ['MWC', 'Local'],
+            'SM Prime' => ['SMPH', 'Local'],
         ];
         $companyIds = [];
-        foreach ($companies as $name => $type) {
-            $companyIds[$name] = Company::firstOrCreate(['name' => $name], ['type' => $type])->id;
+        foreach ($companies as $name => [$symbol, $type]) {
+            $companyIds[$name] = Company::firstOrCreate(
+                ['name' => $name],
+                ['symbol' => $symbol, 'type' => $type],
+            )->id;
         }
 
+        // Seeded by migration; reports file themselves under one of these.
+        $typeIds = ReportType::pluck('id', 'name')->all();
+
         $rows = [
-            ['Philippine Banks: the deposit war nobody declared', 'Banks', null, 'C. Resullar, CFA', '2026-08-22', 14, 'Time-deposit repricing is running ahead of loan yields for the first time since 2022. Three franchises absorb it; two pass it on.', 'ph-banks-deposit-war.pdf', 1842000],
-            ['PSEi 7,400: the earnings math behind our year-end target', 'Macro / Strategy', null, 'C. Sy, CFA', '2026-08-20', 22, 'The re-rating case rests on banks and holding-company discounts, not on the index heavyweights the street keeps modelling.', 'psei-7400-year-end.pdf', 2640000],
-            ['Ayala Land: the office market has re-based, not recovered', 'Property', 'Ayala Land', 'P. Garcia', '2026-08-15', 18, 'Bay Area vacancy stopped making headlines because it stopped getting worse. The recovery is narrow, and rents tell you where.', 'ali-office-rebase.pdf', 2110000],
-            ['Meralco: reserve margins after the July outages', 'Power', 'Meralco', 'P. Garcia', '2026-08-11', 16, 'WESM spiked, but merchant exposure is not where the market thinks it is. A plant-by-plant walk through the dispatch stack.', 'mer-reserve-margins.pdf', 1970000],
-            ['ICT: underappreciated optionality on Manila port volumes', 'Transportation', 'International Container Terminal Services', 'C. Sy, CFA', '2026-08-06', 12, 'Berth productivity, yard density, and the tariff reset — the three levers the street models flat.', 'ict-manila-volumes.pdf', 1480000],
-            ['Universal Robina: the discounter thesis, stress-tested', 'Consumer', 'Universal Robina', 'C. Resullar, CFA', '2026-08-01', 20, 'Route-to-market data from 1.3M outlets says the discounters are not winning where the market assumes they are.', 'urc-discounter-thesis.pdf', 2320000],
-            ['Ayala Corp: unpacking the holding-company discount', 'Conglomerates', 'Ayala Corp', 'C. Sy, CFA', '2026-07-27', 24, 'A sum-of-the-parts that the market has stopped updating. Where the 38% discount is earned, and where it is lazy.', 'ac-holdco-discount.pdf', 2910000],
-            ['Globe vs. PLDT: the capex truce and the FCF inflection', 'Telecommunications', null, 'P. Garcia', '2026-07-21', 15, 'Tower monetisation is done; the story is now free cash flow. We model the dividend runway both ways.', 'glo-tel-fcf.pdf', 1760000],
-            ['Nickel Asia: the Indonesia supply overhang, quantified', 'Mining', 'Nickel Asia', 'C. Resullar, CFA', '2026-07-14', 13, 'LME nickel is pricing an Indonesian discipline that the export data does not support. Cost-curve implications for local ore.', 'nikl-supply-overhang.pdf', 1540000],
-            ['Bloomberry Resorts: mass-market GGR past the peak?', 'Hotels / Leisure / Gaming', 'Bloomberry Resorts', 'P. Garcia', '2026-07-08', 17, 'Junket is gone and never coming back. Whether mass-market gross gaming revenue has plateaued is the only debate that matters.', 'blo-mass-market-ggr.pdf', 2040000],
-            ['Manila Water: the tariff reset and the return path', 'Utilities', 'Manila Water', 'C. Sy, CFA', '2026-06-30', 11, 'The rebasing is finally through. We walk the allowed return, the capex commitment, and the concession renewal risk.', 'mwc-tariff-reset.pdf', 1310000],
-            ['SM Prime: the NLEX-to-mall land bank optionality', 'Infrastructure', 'SM Prime', 'P. Garcia', '2026-06-23', 19, 'Reclamation politics aside, the entitled land bank is a multi-cycle option the market marks at zero.', 'smph-land-bank.pdf', 2260000],
+            ['Philippine Banks: the deposit war nobody declared', 'Banks', null, 'C. Resullar, CFA', '2026-08-22', 14, 'Time-deposit repricing is running ahead of loan yields for the first time since 2022. Three franchises absorb it; two pass it on.', 'ph-banks-deposit-war.pdf', 1842000, 'Industry Update', null],
+            ['PSEi 7,400: the earnings math behind our year-end target', 'Macro / Strategy', null, 'C. Sy, CFA', '2026-08-20', 22, 'The re-rating case rests on banks and holding-company discounts, not on the index heavyweights the street keeps modelling.', 'psei-7400-year-end.pdf', 2640000, 'Strategy Update', null],
+            ['Ayala Land: the office market has re-based, not recovered', 'Property', 'Ayala Land', 'P. Garcia', '2026-08-15', 18, 'Bay Area vacancy stopped making headlines because it stopped getting worse. The recovery is narrow, and rents tell you where.', 'ali-office-rebase.pdf', 2110000, 'Company Update', 'Buy'],
+            ['Meralco: reserve margins after the July outages', 'Power', 'Meralco', 'P. Garcia', '2026-08-11', 16, 'WESM spiked, but merchant exposure is not where the market thinks it is. A plant-by-plant walk through the dispatch stack.', 'mer-reserve-margins.pdf', 1970000, 'Company Update', 'Hold'],
+            ['ICT: underappreciated optionality on Manila port volumes', 'Transportation', 'International Container Terminal Services', 'C. Sy, CFA', '2026-08-06', 12, 'Berth productivity, yard density, and the tariff reset — the three levers the street models flat.', 'ict-manila-volumes.pdf', 1480000, 'Initiation of Coverage', 'Buy'],
+            ['Universal Robina: the discounter thesis, stress-tested', 'Consumer', 'Universal Robina', 'C. Resullar, CFA', '2026-08-01', 20, 'Route-to-market data from 1.3M outlets says the discounters are not winning where the market assumes they are.', 'urc-discounter-thesis.pdf', 2320000, 'Results', 'Hold'],
+            ['Ayala Corp: unpacking the holding-company discount', 'Conglomerates', 'Ayala Corp', 'C. Sy, CFA', '2026-07-27', 24, 'A sum-of-the-parts that the market has stopped updating. Where the 38% discount is earned, and where it is lazy.', 'ac-holdco-discount.pdf', 2910000, 'Company Update', 'Buy'],
+            ['Globe vs. PLDT: the capex truce and the FCF inflection', 'Telecommunications', null, 'P. Garcia', '2026-07-21', 15, 'Tower monetisation is done; the story is now free cash flow. We model the dividend runway both ways.', 'glo-tel-fcf.pdf', 1760000, 'Industry Update', null],
+            ['Nickel Asia: the Indonesia supply overhang, quantified', 'Mining', 'Nickel Asia', 'C. Resullar, CFA', '2026-07-14', 13, 'LME nickel is pricing an Indonesian discipline that the export data does not support. Cost-curve implications for local ore.', 'nikl-supply-overhang.pdf', 1540000, 'Forecast Change', 'Sell'],
+            ['Bloomberry Resorts: mass-market GGR past the peak?', 'Hotels / Leisure / Gaming', 'Bloomberry Resorts', 'P. Garcia', '2026-07-08', 17, 'Junket is gone and never coming back. Whether mass-market gross gaming revenue has plateaued is the only debate that matters.', 'blo-mass-market-ggr.pdf', 2040000, 'Rating Change', 'Hold'],
+            ['Manila Water: the tariff reset and the return path', 'Utilities', 'Manila Water', 'C. Sy, CFA', '2026-06-30', 11, 'The rebasing is finally through. We walk the allowed return, the capex commitment, and the concession renewal risk.', 'mwc-tariff-reset.pdf', 1310000, 'Company Update', 'Buy'],
+            ['SM Prime: the NLEX-to-mall land bank optionality', 'Infrastructure', 'SM Prime', 'P. Garcia', '2026-06-23', 19, 'Reclamation politics aside, the entitled land bank is a multi-cycle option the market marks at zero.', 'smph-land-bank.pdf', 2260000, 'Company Update', 'Buy'],
         ];
 
-        foreach ($rows as [$title, $category, $companyName, $analyst, $date, $pages, $summary, $fileName, $fileSize]) {
+        foreach ($rows as [$title, $category, $companyName, $analyst, $date, $pages, $summary, $fileName, $fileSize, $type, $rating]) {
             Report::create([
                 'title' => $title,
                 'category' => $category,
+                'report_type_id' => $typeIds[$type] ?? null,
                 'company_id' => $companyName !== null ? $companyIds[$companyName] : null,
                 'analyst' => $analyst,
+                'rating' => $rating,
                 'date' => $date,
                 'pages' => $pages,
                 'summary' => $summary,

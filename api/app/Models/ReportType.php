@@ -5,9 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Company extends Model
+/** Editorial classification of a research report — Results, Rating Change,
+    Initiation of Coverage, and whatever else the desk adds in the CMS. */
+class ReportType extends Model
 {
-    protected $fillable = ['name', 'symbol', 'type'];
+    protected $fillable = ['name'];
 
     public function reports(): HasMany
     {
@@ -19,9 +21,6 @@ class Company extends Model
         return [
             'id' => (string) $this->id,
             'name' => $this->name,
-            // Exchange ticker; null for unlisted names.
-            'symbol' => $this->symbol,
-            'type' => $this->type,
         ];
     }
 }

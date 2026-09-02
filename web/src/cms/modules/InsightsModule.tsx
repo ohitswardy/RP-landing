@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCms } from '../store';
 import {
-  BtnGhost, BtnPrimary, Chip, Drawer, EmptyState, ModuleHeader,
+  BtnGhost, BtnPrimary, Chip, DateField, Drawer, EmptyState, ModuleHeader,
   RowAction, SelectField, SkeletonRows, Stat, Switch, TextField, useConfirm, EASE,
 } from '../ui';
 import {
@@ -672,19 +672,6 @@ function NumberField({ label, value, max, onChange, hint }: {
 
 /* ── Date field ────────────────────────────────────────────── */
 
-function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">{label}</label>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-      />
-    </div>
-  );
-}
 
 /* ── Sector rail editor ────────────────────────────────────── */
 

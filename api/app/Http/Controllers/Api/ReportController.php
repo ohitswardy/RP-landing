@@ -7,6 +7,7 @@ use App\Models\PortalSetting;
 use App\Models\Report;
 use App\Support\Audit;
 use App\Support\Trending;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -15,19 +16,47 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ReportController extends Controller
 {
-    private const RULES = [
-        'title' => ['required', 'string', 'max:500'],
-        'category' => ['nullable', 'string', 'max:60'],
-        'company_id' => ['nullable', 'integer', 'exists:companies,id'],
-        'analyst' => ['required', 'string', 'max:120'],
-        'pages' => ['nullable', 'integer', 'min:0', 'max:2000'],
-        'summary' => ['nullable', 'string', 'max:2000'],
-    ];
+    /** Buy / Hold / Sell. A report may also carry no rating at all. */
+    public const RATINGS = ['Buy', 'Hold', 'Sell'];
+
+    /** Fields shared by store and update. Everything but title, analyst and
+        the publication date is optional — macro research carries no company,
+        no rating, and often no sector. */
+    private static function rules(): array
+    {
+        return [
+            'title' => ['required', 'string', 'max:500'],
+            'category' => ['nullable', 'string', 'max:60'],
+            'report_type_id' => ['nullable', 'integer', 'exists:report_types,id'],
+            'company_id' => ['nullable', 'integer', 'exists:companies,id'],
+            'analyst' => ['required', 'string', 'max:120'],
+            'rating' => ['nullable', Rule::in(self::RATINGS)],
+            'date' => ['required', 'date'],
+            'pages' => ['nullable', 'integer', 'min:0', 'max:2000'],
+            'summary' => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+
+    /** The columns a store or update writes, normalised from validated input. */
+    private static function attributes(array $data): array
+    {
+        return [
+            'title' => $data['title'],
+            'category' => $data['category'] ?? null,
+            'report_type_id' => $data['report_type_id'] ?? null,
+            'company_id' => $data['company_id'] ?? null,
+            'analyst' => $data['analyst'],
+            'rating' => $data['rating'] ?? null,
+            'date' => Carbon::parse($data['date'])->toDateString(),
+            'pages' => (int) ($data['pages'] ?? 0),
+            'summary' => $data['summary'] ?? '',
+        ];
+    }
 
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            ...self::RULES,
+            ...self::rules(),
             'file' => ['required', 'file', 'mimetypes:application/pdf', 'max:25600'],
         ]);
 
@@ -35,13 +64,7 @@ class ReportController extends Controller
         $path = $file->store('reports');
 
         $report = Report::create([
-            'title' => $data['title'],
-            'category' => $data['category'] ?? null,
-            'company_id' => $data['company_id'] ?? null,
-            'analyst' => $data['analyst'],
-            'pages' => (int) ($data['pages'] ?? 0),
-            'summary' => $data['summary'] ?? '',
-            'date' => now()->toDateString(),
+            ...self::attributes($data),
             'file_name' => $file->getClientOriginalName(),
             'file_size' => $file->getSize(),
             'file_path' => $path,
@@ -50,13 +73,13 @@ class ReportController extends Controller
 
         $audit = Audit::log('Published report', $report->title);
 
-        return response()->json(['item' => $report->load('company')->toWire(), 'audit' => $audit->toWire()], 201);
+        return response()->json(['item' => $report->load('company', 'reportType')->toWire(), 'audit' => $audit->toWire()], 201);
     }
 
     public function update(Request $request, Report $report): JsonResponse
     {
         $data = $request->validate([
-            ...self::RULES,
+            ...self::rules(),
             'file' => ['nullable', 'file', 'mimetypes:application/pdf', 'max:25600'],
         ]);
 
@@ -72,18 +95,11 @@ class ReportController extends Controller
             $replaced = true;
         }
 
-        $report->fill([
-            'title' => $data['title'],
-            'category' => $data['category'] ?? null,
-            'company_id' => $data['company_id'] ?? null,
-            'analyst' => $data['analyst'],
-            'pages' => (int) ($data['pages'] ?? 0),
-            'summary' => $data['summary'] ?? '',
-        ])->save();
+        $report->fill(self::attributes($data))->save();
 
         $audit = Audit::log($replaced ? 'Replaced report PDF' : 'Updated report', $report->title);
 
-        return response()->json(['item' => $report->load('company')->toWire(), 'audit' => $audit->toWire()]);
+        return response()->json(['item' => $report->load('company', 'reportType')->toWire(), 'audit' => $audit->toWire()]);
     }
 
     /** Ranking-rule fields shared by the update and preview endpoints. */
@@ -151,7 +167,7 @@ class ReportController extends Controller
 
         $audit = Audit::log($report->spotlight ? 'Spotlighted report' : 'Cleared report spotlight', $report->title);
 
-        return response()->json(['item' => $report->load('company')->toWire(), 'audit' => $audit->toWire()]);
+        return response()->json(['item' => $report->load('company', 'reportType')->toWire(), 'audit' => $audit->toWire()]);
     }
 
     public function destroy(Report $report): JsonResponse

@@ -5,6 +5,7 @@ import {
   type AboutCopy, type ContactCopy, type Article, type ArticleStatus, type InsightsPage, type StaffMember, type ServiceLine,
   type ServicePage, type ServicePillar, type ServiceProof,
   type Subscriber, type PageBlock, type AuditEntry, type Report, type MediaAsset, type ReportCategory, type ReportCompany, type Company,
+  type ReportType, type ReportRating,
   type NewsletterCadence, type NewsletterIssue, type NewsletterSection, type TrendingRules,
 } from './data';
 
@@ -18,6 +19,8 @@ type CmsState = {
   articles: Article[];
   reports: Report[];
   companies: Company[];
+  /** The editable registry of report types (Results, Rating Change, …). */
+  reportTypes: ReportType[];
   /** How the portal dashboard ranks Trending Content. */
   trendingRules: TrendingRules;
   people: StaffMember[];
@@ -45,8 +48,19 @@ export type ArticlePayload = {
   date?: string;
   featured?: boolean;
 };
-export type ReportPayload = { title: string; category: ReportCategory | null; companyId: string | null; analyst: string; pages: number; summary: string };
-export type CompanyPayload = { name: string; type: ReportCompany };
+export type ReportPayload = {
+  title: string;
+  category: ReportCategory | null;
+  reportTypeId: string | null;
+  companyId: string | null;
+  analyst: string;
+  rating: ReportRating | null;
+  /** Publication date, ISO yyyy-mm-dd. */
+  date: string;
+  pages: number;
+  summary: string;
+};
+export type CompanyPayload = { name: string; symbol: string | null; type: ReportCompany };
 export type PersonPayload = {
   name: string;
   team: StaffMember['team'];
@@ -101,6 +115,10 @@ type CmsStore = CmsState & {
   updateCompany: (id: string, p: CompanyPayload) => Promise<void>;
   deleteCompany: (id: string) => Promise<void>;
 
+  createReportType: (name: string) => Promise<ReportType>;
+  renameReportType: (id: string, name: string) => Promise<void>;
+  deleteReportType: (id: string) => Promise<void>;
+
   createPerson: (p: PersonPayload) => Promise<StaffMember>;
   updatePerson: (id: string, p: Partial<PersonPayload & { visible: boolean }>) => Promise<void>;
   deletePerson: (id: string) => Promise<void>;
@@ -130,7 +148,7 @@ const EMPTY_SERVICE_PAGE: ServicePage = {
 };
 
 const EMPTY: CmsState = {
-  articles: [], reports: [], companies: [], trendingRules: EMPTY_TRENDING_RULES,
+  articles: [], reports: [], companies: [], reportTypes: [], trendingRules: EMPTY_TRENDING_RULES,
   people: [], services: [], servicePage: EMPTY_SERVICE_PAGE,
   aboutPage: EMPTY_ABOUT, contactPage: EMPTY_CONTACT, insightsPage: EMPTY_INSIGHTS,
   newsletters: [], subscribers: [], pages: [], media: [], audit: [],
@@ -226,8 +244,11 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     fd.append('title', p.title);
     // Empty strings reach Laravel as null (ConvertEmptyStringsToNull).
     fd.append('category', p.category ?? '');
+    fd.append('report_type_id', p.reportTypeId ?? '');
     fd.append('company_id', p.companyId ?? '');
     fd.append('analyst', p.analyst);
+    fd.append('rating', p.rating ?? '');
+    fd.append('date', p.date);
     fd.append('pages', String(p.pages));
     fd.append('summary', p.summary);
     if (file) fd.append('file', file);
@@ -267,11 +288,13 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     const res = await apiFetch<ItemResponse<Company>>(`/cms/companies/${id}`, {
       method: 'PUT', body: p, audience: 'cms',
     });
-    // Reports carry a denormalized name/type — keep them in step locally.
+    // Reports carry a denormalized name/ticker/type — keep them in step locally.
     setState((s) => ({
       ...s,
       companies: sortCompanies(upsert(s.companies, res.item)),
-      reports: s.reports.map((r) => r.companyId === id ? { ...r, companyName: res.item.name, company: res.item.type } : r),
+      reports: s.reports.map((r) => r.companyId === id
+        ? { ...r, companyName: res.item.name, companySymbol: res.item.symbol, company: res.item.type }
+        : r),
       audit: res.audit ? [res.audit, ...s.audit].slice(0, 60) : s.audit,
     }));
   }, []);
@@ -284,7 +307,48 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     setState((s) => ({
       ...s,
       companies: s.companies.filter((c) => c.id !== id),
-      reports: s.reports.map((r) => r.companyId === id ? { ...r, companyId: null, companyName: null, company: null } : r),
+      reports: s.reports.map((r) => r.companyId === id
+        ? { ...r, companyId: null, companyName: null, companySymbol: null, company: null }
+        : r),
+      audit: res.audit ? [res.audit, ...s.audit].slice(0, 60) : s.audit,
+    }));
+  }, []);
+
+  /* ── Report types ─────────────────────────────────────────── */
+
+  const sortTypes = (list: ReportType[]): ReportType[] =>
+    list.slice().sort((a, b) => a.name.localeCompare(b.name));
+
+  const createReportType = useCallback(async (name: string) => {
+    const res = await apiFetch<ItemResponse<ReportType>>('/cms/report-types', {
+      method: 'POST', body: { name }, audience: 'cms',
+    });
+    apply('reportTypes', (prev) => sortTypes(upsert(prev, res.item)), res.audit);
+    return res.item;
+  }, [apply]);
+
+  const renameReportType = useCallback(async (id: string, name: string) => {
+    const res = await apiFetch<ItemResponse<ReportType>>(`/cms/report-types/${id}`, {
+      method: 'PUT', body: { name }, audience: 'cms',
+    });
+    // Reports carry the type name denormalized — keep them in step locally.
+    setState((s) => ({
+      ...s,
+      reportTypes: sortTypes(upsert(s.reportTypes, res.item)),
+      reports: s.reports.map((r) => (r.reportTypeId === id ? { ...r, reportType: res.item.name } : r)),
+      audit: res.audit ? [res.audit, ...s.audit].slice(0, 60) : s.audit,
+    }));
+  }, []);
+
+  const deleteReportType = useCallback(async (id: string) => {
+    const res = await apiFetch<DeleteResponse>(`/cms/report-types/${id}`, {
+      method: 'DELETE', audience: 'cms',
+    });
+    // The API keeps the reports and unclassifies them (FK nulls on delete).
+    setState((s) => ({
+      ...s,
+      reportTypes: s.reportTypes.filter((t) => t.id !== id),
+      reports: s.reports.map((r) => (r.reportTypeId === id ? { ...r, reportTypeId: null, reportType: null } : r)),
       audit: res.audit ? [res.audit, ...s.audit].slice(0, 60) : s.audit,
     }));
   }, []);
@@ -443,6 +507,7 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     createArticle, updateArticle, deleteArticle, updateInsightsPage,
     createReport, updateReport, deleteReport, setReportSpotlight, updateTrendingRules,
     createCompany, updateCompany, deleteCompany,
+    createReportType, renameReportType, deleteReportType,
     createPerson, updatePerson, deletePerson, reorderPeople, updateAboutPage,
     updateService, reorderServices, updateServicePage, uploadImage,
     createNewsletter, updateNewsletter, deleteNewsletter,
@@ -453,6 +518,7 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     createArticle, updateArticle, deleteArticle, updateInsightsPage,
     createReport, updateReport, deleteReport, setReportSpotlight, updateTrendingRules,
     createCompany, updateCompany, deleteCompany,
+    createReportType, renameReportType, deleteReportType,
     createPerson, updatePerson, deletePerson, reorderPeople, updateAboutPage,
     updateService, reorderServices, updateServicePage, uploadImage,
     createNewsletter, updateNewsletter, deleteNewsletter,

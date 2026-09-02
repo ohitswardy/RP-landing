@@ -158,6 +158,23 @@ export function TextField({
   );
 }
 
+export function DateField({ label, value, onChange, helper }: {
+  label: string; value: string; onChange: (v: string) => void; helper?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">{label}</label>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
+      />
+      {helper && <p className="text-[12px] text-graphite">{helper}</p>}
+    </div>
+  );
+}
+
 export function SelectField({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: string[];
 }) {

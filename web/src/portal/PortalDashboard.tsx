@@ -11,8 +11,11 @@ import { useBookmarks } from './bookmarks';
 import { downloadReport } from './download';
 import { trackActivity } from './track';
 import ReportViewer from './ReportViewer';
+import RatingTag from './RatingTag';
 import BookmarksModal from './BookmarksModal';
 import LineSidebar from '../components/LineSidebar';
+import Highlight from '../components/Highlight';
+import { SEARCH_EXAMPLES, useReportSearch } from '../lib/reportSearch';
 import TextType from '../components/TextType';
 import {
   IconSearch, IconDownload, IconEye, IconSignOut, IconBookmark, IconBookmarkFilled,
@@ -65,6 +68,7 @@ export default function PortalDashboard() {
   const { client, signOut } = usePortal();
   const saved = useBookmarks();
   const [query, setQuery] = useState('');
+  const [searchFocus, setSearchFocus] = useState(false);
   const [view, setView] = useState<'latest' | 'all' | ReportCategory>('latest');
   const [companySel, setCompanySel] = useState<CompanySel>(null);
   const [companiesOpen, setCompaniesOpen] = useState(false);
@@ -144,9 +148,12 @@ export default function PortalDashboard() {
     [dateIndex, dateSel],
   );
 
+  /** One box over every column a report carries — title, description,
+      analyst, sector, company, ticker, type, rating and the date. */
+  const search = useReportSearch(reports, query);
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return sorted
+    const list = sorted
       .filter((r) => view === 'latest' || view === 'all' || r.category === view)
       .filter((r) => {
         if (!companySel) return true;
@@ -158,8 +165,10 @@ export default function PortalDashboard() {
         if (r.date.slice(0, 4) !== dateSel.year) return false;
         return !dateSel.month || r.date.slice(5, 7) === dateSel.month;
       })
-      .filter((r) => !q || r.title.toLowerCase().includes(q) || r.analyst.toLowerCase().includes(q) || (r.category ?? '').toLowerCase().includes(q) || r.summary.toLowerCase().includes(q) || (r.companyName ?? '').toLowerCase().includes(q));
-  }, [sorted, view, companySel, dateSel, query]);
+      .filter(search.match);
+    // Newest first while browsing; best match first once something is typed.
+    return search.rank(list);
+  }, [sorted, view, companySel, dateSel, search]);
 
   const companySelLabel = companySel
     ? companySel.kind === 'type' ? companyLabel(companySel.type) : companySel.company.name
@@ -389,8 +398,10 @@ export default function PortalDashboard() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search reports by title, analyst, or sector…"
-                className="w-full border rule bg-white py-4 pl-12 pr-4 text-[15px] text-ink outline-none transition-colors duration-300 placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
+                onFocus={() => setSearchFocus(true)}
+                onBlur={() => setSearchFocus(false)}
+                placeholder="Search title, ticker, company, analyst, sector, type, rating or date…"
+                className="w-full border rule bg-white py-4 pl-12 pr-20 text-[15px] text-ink outline-none transition-colors duration-300 placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
               />
               {query && (
                 <button
@@ -403,6 +414,38 @@ export default function PortalDashboard() {
               )}
             </label>
           </div>
+
+          {/* What the box understands — shown while it is empty and focused */}
+          <AnimatePresence initial={false}>
+            {searchFocus && !query && (
+              <motion.div
+                key="search-hint"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.28, ease: EASE }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-wrap items-center gap-2 pt-3">
+                  <span className="mono text-[10px] uppercase tracking-[0.2em] text-silver">Try</span>
+                  {SEARCH_EXAMPLES.map((example) => (
+                    <button
+                      key={example}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setQuery(example)}
+                      className="mono border rule bg-white px-2.5 py-1 text-[10px] tracking-[0.08em] text-graphite transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink"
+                    >
+                      {example}
+                    </button>
+                  ))}
+                  <span className="text-[12.5px] leading-relaxed text-graphite">
+                    Words in any order, quotes for a phrase, minus to exclude.
+                  </span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Companies panel — local vs foreign coverage */}
           <AnimatePresence initial={false}>
@@ -460,11 +503,19 @@ export default function PortalDashboard() {
                                     onClick={() => { setCompanySel(active ? null : { kind: 'company', company: c }); setCompaniesOpen(false); }}
                                     className="group/item flex w-full items-baseline justify-between gap-4 py-3 text-left transition-colors duration-200"
                                   >
-                                    <span
-                                      className={`block truncate text-[13.5px] leading-snug transition-colors group-hover/item:text-[color:var(--color-amber-deep)] ${active ? '' : 'text-ink'}`}
-                                      style={active ? { color: 'var(--color-amber-deep)' } : undefined}
-                                    >
-                                      {c.name}
+                                    <span className="flex min-w-0 items-baseline gap-2.5">
+                                      <span
+                                        className="mono shrink-0 text-[10.5px] uppercase tracking-[0.1em]"
+                                        style={{ color: active ? 'var(--color-amber-deep)' : c.symbol ? 'var(--color-slate)' : 'var(--color-silver)' }}
+                                      >
+                                        {c.symbol ?? '—'}
+                                      </span>
+                                      <span
+                                        className={`block truncate text-[13.5px] leading-snug transition-colors group-hover/item:text-[color:var(--color-amber-deep)] ${active ? '' : 'text-ink'}`}
+                                        style={active ? { color: 'var(--color-amber-deep)' } : undefined}
+                                      >
+                                        {c.name}
+                                      </span>
                                     </span>
                                     <span className="mono num shrink-0 text-[10.5px] text-silver">
                                       {count} {count === 1 ? 'report' : 'reports'}
@@ -683,6 +734,7 @@ export default function PortalDashboard() {
               </div>
               <span className="mono text-[11px] uppercase tracking-[0.16em] text-graphite">
                 {filtered.length} {filtered.length === 1 ? 'report' : 'reports'}
+                {search.active && <span className="text-silver"> · by relevance</span>}
               </span>
             </div>
 
@@ -701,8 +753,10 @@ export default function PortalDashboard() {
               <div className="flex flex-col items-start gap-3 border border-dashed rule px-8 py-16">
                 <span aria-hidden className="block h-[2px] w-6" style={{ background: 'var(--color-amber)' }} />
                 <p className="text-[15px] font-medium text-ink">Nothing matches that search.</p>
-                <p className="max-w-[46ch] text-[13.5px] leading-relaxed text-graphite">
-                  Try a shorter fragment, or clear the sector filter to see the full archive.
+                <p className="max-w-[52ch] text-[13.5px] leading-relaxed text-graphite">
+                  Every word has to land somewhere — on a title, ticker, company, analyst,
+                  sector, type, rating or date. Drop a term, or clear the filters to see the
+                  full archive.
                 </p>
                 <button
                   type="button"
@@ -715,7 +769,7 @@ export default function PortalDashboard() {
             ) : (
               <div className="space-y-6">
                 {featured && (
-                  <FeaturedCard report={featured} onView={() => setActive(featured)} />
+                  <FeaturedCard report={featured} words={search.words} onView={() => setActive(featured)} />
                 )}
                 <motion.div
                   layout
@@ -723,7 +777,7 @@ export default function PortalDashboard() {
                 >
                   <AnimatePresence mode="popLayout">
                     {grid.map((r, i) => (
-                      <ReportCard key={r.id} report={r} index={i} onView={() => setActive(r)} />
+                      <ReportCard key={r.id} report={r} index={i} words={search.words} onView={() => setActive(r)} />
                     ))}
                   </AnimatePresence>
                 </motion.div>
@@ -892,8 +946,11 @@ function TrendingCard({ report, rank, count, maxCount, metric, index, onView }: 
             {count.toLocaleString('en-PH')} {unit}
           </span>
         </div>
-        <div className="mono mt-4 truncate text-[9.5px] uppercase tracking-[0.16em] text-graphite">
-          {[report.category ?? 'General', report.companyName].filter(Boolean).join(' · ')}
+        <div className="mono mt-4 flex items-baseline justify-between gap-3 text-[9.5px] uppercase tracking-[0.16em] text-graphite">
+          <span className="truncate">
+            {[report.companySymbol, report.reportType ?? report.category ?? 'General'].filter(Boolean).join(' · ')}
+          </span>
+          <RatingTag rating={report.rating} />
         </div>
         <h3 className="mt-2 line-clamp-2 text-[14.5px] font-medium leading-snug tracking-[-0.01em] text-ink transition-colors group-hover:text-[color:var(--color-amber-deep)]">
           {report.title}
@@ -940,10 +997,13 @@ function SpotlightCard({ report, onView }: { report: Report; onView: () => void 
         aria-label={`Open ${report.title}`}
         className="flex h-full w-full flex-col p-6 text-left md:p-7"
       >
-        <span className="mono flex items-center gap-2.5 text-[10px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-amber)' }}>
-          <LiveDot />
-          Spotlight
-        </span>
+        <div className="flex items-center justify-between gap-3">
+          <span className="mono flex items-center gap-2.5 text-[10px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-amber)' }}>
+            <LiveDot />
+            Spotlight
+          </span>
+          <RatingTag rating={report.rating} dark />
+        </div>
         <h3 className="mt-4 text-[clamp(1.15rem,1.8vw,1.45rem)] font-medium leading-[1.15] tracking-[-0.015em] text-paper transition-colors duration-300 group-hover:text-[color:var(--color-amber)]">
           {report.title}
         </h3>
@@ -956,6 +1016,8 @@ function SpotlightCard({ report, onView }: { report: Report; onView: () => void 
           className="mono mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t rule-paper pt-4 text-[10.5px] tracking-[0.05em]"
           style={{ color: 'color-mix(in oklab, var(--color-paper) 60%, transparent)' }}
         >
+          {report.companySymbol && <><span>{report.companySymbol}</span><span>·</span></>}
+          {report.reportType && <><span>{report.reportType}</span><span>·</span></>}
           <span>{report.analyst}</span>
           <span>·</span>
           <span className="num">{fmtDate(report.date)}</span>
@@ -976,7 +1038,7 @@ function SpotlightCard({ report, onView }: { report: Report; onView: () => void 
 
 /* ── Featured (latest) ───────────────────────────────────────── */
 
-function FeaturedCard({ report, onView }: { report: Report; onView: () => void }) {
+function FeaturedCard({ report, words, onView }: { report: Report; words: string[]; onView: () => void }) {
   const { has } = useBookmarks();
   return (
     <motion.article
@@ -999,18 +1061,29 @@ function FeaturedCard({ report, onView }: { report: Report; onView: () => void }
             {report.companyName && (
               <>
                 <span className="text-silver">/</span>
-                <span className="text-graphite">{report.companyName}</span>
+                <span className="text-graphite">
+                  {[report.companySymbol, report.companyName].filter(Boolean).join(' · ')}
+                </span>
               </>
             )}
+            {report.reportType && (
+              <>
+                <span className="text-silver">/</span>
+                <span className="text-graphite">{report.reportType}</span>
+              </>
+            )}
+            <RatingTag rating={report.rating} />
           </div>
           <button type="button" onClick={onView} className="block text-left">
             <h3 className="text-[clamp(1.4rem,2.4vw,2rem)] font-medium leading-[1.08] tracking-[-0.02em] text-ink">
-              {report.title}
+              <Highlight text={report.title} words={words} />
             </h3>
           </button>
-          <p className="mt-4 max-w-[62ch] text-[14px] leading-relaxed text-slate">{report.summary}</p>
+          <p className="mt-4 max-w-[62ch] text-[14px] leading-relaxed text-slate">
+            <Highlight text={report.summary} words={words} />
+          </p>
           <div className="mono mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] tracking-[0.04em] text-graphite">
-            <span className="text-slate">{report.analyst}</span>
+            <span className="text-slate"><Highlight text={report.analyst} words={words} /></span>
             <span className="text-silver">·</span>
             <span className="num">{fmtDate(report.date)}</span>
             {report.pages ? <><span className="text-silver">·</span><span className="num">{report.pages} pages</span></> : null}
@@ -1044,7 +1117,9 @@ function FeaturedCard({ report, onView }: { report: Report; onView: () => void }
 
 /* ── Report card ─────────────────────────────────────────────── */
 
-const ReportCard = memo(function ReportCard({ report, index, onView }: { report: Report; index: number; onView: () => void }) {
+const ReportCard = memo(function ReportCard({ report, index, words, onView }: {
+  report: Report; index: number; words: string[]; onView: () => void;
+}) {
   const { has } = useBookmarks();
   return (
     <motion.article
@@ -1056,22 +1131,27 @@ const ReportCard = memo(function ReportCard({ report, index, onView }: { report:
     >
       <SavedTick shown={has(report.id)} />
       <div className="mono mb-4 flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-graphite">
-        <span className="truncate pr-3">{[report.category ?? 'General', report.companyName].filter(Boolean).join(' · ')}</span>
+        <span className="truncate pr-3">
+          {[report.companySymbol, report.reportType ?? report.category ?? 'General'].filter(Boolean).join(' · ')}
+        </span>
         <span className="num shrink-0">{fmtDate(report.date)}</span>
       </div>
 
       <button type="button" onClick={onView} className="block flex-1 text-left">
         <h3 className="text-[15.5px] font-medium leading-snug tracking-[-0.01em] text-ink transition-colors group-hover:text-[color:var(--color-amber-deep)]">
-          {report.title}
+          <Highlight text={report.title} words={words} />
         </h3>
-        <p className="mt-2.5 line-clamp-2 text-[13px] leading-relaxed text-graphite">{report.summary}</p>
+        <p className="mt-2.5 line-clamp-2 text-[13px] leading-relaxed text-graphite">
+          <Highlight text={report.summary} words={words} />
+        </p>
       </button>
 
       <div className="mono mt-5 flex items-center gap-2 text-[11px] tracking-[0.04em] text-graphite">
-        <span className="truncate text-slate">{report.analyst}</span>
+        <span className="truncate text-slate"><Highlight text={report.analyst} words={words} /></span>
         {report.pages ? <><span className="text-silver">·</span><span className="num shrink-0">{report.pages}p</span></> : null}
         <span className="text-silver">·</span>
         <span className="num shrink-0">{fmtBytes(report.fileSize)}</span>
+        {report.rating && <span className="ml-auto"><RatingTag rating={report.rating} /></span>}
       </div>
 
       <div className="mt-5 flex items-center gap-2 border-t rule pt-4">

@@ -15,6 +15,7 @@ use App\Models\NewsletterIssue;
 use App\Models\PageBlock;
 use App\Models\PortalSetting;
 use App\Models\Report;
+use App\Models\ReportType;
 use App\Models\ServiceLine;
 use App\Models\ServicePage;
 use App\Models\StaffMember;
@@ -30,8 +31,10 @@ class BootstrapController extends Controller
     {
         return response()->json([
             'articles' => Article::orderByDesc('date')->orderByDesc('id')->get()->map->toWire()->values(),
-            'reports' => Report::with('company')->orderByDesc('date')->orderByDesc('id')->get()->map->toWire()->values(),
+            'reports' => Report::with('company', 'reportType')->orderByDesc('date')->orderByDesc('id')->get()->map->toWire()->values(),
             'companies' => Company::orderBy('name')->get()->map->toWire()->values(),
+            // Editable report-type registry (Results, Rating Change, …).
+            'reportTypes' => ReportType::orderBy('name')->get()->map->toWire()->values(),
             // How the portal dashboard ranks Trending Content (Reports module).
             'trendingRules' => PortalSetting::current()->trendingToWire(),
             'people' => StaffMember::orderBy('position')->orderBy('id')->get()->map->toWire()->values(),

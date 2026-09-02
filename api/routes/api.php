@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\PortalClientController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\RegistrationController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\ReportTypeController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SiteContentController;
 use App\Http\Controllers\Api\SubscriberController;
@@ -84,6 +85,11 @@ Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::post('/companies', [CompanyController::class, 'store']);
         Route::put('/companies/{company}', [CompanyController::class, 'update']);
         Route::delete('/companies/{company}', [CompanyController::class, 'destroy']);
+
+        // Report-type registry — the desk's editable editorial classifications.
+        Route::post('/report-types', [ReportTypeController::class, 'store']);
+        Route::put('/report-types/{reportType}', [ReportTypeController::class, 'update']);
+        Route::delete('/report-types/{reportType}', [ReportTypeController::class, 'destroy']);
     });
 
     Route::middleware('permission:people.manage')->group(function () {
