@@ -8,6 +8,8 @@ export type Session = {
   email: string;
   role: string;
   permissions: string[];
+  /** The Outlook account this staff member blasts from; null when not set. */
+  outlookEmail?: string | null;
   signedInAt: string;
 };
 
@@ -39,7 +41,7 @@ function readSession(): Session | null {
 
 type LoginResponse = {
   token: string;
-  user: { id: string; name: string; email: string; role: string; permissions: string[] };
+  user: { id: string; name: string; email: string; role: string; permissions: string[]; outlookEmail?: string | null };
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {

@@ -489,12 +489,11 @@ function allocateSlots(counts: number[], total: number): number[] {
 const STATUS_META = [
   { key: 'published', label: 'Published', color: 'var(--color-signal)' },
   { key: 'review', label: 'In review', color: 'var(--color-amber-deep)' },
-  { key: 'draft', label: 'Draft', color: 'var(--color-graphite)' },
 ] as const;
 
-function StatusGlyphBar({ counts }: { counts: [number, number, number] }) {
+function StatusGlyphBar({ counts }: { counts: [number, number] }) {
   const reduce = useReducedMotion();
-  const total = counts[0] + counts[1] + counts[2];
+  const total = counts[0] + counts[1];
   const slots = allocateSlots([...counts], total);
   const cells = slots.flatMap((n, si) => Array.from({ length: n }, () => STATUS_META[si].color));
 
@@ -860,7 +859,6 @@ export default function Overview() {
   const derived = useMemo(() => {
     const published = articles.filter((a) => a.status === 'published');
     const inReview = articles.filter((a) => a.status === 'review');
-    const drafts = articles.filter((a) => a.status === 'draft');
 
     const noteDates = published.map((a) => a.date);
     const reportDates = reports.map((r) => r.date);
@@ -879,7 +877,7 @@ export default function Overview() {
     const shipped30 = countWithin(shippedDates, now, 30, 0);
     const shippedPrev30 = countWithin(shippedDates, now, 60, 30);
 
-    const queue = [...inReview, ...drafts];
+    const queue = [...inReview];
     const mostRead = published.reduce<Article | null>(
       (top, a) => (a.reads > (top?.reads ?? 0) ? a : top),
       null,
@@ -897,7 +895,7 @@ export default function Overview() {
     );
 
     return {
-      published, inReview, drafts, queue, mostRead,
+      published, inReview, queue, mostRead,
       weekStarts, notesWeekly, reportsWeekly, issuesWeekly,
       shipped30, shippedPrev30,
       notes30: countWithin(noteDates, now, 30, 0),
@@ -919,7 +917,7 @@ export default function Overview() {
   if (firstLoad) return <OverviewSkeleton />;
 
   const {
-    inReview, drafts, queue, mostRead, weekStarts,
+    inReview, queue, mostRead, weekStarts,
     notesWeekly, reportsWeekly, issuesWeekly, shipped30, shippedPrev30,
     categories, latestIssue, liveServices, visiblePeople,
   } = derived;
@@ -1046,7 +1044,7 @@ export default function Overview() {
               <p className="border-y rule py-10 text-[13.5px] text-graphite">No notes exist yet. New research lands here first.</p>
             ) : (
               <>
-                <StatusGlyphBar counts={[derived.published.length, inReview.length, drafts.length]} />
+                <StatusGlyphBar counts={[derived.published.length, inReview.length]} />
 
                 {queue.length === 0 ? (
                   <p className="mt-8 border-y rule py-8 text-[13.5px] text-graphite">

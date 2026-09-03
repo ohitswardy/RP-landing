@@ -26,23 +26,47 @@ class PortalClientController extends Controller
             'email' => ['required', 'email', 'max:190', 'unique:users,email'],
             'username' => ['nullable', 'string', 'max:60', 'alpha_dash', 'unique:users,username'],
             'firm' => ['required', 'string', 'max:120'],
+            'clientType' => ['sometimes', 'nullable', 'in:Local,Foreign'],
+            'sectorPrefs' => ['sometimes', 'array', 'max:30'],
+            'sectorPrefs.*' => ['string', 'max:80'],
+            'preferredAnalysts' => ['sometimes', 'array', 'max:30'],
+            'preferredAnalysts.*' => ['string', 'max:120'],
+            // Present = the streamlined path: the account goes live approved,
+            // no registration link is issued.
+            'password' => ['sometimes', 'nullable', 'string', 'min:8', 'max:200'],
         ], [
             'email.unique' => 'An account already exists for that address.',
             'username.unique' => 'That user id is taken.',
             'username.alpha_dash' => 'User ids use letters, numbers, dashes, and underscores only.',
         ]);
 
+        $direct = ($data['password'] ?? null) !== null;
+
         $client = User::create([
             'name' => $data['name'],
             'email' => mb_strtolower($data['email']),
             'username' => $data['username'] ?: $this->deriveUsername($data['email']),
             // Placeholder until the client sets their own on the registration page.
-            'password' => Str::random(40),
+            'password' => $direct ? $data['password'] : Str::random(40),
             'kind' => User::KIND_CLIENT,
-            'status' => User::STATUS_INVITED,
+            'status' => $direct ? User::STATUS_APPROVED : User::STATUS_INVITED,
             'firm' => $data['firm'],
+            'client_type' => $data['clientType'] ?? 'Local',
+            'sector_prefs' => array_values($data['sectorPrefs'] ?? []),
+            'preferred_analysts' => array_values($data['preferredAnalysts'] ?? []),
+            'registered_at' => $direct ? now() : null,
+            'approved_at' => $direct ? now() : null,
             'suspended' => false,
         ]);
+
+        if ($direct) {
+            $audit = Audit::log('Provisioned client access (direct)', $client->email);
+
+            return response()->json([
+                'item' => $client->toAccountWire(),
+                'audit' => $audit->toWire(),
+            ], 201);
+        }
 
         $token = PortalToken::issue($client, PortalToken::REGISTRATION);
         $audit = Audit::log('Provisioned client access', $client->email);

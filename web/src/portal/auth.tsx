@@ -104,7 +104,8 @@ export function RequirePortal({ children }: { children: ReactNode }) {
   const { client } = usePortal();
   const location = useLocation();
   if (!client) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    // Keep the query string so blast deep links (/portal?report=…) survive the login gate.
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
   return <>{children}</>;
 }

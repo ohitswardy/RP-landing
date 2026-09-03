@@ -18,7 +18,7 @@ import {
 } from './icons';
 import {
   ChalkboardSimpleIcon, ArticleIcon, ScrollIcon, SuitcaseIcon, UsersThreeIcon,
-  FileIcon, NewspaperIcon, LogIcon, FingerprintIcon,
+  FileIcon, NewspaperIcon, EnvelopeSimpleIcon, LogIcon, FingerprintIcon,
 } from '@phosphor-icons/react';
 
 type NavItem = {
@@ -45,7 +45,8 @@ const CONTENT_NAV: NavItem[] = [
 ];
 
 const SITE_NAV: NavItem[] = [
-  { to: '/cms/newsletter', label: 'Newsletter', code: '07', icon: (p) => <NewspaperIcon {...p} weight="bold" />, perm: 'newsletter.manage' },
+  { to: '/cms/newsletter', label: 'Newsletter', code: '06', icon: (p) => <NewspaperIcon {...p} weight="bold" />, perm: 'newsletter.manage' },
+  { to: '/cms/email', label: 'Email desk', code: '07', icon: (p) => <EnvelopeSimpleIcon {...p} weight="bold" />, perm: 'email.manage' },
   { to: '/cms/access', label: 'Users & access', code: '08', icon: (p) => <LogIcon {...p} weight="bold" />, perm: 'access.manage' },
   { to: '/cms/logs', label: 'Client logs', code: '09', icon: (p) => <FingerprintIcon {...p} weight="bold" />, perm: 'logs.view' },
 ];

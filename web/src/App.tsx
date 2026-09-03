@@ -28,6 +28,7 @@ const ServicesModule = lazy(() => import('./cms/modules/ServicesModule'));
 const PeopleModule = lazy(() => import('./cms/modules/PeopleModule'));
 const PagesModule = lazy(() => import('./cms/modules/PagesModule'));
 const NewsletterModule = lazy(() => import('./cms/modules/NewsletterModule'));
+const EmailModule = lazy(() => import('./cms/modules/EmailModule'));
 const AccessModule = lazy(() => import('./cms/modules/AccessModule'));
 const ClientLogsModule = lazy(() => import('./cms/modules/ClientLogsModule'));
 
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="people" element={<RequirePermission permission="people.manage"><Suspense fallback={null}><PeopleModule /></Suspense></RequirePermission>} />
           <Route path="pages" element={<RequirePermission permission="pages.manage"><Suspense fallback={null}><PagesModule /></Suspense></RequirePermission>} />
           <Route path="newsletter" element={<RequirePermission permission="newsletter.manage"><Suspense fallback={null}><NewsletterModule /></Suspense></RequirePermission>} />
+          <Route path="email" element={<RequirePermission permission="email.manage"><Suspense fallback={null}><EmailModule /></Suspense></RequirePermission>} />
           <Route path="access" element={<RequirePermission permission="access.manage"><Suspense fallback={null}><AccessModule /></Suspense></RequirePermission>} />
           <Route path="logs" element={<RequirePermission permission="logs.view"><Suspense fallback={null}><ClientLogsModule /></Suspense></RequirePermission>} />
         </Route>

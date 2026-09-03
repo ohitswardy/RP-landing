@@ -1,34 +1,53 @@
-import Reveal from './Reveal';
-import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import ArrowCta from './ArrowCta';
 
+const ease = [0.25, 1, 0.5, 1] as const;
+
+/**
+ * Mirror of the Culture panel: photograph bleeding left, bronze block
+ * riding over its right edge (the GIC rightBox move).
+ */
 export default function Community() {
   return (
     <section className="bg-paper">
-      <div className="container-fluid pt-10 pb-24 md:pt-12 md:pb-32">
-        <div className="grid grid-cols-12 gap-x-6 gap-y-10 items-center">
-          <Reveal className="col-span-12 lg:col-span-5 lg:col-start-1 order-2 lg:order-1">
-            <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.1] tracking-[-0.02em] max-w-[20ch] text-ink">
+      <div className="container-fluid pt-4 md:pt-5 pb-24 md:pb-32">
+        <div className="relative">
+          {/* Photograph */}
+          <motion.div
+            initial={{ clipPath: 'inset(0 0 100% 0)' }}
+            whileInView={{ clipPath: 'inset(0 0 0% 0)' }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 1.1, ease }}
+            className="relative overflow-hidden lg:mr-[28%] aspect-[4/3] lg:aspect-[16/9]"
+          >
+            <img
+              src="/People of Regis.png"
+              alt="The people of Regis Partners"
+              className="absolute inset-0 w-full h-full object-cover object-center"
+            />
+          </motion.div>
+
+          {/* Bronze block, offset over the photo's right edge */}
+          <motion.div
+            initial={{ opacity: 0, y: 32 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.9, ease, delay: 0.2 }}
+            className="relative -mt-16 mx-4 lg:mx-0 lg:mt-0 lg:absolute lg:inset-y-14 lg:right-0 lg:w-[42%] bg-bronze text-paper p-9 md:p-12 lg:p-14 flex flex-col justify-center"
+          >
+            <div className="eyebrow eyebrow-paper mb-7">People & community</div>
+            <h2 className="text-[clamp(1.6rem,2.6vw,2.4rem)] leading-[1.12] tracking-[-0.02em] max-w-[20ch]">
               Our people are our greatest contribution to the country.
             </h2>
-            <p className="mt-7 max-w-[44ch] text-slate leading-relaxed text-[15px]">
-              As a people-driven business, our greatest contribution flows
-              through the teams and communities we serve across the
-              Philippines, from Makati to Mindanao.
+            <p className="mt-6 max-w-[42ch] text-paper/75 leading-[1.65] text-[14.5px]">
+              As a people-driven business, our contribution flows through the
+              teams and communities we serve across the Philippines, from
+              Makati to Mindanao.
             </p>
-            <Link to="/about" className="btn-dark mt-10">
-              Explore our programs <span>→</span>
-            </Link>
-          </Reveal>
-
-          <Reveal delay={0.1} className="col-span-12 lg:col-span-7 lg:col-start-6 order-1 lg:order-2">
-            <div className="aspect-[4/3] relative overflow-hidden">
-              <img
-                src="/People of Regis.png"
-                alt="People of Regis"
-                className="absolute inset-0 w-full h-full object-cover object-center"
-              />
+            <div className="mt-9">
+              <ArrowCta to="/about" tone="paper">Explore our programs</ArrowCta>
             </div>
-          </Reveal>
+          </motion.div>
         </div>
       </div>
     </section>

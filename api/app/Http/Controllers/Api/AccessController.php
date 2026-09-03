@@ -40,6 +40,7 @@ class AccessController extends Controller
             'password' => ['required', 'string', 'min:8'],
             'kind' => ['required', 'in:staff'],
             'roleId' => ['required', 'integer', 'exists:roles,id'],
+            'outlookEmail' => ['sometimes', 'nullable', 'email', 'max:190'],
         ], [
             'kind.in' => 'Portal clients are provisioned through the client onboarding flow.',
             'roleId.required' => 'Assign the staff account a role.',
@@ -53,6 +54,7 @@ class AccessController extends Controller
             'status' => User::STATUS_APPROVED,
             'role_id' => $data['roleId'],
             'firm' => null,
+            'outlook_email' => $data['outlookEmail'] ?? null,
             'suspended' => false,
         ]);
 
@@ -69,6 +71,12 @@ class AccessController extends Controller
             'firm' => ['sometimes', 'nullable', 'string', 'max:120'],
             'suspended' => ['sometimes', 'boolean'],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
+            'outlookEmail' => ['sometimes', 'nullable', 'email', 'max:190'],
+            'clientType' => ['sometimes', 'nullable', 'in:Local,Foreign'],
+            'sectorPrefs' => ['sometimes', 'array', 'max:30'],
+            'sectorPrefs.*' => ['string', 'max:80'],
+            'preferredAnalysts' => ['sometimes', 'array', 'max:30'],
+            'preferredAnalysts.*' => ['string', 'max:120'],
         ]);
 
         $actor = $request->user();
@@ -95,6 +103,20 @@ class AccessController extends Controller
         ]);
         if ($user->isStaff() && array_key_exists('roleId', $data)) {
             $user->role_id = $data['roleId'];
+        }
+        if ($user->isStaff() && array_key_exists('outlookEmail', $data)) {
+            $user->outlook_email = $data['outlookEmail'] !== null ? mb_strtolower($data['outlookEmail']) : null;
+        }
+        if ($user->isClient()) {
+            if (array_key_exists('clientType', $data)) {
+                $user->client_type = $data['clientType'];
+            }
+            if (array_key_exists('sectorPrefs', $data)) {
+                $user->sector_prefs = array_values($data['sectorPrefs']);
+            }
+            if (array_key_exists('preferredAnalysts', $data)) {
+                $user->preferred_analysts = array_values($data['preferredAnalysts']);
+            }
         }
         if ($passwordChanged) {
             $user->password = $data['password'];

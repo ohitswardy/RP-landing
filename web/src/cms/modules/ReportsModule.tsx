@@ -7,7 +7,7 @@ import {
 } from '../ui';
 import {
   IconPen, IconPlus, IconSearch, IconTrash, IconCheck, IconUpload, IconEye, IconMenu, IconX,
-  IconStar, IconStarFilled, IconChart, IconArrowDown,
+  IconStar, IconStarFilled, IconChart, IconArrowDown, IconCopy,
 } from '../icons';
 import {
   REPORT_CATEGORIES, REPORT_COMPANIES, REPORT_RATINGS, TRENDING_METRICS, TRENDING_WINDOWS,
@@ -16,6 +16,7 @@ import {
   type ReportType, type TrendingEntry, type TrendingMetric,
 } from '../data';
 import { apiBlobUrl, apiFetch } from '../../lib/api';
+import { writeClipboard } from '../../lib/clipboard';
 import { SEARCH_EXAMPLES, useReportSearch } from '../../lib/reportSearch';
 import Highlight from '../../components/Highlight';
 
@@ -82,6 +83,18 @@ export default function ReportsModule() {
 
   // Spotlight — the one report showcased on the portal dashboard.
   const [spotBusy, setSpotBusy] = useState<string | null>(null);
+
+  // Blast link — the login-gated portal deep link pasted into blast emails.
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const copiedTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current); }, []);
+
+  async function copyBlastLink(r: Report) {
+    const ok = await writeClipboard(`${window.location.origin}/portal?report=${r.id}`);
+    setCopiedLink(ok ? r.id : null);
+    if (copiedTimer.current) window.clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => setCopiedLink(null), 2200);
+  }
 
   // Trending rules drawer, with a live dry-run against the activity ledger.
   const [trendOpen, setTrendOpen] = useState(false);
@@ -774,6 +787,14 @@ export default function ReportsModule() {
                       {r.spotlight
                         ? <span className="grid place-items-center" style={{ color: 'var(--color-amber-deep)' }}><IconStarFilled size={15} /></span>
                         : <IconStar size={15} />}
+                    </RowAction>
+                    <RowAction
+                      label={copiedLink === r.id ? 'Blast link copied' : 'Copy blast link'}
+                      onClick={() => void copyBlastLink(r)}
+                    >
+                      {copiedLink === r.id
+                        ? <span className="grid place-items-center" style={{ color: 'var(--color-amber-deep)' }}><IconCheck /></span>
+                        : <IconCopy />}
                     </RowAction>
                     <RowAction label="Preview PDF" onClick={() => preview(r)}><IconEye /></RowAction>
                     <RowAction label="Edit report" onClick={() => openEditor(r)}><IconPen /></RowAction>

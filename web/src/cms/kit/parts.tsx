@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EASE } from '../ui';
 import { IconX } from '../icons';
@@ -185,17 +185,50 @@ export function Modal({
   open: boolean; title: string; onClose: () => void;
   children: ReactNode; footer?: ReactNode; wide?: boolean;
 }) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  /* Escape closes, Tab stays inside, and the page behind stops scrolling. */
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const returnTo = document.activeElement as HTMLElement | null;
+    const body = document.body;
+    const prevOverflow = body.style.overflow;
+    body.style.overflow = 'hidden';
+
+    const focusables = () => Array.from(
+      panelRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    ).filter((el) => el.offsetParent !== null);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault(); first.focus();
+      }
+    };
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    panelRef.current?.focus({ preventScroll: true });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      body.style.overflow = prevOverflow;
+      returnTo?.focus?.();
+    };
   }, [open, onClose]);
 
   return (
     <AnimatePresence>
       {open && (
-        <motion.div key="modal" className="fixed inset-0 z-50 grid place-items-center p-4 sm:p-8">
+        <motion.div key="modal" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden p-4 sm:p-8">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -206,27 +239,34 @@ export function Modal({
             style={{ background: 'oklch(0.165 0.040 260 / 0.5)' }}
           />
           <motion.div
+            ref={panelRef}
             role="dialog"
+            aria-modal="true"
             aria-label={title}
+            tabIndex={-1}
             initial={{ opacity: 0, y: 14, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.99 }}
             transition={{ duration: 0.32, ease: EASE }}
-            className={`relative flex max-h-full w-full flex-col bg-paper shadow-2xl ${wide ? 'max-w-[860px]' : 'max-w-[460px]'}`}
+            className={`relative flex max-h-full w-full flex-col bg-paper shadow-2xl outline-none ${wide ? 'max-w-[860px]' : 'max-w-[460px]'}`}
           >
-            <div className="flex items-center justify-between border-b rule px-6 py-4">
-              <h2 className="text-[15px] font-medium tracking-[-0.01em]">{title}</h2>
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b rule px-6 py-4">
+              <h2 className="min-w-0 flex-1 truncate text-[15px] font-medium tracking-[-0.01em]" title={title}>{title}</h2>
               <button
                 type="button"
                 aria-label="Close"
                 onClick={onClose}
-                className="grid h-8 w-8 place-items-center text-graphite transition-colors hover:text-ink"
+                className="grid h-8 w-8 shrink-0 place-items-center text-graphite transition-colors hover:text-ink"
               >
                 <IconX />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">{children}</div>
-            {footer && <div className="flex items-center justify-end gap-3 border-t rule px-6 py-4">{footer}</div>}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-6" style={{ scrollbarGutter: 'stable' }}>
+              {children}
+            </div>
+            {footer && (
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t rule px-6 py-4">{footer}</div>
+            )}
           </motion.div>
         </motion.div>
       )}

@@ -183,8 +183,14 @@ class ReportController extends Controller
     }
 
     /** Stream the stored PDF to authenticated staff or clients. */
-    public function file(Report $report): Response
+    public function file(Request $request, Report $report): Response
     {
+        // A client provisioned to a mandate cannot pull a PDF off it, even
+        // with the id in hand — the catalog hides it, this refuses it.
+        if (! $report->isVisibleTo($request->user())) {
+            return response()->json(['message' => 'That report is outside your coverage.'], 403);
+        }
+
         if (! $report->file_path || ! Storage::exists($report->file_path)) {
             return response()->json(['message' => 'This report has no stored PDF.'], 404);
         }

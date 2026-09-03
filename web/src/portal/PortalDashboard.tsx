@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useReports } from './reports';
 import {
@@ -77,8 +77,21 @@ export default function PortalDashboard() {
   const [sidebarKey, setSidebarKey] = useState(0);
   const [active, setActive] = useState<Report | null>(null);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const loading = status === 'loading';
+
+  /** Blast deep links (/portal?report=…) open the viewer once the catalog is
+      in; an id the client cannot see is dropped silently. One-shot — the param
+      is cleared so refreshes and in-app navigation behave normally. */
+  useEffect(() => {
+    if (loading) return;
+    const wanted = searchParams.get('report');
+    if (!wanted) return;
+    const linked = reports.find((r) => r.id === wanted);
+    if (linked) setActive(linked);
+    setSearchParams({}, { replace: true });
+  }, [loading, reports, searchParams, setSearchParams]);
 
   const greetingLine = `${greeting()}, ${client ? firstName(client.name) : 'there'}.`;
 
@@ -107,6 +120,13 @@ export default function PortalDashboard() {
     }
     return m;
   }, [reports]);
+
+  /** Only the sectors this client's catalog actually carries. A mandate
+      narrowed to two sectors should not offer the other eight as dead ends. */
+  const sectors = useMemo(
+    () => REPORT_CATEGORIES.filter((c) => (counts.get(c) ?? 0) > 0),
+    [counts],
+  );
 
   const companyGroups = useMemo(() => {
     const g: Record<ReportCompany, Company[]> = { Local: [], Foreign: [] };
@@ -675,8 +695,10 @@ export default function PortalDashboard() {
             <div className="sticky top-[72px]">
               <div className="mono mb-4 text-[9.5px] uppercase tracking-[0.22em] text-graphite">Sectors</div>
               <LineSidebar
-                key={sidebarKey}
-                items={['Latest reports', ...REPORT_CATEGORIES, 'All reports']}
+                // Re-keyed on the sector list so the rail rebuilds when the
+                // catalog lands, or when a mandate change reshapes it.
+                key={`${sidebarKey}:${sectors.join('|')}`}
+                items={['Latest reports', ...sectors, 'All reports']}
                 accentColor="var(--color-amber-deep)"
                 textColor="var(--color-slate)"
                 markerColor="var(--color-graphite)"
@@ -695,8 +717,8 @@ export default function PortalDashboard() {
                 defaultActive={0}
                 onItemClick={(index) => {
                   if (index === 0) setView('latest');
-                  else if (index === REPORT_CATEGORIES.length + 1) setView('all');
-                  else setView(REPORT_CATEGORIES[index - 1] as ReportCategory);
+                  else if (index === sectors.length + 1) setView('all');
+                  else setView(sectors[index - 1] as ReportCategory);
                 }}
               />
             </div>
@@ -741,7 +763,7 @@ export default function PortalDashboard() {
             {/* Mobile category pills — hidden on lg+ where sidebar shows */}
             <div className="mb-5 flex flex-wrap gap-1.5 lg:hidden">
               <FilterBtn active={view === 'latest'} label="Latest" count={reports.length} onClick={() => setView('latest')} />
-              {REPORT_CATEGORIES.map((c) => (
+              {sectors.map((c) => (
                 <FilterBtn key={c} active={view === c} label={c} count={counts.get(c) ?? 0} onClick={() => setView(c)} />
               ))}
               <FilterBtn active={view === 'all'} label="All" count={reports.length} onClick={() => setView('all')} />
@@ -749,6 +771,19 @@ export default function PortalDashboard() {
 
             {loading ? (
               <ReportsSkeleton />
+            ) : reports.length === 0 ? (
+              /* Nothing in the catalog at all — either the desk has published
+                 nothing, or this mandate's sectors and analysts carry no
+                 research yet. Filters are not the reason, so don't offer them. */
+              <div className="flex flex-col items-start gap-3 border border-dashed rule px-8 py-16">
+                <span aria-hidden className="block h-[2px] w-6" style={{ background: 'var(--color-amber)' }} />
+                <p className="text-[15px] font-medium text-ink">No research on your coverage yet.</p>
+                <p className="max-w-[52ch] text-[13.5px] leading-relaxed text-graphite">
+                  Your mandate is provisioned to specific sectors and analysts. Reports land here
+                  as soon as the desk publishes on them — your account manager can widen the
+                  coverage if you need more.
+                </p>
+              </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-start gap-3 border border-dashed rule px-8 py-16">
                 <span aria-hidden className="block h-[2px] w-6" style={{ background: 'var(--color-amber)' }} />

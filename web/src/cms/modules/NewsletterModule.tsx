@@ -1,39 +1,26 @@
 import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCms } from '../store';
-import { useAuth } from '../auth';
 import { BtnGhost, BtnPrimary, Chip, EmptyState, ModuleHeader, RowAction, SkeletonRows, Stat, useConfirm, EASE } from '../ui';
-import { IconCheck, IconCopy, IconDownload, IconEye, IconPen, IconPlus, IconSearch, IconTrash } from '../icons';
+import { IconCheck, IconCopy, IconDownload, IconEye, IconMail, IconPen, IconPlus, IconSearch, IconTrash } from '../icons';
 import {
   NEWSLETTER_CADENCES, fmtDate, timeAgo,
   type NewsletterCadence, type NewsletterIssue, type Subscriber,
 } from '../data';
 import IssueComposer from './newsletter/IssueComposer';
 import IssueViewer from './newsletter/IssueViewer';
-import { downloadIssuePdf } from './newsletter/printIssue';
+import BlastPanel from './newsletter/BlastPanel';
 
 type Tab = NewsletterCadence | 'recipients';
 
 export default function NewsletterModule() {
   const { newsletters, subscribers, status, deleteNewsletter } = useCms();
-  const { session } = useAuth();
   const [tab, setTab] = useState<Tab>('daily');
   const [query, setQuery] = useState('');
   const [composer, setComposer] = useState<{ editingId: string | null; base: NewsletterIssue | null } | null>(null);
   const [viewing, setViewing] = useState<NewsletterIssue | null>(null);
-  const [preparing, setPreparing] = useState<string | null>(null);
+  const [blasting, setBlasting] = useState<NewsletterIssue | null>(null);
   const [armed, confirm] = useConfirm();
-
-  const actor = session ? { name: session.name, email: session.email } : null;
-
-  async function download(n: NewsletterIssue) {
-    setPreparing(n.id);
-    try {
-      await downloadIssuePdf(n, actor);
-    } finally {
-      setPreparing(null);
-    }
-  }
 
   const loading = status === 'loading';
 
@@ -73,7 +60,7 @@ export default function NewsletterModule() {
   return (
     <div className="space-y-9">
       <ModuleHeader
-        code="08 / Newsletter"
+        code="06 / Newsletter"
         title="Newsletter desk"
         blurb="The daily, weekly, and monthly REGIS mailers. Each issue is composed against the client's exact template and previewed live before it is filed."
         actions={
@@ -158,13 +145,7 @@ export default function NewsletterModule() {
                       <span className="mono hidden text-[11.5px] text-graphite lg:block lg:col-span-2">{timeAgo(n.updated)}</span>
                       <div className="col-span-12 flex items-center justify-end gap-1.5 md:col-span-4 lg:col-span-3">
                         <RowAction label="View issue" onClick={() => setViewing(n)}><IconEye /></RowAction>
-                        <RowAction
-                          label={preparing === n.id ? 'Preparing PDF…' : 'Download PDF'}
-                          disabled={preparing === n.id}
-                          onClick={() => { void download(n); }}
-                        >
-                          <IconDownload size={14} />
-                        </RowAction>
+                        <RowAction label="Email blast" onClick={() => setBlasting(n)}><IconMail size={14} /></RowAction>
                         <RowAction label="Edit issue" onClick={() => setComposer({ editingId: n.id, base: n })}><IconPen /></RowAction>
                         <RowAction label="Duplicate into a new issue" onClick={() => setComposer({ editingId: null, base: n })}><IconCopy /></RowAction>
                         <RowAction label={armed === n.id ? 'Confirm delete' : 'Delete issue'} danger onClick={() => confirm(n.id, () => { void deleteNewsletter(n.id); })}>
@@ -183,11 +164,13 @@ export default function NewsletterModule() {
       {viewing && (
         <IssueViewer
           issue={viewing}
-          actor={actor}
           onEdit={() => { setComposer({ editingId: viewing.id, base: viewing }); setViewing(null); }}
+          onBlast={() => { setBlasting(viewing); setViewing(null); }}
           onClose={() => setViewing(null)}
         />
       )}
+
+      {blasting && <BlastPanel issue={blasting} onClose={() => setBlasting(null)} />}
     </div>
   );
 }

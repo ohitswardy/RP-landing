@@ -9,9 +9,10 @@ import {
 } from '../ui';
 import { IconCheck, IconPen, IconPlus, IconSearch, IconShield, IconTrash } from '../icons';
 import {
-  CLIENT_STATUS, fmtDate, timeAgo,
+  CLIENT_STATUS, REPORT_CATEGORIES, fmtDate, timeAgo,
   type Account, type AccountKind, type AuditEntry, type PermissionDef, type RoleDef,
 } from '../data';
+import { Segmented } from './access/parts';
 import ClientProvisioning from './access/ClientProvisioning';
 import ClientApprovals from './access/ClientApprovals';
 import ClientPasswordReset from './access/ClientPasswordReset';
@@ -42,14 +43,21 @@ const AUDIT_PAGE_SIZE = 10;
 type AccountForm = {
   name: string; email: string; password: string;
   kind: AccountKind; roleId: string; firm: string;
+  outlookEmail: string;
+  clientType: 'Local' | 'Foreign' | null;
+  sectorPrefs: string[];
+  preferredAnalysts: string[];
 };
 type RoleForm = { name: string; description: string };
 
-const BLANK_ACCOUNT: AccountForm = { name: '', email: '', password: '', kind: 'staff', roleId: '', firm: '' };
+const BLANK_ACCOUNT: AccountForm = {
+  name: '', email: '', password: '', kind: 'staff', roleId: '', firm: '',
+  outlookEmail: '', clientType: null, sectorPrefs: [], preferredAnalysts: [],
+};
 
 export default function AccessModule() {
   const { session } = useAuth();
-  const { audit, appendAudit } = useCms();
+  const { audit, appendAudit, people, reports } = useCms();
   const [data, setData] = useState<AccessData | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -138,6 +146,10 @@ export default function AccessModule() {
       setAccountForm({
         name: target.name, email: target.email, password: '',
         kind: target.kind, roleId: target.roleId ?? '', firm: target.firm ?? '',
+        outlookEmail: target.outlookEmail ?? '',
+        clientType: target.clientType,
+        sectorPrefs: target.sectorPrefs ?? [],
+        preferredAnalysts: target.preferredAnalysts ?? [],
       });
     }
     setAccountEditing(target);
@@ -166,6 +178,7 @@ export default function AccessModule() {
             kind: f.kind,
             roleId: f.kind === 'staff' ? Number(f.roleId) : null,
             firm: f.kind === 'client' ? f.firm.trim() : null,
+            ...(f.kind === 'staff' ? { outlookEmail: f.outlookEmail.trim() || null } : {}),
           },
         });
         setUser(res.item);
@@ -176,8 +189,12 @@ export default function AccessModule() {
           method: 'PUT', audience: 'cms',
           body: {
             name: f.name.trim(),
-            ...(accountEditing.kind === 'staff' ? { roleId: f.roleId ? Number(f.roleId) : null } : {}),
-            ...(accountEditing.kind === 'client' ? { firm: f.firm.trim() } : {}),
+            ...(accountEditing.kind === 'staff'
+              ? { roleId: f.roleId ? Number(f.roleId) : null, outlookEmail: f.outlookEmail.trim() || null }
+              : {}),
+            ...(accountEditing.kind === 'client'
+              ? { firm: f.firm.trim(), clientType: f.clientType, sectorPrefs: f.sectorPrefs, preferredAnalysts: f.preferredAnalysts }
+              : {}),
             ...(f.password ? { password: f.password } : {}),
           },
         });
@@ -215,6 +232,43 @@ export default function AccessModule() {
       setLoadError(e instanceof Error ? e.message : 'The account could not be deleted.');
     }
   }
+
+  /* ── Client mandate helpers ────────────────────────────────── */
+
+  /** Sector and byline tallies off the live catalog. The portal matches a
+      client's preferences against these exact strings, so the chips offer what
+      the shelf actually carries rather than a guess. */
+  const sectorCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of reports) if (r.category) m.set(r.category, (m.get(r.category) ?? 0) + 1);
+    return m;
+  }, [reports]);
+
+  const analystCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of reports) if (r.analyst) m.set(r.analyst, (m.get(r.analyst) ?? 0) + 1);
+    return m;
+  }, [reports]);
+
+  const analystOptions = useMemo(
+    () => [...new Set([
+      ...analystCounts.keys(),
+      ...people.filter((p) => p.team === 'Research').map((p) => p.name),
+      ...accountForm.preferredAnalysts,
+    ])].sort((a, b) => a.localeCompare(b)),
+    [analystCounts, people, accountForm.preferredAnalysts],
+  );
+
+  /** What the mandate on screen resolves to, under the same union rule the
+      portal and the Email desk apply: a report qualifies on either a preferred
+      sector or a preferred analyst. null = no restriction set. */
+  const coverageCount = useMemo(() => {
+    const norm = (v: string) => v.trim().toLowerCase();
+    const sectors = new Set(accountForm.sectorPrefs.map(norm).filter(Boolean));
+    const analysts = new Set(accountForm.preferredAnalysts.map(norm).filter(Boolean));
+    if (sectors.size === 0 && analysts.size === 0) return null;
+    return reports.filter((r) => sectors.has(norm(r.category ?? '')) || analysts.has(norm(r.analyst ?? ''))).length;
+  }, [reports, accountForm.sectorPrefs, accountForm.preferredAnalysts]);
 
   /* ── Role state ────────────────────────────────────────────── */
 
@@ -778,15 +832,62 @@ export default function AccessModule() {
                   {roles.find((r) => r.id === accountForm.roleId)?.description || 'No description yet.'}
                 </p>
               )}
+              <TextField
+                label="Outlook email"
+                value={accountForm.outlookEmail}
+                onChange={(v) => setAccountForm((f) => ({ ...f, outlookEmail: v }))}
+                placeholder="name@regis.ph"
+                helper="The account email blasts are sent from. Recorded on every blast in the Email desk."
+              />
             </div>
           ) : (
-            <TextField
-              label="Institutional firm"
-              value={accountForm.firm}
-              onChange={(v) => setAccountForm((f) => ({ ...f, firm: v }))}
-              placeholder="ARQ Capital"
-              helper="Shown in the portal header and coverage reports."
-            />
+            <div className="space-y-6">
+              <TextField
+                label="Institutional firm"
+                value={accountForm.firm}
+                onChange={(v) => setAccountForm((f) => ({ ...f, firm: v }))}
+                placeholder="ARQ Capital"
+                helper="Shown in the portal header and coverage reports."
+              />
+              <div className="space-y-2.5">
+                <span className="mono block text-[10.5px] uppercase tracking-[0.18em] text-graphite">Client type</span>
+                <Segmented
+                  options={[{ value: 'Local', label: 'Local' }, { value: 'Foreign', label: 'Foreign' }]}
+                  value={accountForm.clientType}
+                  onChange={(v) => setAccountForm((f) => ({ ...f, clientType: v }))}
+                />
+                {accountForm.clientType === null && (
+                  <p className="text-[11.5px] leading-relaxed text-graphite">Not set yet — pick one to enable blast matching.</p>
+                )}
+              </div>
+              <PrefChips
+                label="Preferred sectors"
+                options={REPORT_CATEGORIES}
+                selected={accountForm.sectorPrefs}
+                count={(c) => sectorCounts.get(c) ?? 0}
+                onToggle={(s) => setAccountForm((f) => ({
+                  ...f,
+                  sectorPrefs: f.sectorPrefs.includes(s) ? f.sectorPrefs.filter((x) => x !== s) : [...f.sectorPrefs, s],
+                }))}
+                hint="Sets what this client sees in the portal, and queues them automatically for blasts in these sectors."
+              />
+              <PrefChips
+                label="Preferred analysts"
+                options={analystOptions}
+                selected={accountForm.preferredAnalysts}
+                count={(n) => analystCounts.get(n) ?? 0}
+                onToggle={(n) => setAccountForm((f) => ({
+                  ...f,
+                  preferredAnalysts: f.preferredAnalysts.includes(n) ? f.preferredAnalysts.filter((x) => x !== n) : [...f.preferredAnalysts, n],
+                }))}
+                onAdd={(n) => setAccountForm((f) => ({
+                  ...f,
+                  preferredAnalysts: f.preferredAnalysts.includes(n) ? f.preferredAnalysts : [...f.preferredAnalysts, n],
+                }))}
+                hint="Names match report bylines exactly. A name carrying no reports shows a zero — check the spelling against the Reports module."
+              />
+              <CoverageNote count={coverageCount} total={reports.length} />
+            </div>
           )}
 
           <TextField
@@ -892,6 +993,101 @@ export default function AccessModule() {
           )}
         </div>
       </Drawer>
+    </div>
+  );
+}
+
+/* ── Preference chip grid ──────────────────────────────────── */
+
+function PrefChips({ label, options, selected, onToggle, onAdd, count, hint }: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  /** When present, a free-add input is shown after the chips. */
+  onAdd?: (value: string) => void;
+  /** Published reports carrying this value — a zero is a spelling warning. */
+  count?: (value: string) => number;
+  hint?: string;
+}) {
+  const [draft, setDraft] = useState('');
+
+  const add = () => {
+    const v = draft.trim();
+    if (v && onAdd) onAdd(v);
+    setDraft('');
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <span className="mono block text-[10.5px] uppercase tracking-[0.18em] text-graphite">
+        {label}
+        {selected.length > 0 && <span className="num ml-2 opacity-60">{selected.length}</span>}
+      </span>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((o) => {
+          const on = selected.includes(o);
+          const n = count?.(o);
+          return (
+            <button
+              key={o}
+              type="button"
+              onClick={() => onToggle(o)}
+              aria-pressed={on}
+              title={n === undefined ? undefined : `${n} ${n === 1 ? 'report' : 'reports'} published under ${o}`}
+              className={`mono border px-2.5 py-1.5 text-[10px] uppercase tracking-[0.1em] transition-colors duration-200 active:translate-y-px ${
+                on ? 'border-navy bg-navy text-paper' : 'rule text-graphite hover:border-[color:var(--color-amber-deep)] hover:text-ink'
+              }`}
+            >
+              {o}
+              {n !== undefined && (
+                <span className={`num ml-2 ${on ? 'opacity-60' : n === 0 ? 'text-silver' : 'text-slate'}`}>{n}</span>
+              )}
+            </button>
+          );
+        })}
+        {onAdd && (
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            onBlur={add}
+            placeholder="Other…"
+            className="mono w-[110px] border rule bg-white px-2.5 py-1.5 text-[10px] uppercase tracking-[0.1em] text-ink outline-none transition-colors placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
+          />
+        )}
+      </div>
+      {hint && <p className="text-[11.5px] leading-relaxed text-graphite">{hint}</p>}
+    </div>
+  );
+}
+
+/* ── Mandate readout ───────────────────────────────────────── */
+
+/** What the preferences on screen mean for the client's portal: how many
+    reports they will see once saved. No preferences means the whole shelf. */
+function CoverageNote({ count, total }: { count: number | null; total: number }) {
+  const restricted = count !== null;
+  const empty = restricted && count === 0;
+
+  return (
+    <div className="border-l-2 pl-4" style={{ borderColor: empty ? 'var(--color-warn)' : 'var(--color-amber)' }}>
+      <p className="mono text-[9.5px] uppercase tracking-[0.2em] text-graphite">Portal coverage</p>
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-graphite" style={empty ? { color: 'var(--color-warn)' } : undefined}>
+        {!restricted ? (
+          <>
+            No preferences set — this client sees the full catalog of{' '}
+            <span className="num">{total}</span> {total === 1 ? 'report' : 'reports'}.
+          </>
+        ) : empty ? (
+          <>Nothing on the shelf matches these preferences. This client's portal stays empty until research lands on one of them.</>
+        ) : (
+          <>
+            This client sees <span className="num">{count}</span> of <span className="num">{total}</span>{' '}
+            {total === 1 ? 'report' : 'reports'} — those on a preferred sector, or by a preferred analyst.
+          </>
+        )}
+      </p>
     </div>
   );
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\CareerController;
 use App\Http\Controllers\Api\ClientLogController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\ContactController;
+use App\Http\Controllers\Api\EmailBlastController;
 use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\NewsletterController;
@@ -128,6 +129,17 @@ Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::put('/newsletters/{issue}', [NewsletterController::class, 'update']);
         Route::delete('/newsletters/{issue}', [NewsletterController::class, 'destroy']);
         Route::delete('/subscribers/{subscriber}', [SubscriberController::class, 'destroy']);
+    });
+
+    // The Email desk: blasts are composed and previewed here, sent from Outlook.
+    Route::middleware('permission:email.manage')->group(function () {
+        Route::get('/email-blasts', [EmailBlastController::class, 'index']);
+        Route::get('/email-blasts/audience', [EmailBlastController::class, 'audience']);
+        Route::get('/email-blasts/match', [EmailBlastController::class, 'match']);
+        Route::post('/email-blasts', [EmailBlastController::class, 'store']);
+        Route::put('/email-blasts/{blast}', [EmailBlastController::class, 'update']);
+        Route::post('/email-blasts/{blast}/sent', [EmailBlastController::class, 'markSent']);
+        Route::delete('/email-blasts/{blast}', [EmailBlastController::class, 'destroy']);
     });
 
     Route::middleware('permission:pages.manage')->group(function () {

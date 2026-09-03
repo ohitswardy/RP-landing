@@ -48,7 +48,7 @@ class ContentSeeder extends Seeder
     {
         $rows = [
             ['Strategy', 'PSEi 7,400: the earnings math behind our year-end target.', 'C. Sy', '2026-08-21', 'review', 0, 'Consensus is still marking to the 2024 multiple. We walk through why the re-rating case rests on banks and holding-company discounts, not on the index heavyweights.'],
-            ['Banks', 'The deposit war nobody declared: funding costs into Q4.', 'C. Resullar', '2026-08-18', 'draft', 0, 'Time-deposit repricing is running ahead of loan yields for the first time since 2022. Three banks absorb it; two pass it on.'],
+            ['Banks', 'The deposit war nobody declared: funding costs into Q4.', 'C. Resullar', '2026-08-18', 'review', 0, 'Time-deposit repricing is running ahead of loan yields for the first time since 2022. Three banks absorb it; two pass it on.'],
             ['Macro', 'Remittance seasonality and the peso: the September setup.', 'P. Garcia', '2026-08-12', 'published', 1874, 'The seasonal remittance surge meets a thinner BSP forward book this year. What that means for importers, and for index FX sensitivity.'],
             ['Power', 'Reserve margins after the July outages: who actually earns.', 'A. Lim', '2026-08-04', 'published', 2941, 'WESM spiked, but merchant exposure is not where the market thinks it is. A plant-by-plant walk through the dispatch stack.'],
             ['Property', 'POGO exit, two years on: the office market has re-based.', 'A. Lim', '2026-07-28', 'published', 3260, 'Vacancy in the Bay Area has stopped making headlines because it stopped getting worse. The recovery is narrow, and rents tell you where.'],
@@ -251,7 +251,7 @@ class ContentSeeder extends Seeder
         $rows = [
             ['C. Sy', 'Submitted for review', 'PSEi 7,400: the earnings math behind our year-end target.', '2026-08-21 16:42:00'],
             ['R. Chu', 'Updated posting', 'Careers / Equity Research Analyst — Banks & Financials', '2026-08-20 10:18:00'],
-            ['C. Resullar', 'Saved draft', 'The deposit war nobody declared: funding costs into Q4.', '2026-08-18 18:03:00'],
+            ['C. Resullar', 'Saved for review', 'The deposit war nobody declared: funding costs into Q4.', '2026-08-18 18:03:00'],
             ['E. Dagal', 'Suspended account', 'm.salvador@regis.ph', '2026-08-15 09:27:00'],
             ['P. Garcia', 'Published', 'Remittance seasonality and the peso: the September setup.', '2026-08-12 08:55:00'],
             ['R. Chu', 'Replaced asset', '/CareersBG.png', '2026-08-08 14:31:00'],

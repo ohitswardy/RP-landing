@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { EASE } from '../../ui';
 import { IconCheck, IconCopy, IconExternal } from '../../icons';
 import { fill, segments, type Placeholders } from './templates';
+import { writeClipboard } from '../../../lib/clipboard';
 
 export { RuleField, PasswordField } from '../../../components/RuleField';
 
@@ -63,29 +64,6 @@ export function StepHead({
 }
 
 /* ── Copy ──────────────────────────────────────────────────── */
-
-async function writeClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    // Fallback for browsers that gate the async clipboard API.
-    try {
-      const el = document.createElement('textarea');
-      el.value = text;
-      el.setAttribute('readonly', '');
-      el.style.position = 'fixed';
-      el.style.opacity = '0';
-      document.body.appendChild(el);
-      el.select();
-      const ok = document.execCommand('copy');
-      el.remove();
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-}
 
 export function CopyButton({
   text, label = 'Copy', copiedLabel = 'Copied', disabled = false, tone = 'ghost',
@@ -237,7 +215,8 @@ export function Segmented<T extends string>({
   options, value, onChange,
 }: {
   options: Array<{ value: T; label: string; count?: number }>;
-  value: T;
+  /** null leaves every segment unlit — "not set yet" reads as exactly that. */
+  value: T | null;
   onChange: (v: T) => void;
 }) {
   return (

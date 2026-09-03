@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useCms } from '../../store';
-import { useAuth } from '../../auth';
 import { BtnGhost, BtnPrimary, EASE, useConfirm } from '../../ui';
 import { Field, MiniBtn, TinyBtn, move } from '../../kit/parts';
 import ImagePicker from '../../kit/ImagePicker';
 import RichTextField from '../../kit/RichTextField';
+import { plainToHtml } from '../../kit/textFormat';
 import { usePublishedHeight } from '../../kit/stickyOffset';
 import {
-  IconArrowDown, IconArrowUp, IconCheck, IconDownload, IconImage, IconPlus, IconTrash, IconX,
+  IconArrowDown, IconArrowUp, IconCheck, IconImage, IconPlus, IconTrash, IconX,
 } from '../../icons';
-import { downloadIssuePdf } from './printIssue';
 import {
-  NEWSLETTER_BADGES, defaultNewsletterSubject,
-  type NewsletterCadence, type NewsletterIssue, type NewsletterSection,
+  BLANK_RAIL_BLOCK, NEWSLETTER_BADGES, defaultNewsletterSubject, railBlock,
+  type NewsletterCadence, type NewsletterIssue, type NewsletterRailBlock, type NewsletterSection,
 } from '../../data';
 import TemplatePreview from './TemplatePreview';
 
@@ -41,7 +40,6 @@ export default function IssueComposer({
   onClose: () => void;
 }) {
   const { createNewsletter, updateNewsletter } = useCms();
-  const { session } = useAuth();
 
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(base && editingId ? base.date : today);
@@ -52,13 +50,16 @@ export default function IssueComposer({
   const [intro, setIntro] = useState(base?.intro ?? '');
   const [sections, setSections] = useState<DraftSection[]>(() =>
     (base?.sections ?? []).map((s) => ({ ...s, uid: crypto.randomUUID() })));
-  const [picking, setPicking] = useState<string | null>(null); // section uid
+  const [rail, setRail] = useState<NewsletterRailBlock[]>(() => (base?.rail ?? []).map(railBlock));
+  // A `rail:<index>` value picks that rail block's graphic; anything
+  // else is a section uid picking one of its charts.
+  const [picking, setPicking] = useState<string | null>(null);
   // Sections append to the bottom, which is off-screen once the issue is long,
   // so a new one is scrolled to instead of silently landing below the fold.
   const [focus, setFocus] = useState<string | null>(null); // freshly added uid
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [preparing, setPreparing] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
   const [armed, confirm] = useConfirm();
 
   // The Sections bar pins under the CMS header, and the toolbars of the
@@ -76,6 +77,10 @@ export default function IssueComposer({
   function changeDate(next: string) {
     setDate(next);
     if (autoName) setSubject(defaultNewsletterSubject(cadence, next));
+  }
+
+  function patchRail(i: number, p: Partial<NewsletterRailBlock>) {
+    setRail((list) => list.map((b, bi) => (bi === i ? { ...b, ...p } : b)));
   }
 
   function addSection() {
@@ -100,7 +105,11 @@ export default function IssueComposer({
     setSaving(true);
     setError(null);
     try {
-      const payload = { cadence, date, subject: subject.trim(), intro, sections: preview };
+      const payload = {
+        cadence, date, subject: subject.trim(), intro, sections: preview,
+        // The rail is a monthly fixture; the other two mailers never print it.
+        rail: cadence === 'daily' ? [] : rail,
+      };
       if (editingId) await updateNewsletter(editingId, payload);
       else await createNewsletter(payload);
       onClose();
@@ -124,9 +133,19 @@ export default function IssueComposer({
             {editingId ? subject || 'Untitled issue' : `New ${CADENCE_LABEL[cadence]} issue`}
           </h2>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowPreview((v) => !v)}
+          aria-pressed={showPreview}
+          className={`mono border px-3 py-1.5 text-[10.5px] uppercase tracking-[0.14em] transition-colors duration-300 ${
+            showPreview ? 'border-navy bg-navy text-paper' : 'rule text-graphite hover:border-[color:var(--color-amber-deep)] hover:text-ink'
+          }`}
+        >
+          Live preview
+        </button>
       </div>
 
-      <div className="grid gap-10 lg:grid-cols-2">
+      <div className={`grid gap-10 ${showPreview ? 'lg:grid-cols-2' : ''}`}>
         {/* ── Editor rail ── */}
         <div className="min-w-0 space-y-7">
           <div className="grid grid-cols-[150px_1fr] gap-4">
@@ -148,14 +167,31 @@ export default function IssueComposer({
             />
           </div>
 
-          <RichTextField
-            label="Top of the issue"
-            value={intro}
-            onChange={setIntro}
-            rows={7}
-            images={{ scope: 'newsletters', usedBy: 'Newsletter' }}
-            hint="A paragraph holding only +++ separates the lead stories, exactly as the mailer prints it."
-          />
+          <div className="space-y-2">
+            <RichTextField
+              label="Top of the issue"
+              value={intro}
+              onChange={setIntro}
+              rows={7}
+              images={{ scope: 'newsletters', usedBy: 'Newsletter' }}
+              hint="A paragraph holding only +++ separates the lead stories, exactly as the mailer prints it."
+            />
+            <TinyBtn onClick={() => setIntro((plainToHtml(intro) || '') + '<p>+++</p>')}>
+              <IconPlus size={11} /> Insert story separator
+            </TinyBtn>
+          </div>
+
+          {cadence !== 'daily' && (
+            <MarketRail
+              cadence={cadence}
+              blocks={rail}
+              onPatch={patchRail}
+              onAdd={() => setRail((l) => [...l, BLANK_RAIL_BLOCK()])}
+              onRemove={(i) => setRail((l) => l.filter((_, bi) => bi !== i))}
+              onMove={(from, to) => setRail((l) => move(l, from, to))}
+              onPickImage={(i) => setPicking(`rail:${i}`)}
+            />
+          )}
 
           <div
             ref={sectionsRef}
@@ -176,7 +212,7 @@ export default function IssueComposer({
             {sections.length === 0 && (
               <p className="border border-dashed rule px-5 py-8 text-[13px] leading-relaxed text-graphite">
                 No sections yet. Each section is one story: a category badge, a headline, and its bullets.
-                Daily issues also build the “In the news” index from these.
+                {cadence === 'daily' && ' The daily issue also builds its “In the news” index from these — a section needs both a badge and a headline to appear in it.'}
               </p>
             )}
 
@@ -187,8 +223,19 @@ export default function IssueComposer({
                 className="scroll-mt-[calc(var(--cms-header-h)_+_var(--cms-bar-h,3rem)_+_1rem)] border rule bg-white"
               >
                 <div className="flex items-center justify-between border-b rule px-4 py-2.5">
-                  <span className="mono num text-[10px] tracking-[0.14em] text-graphite">
+                  <span className="mono num flex items-center gap-2 text-[10px] tracking-[0.14em] text-graphite">
                     {String(i + 1).padStart(2, '0')}{s.badge ? ` · ${s.badge}` : ''}
+                    {cadence === 'daily' && (
+                      s.badge.trim() && s.title.trim() ? (
+                        <span className="mono border px-1.5 py-0.5 text-[8.5px] uppercase tracking-[0.12em]" style={{ borderColor: 'var(--color-amber-deep)', color: 'var(--color-amber-deep)' }}>
+                          In the news
+                        </span>
+                      ) : (
+                        <span className="mono border rule px-1.5 py-0.5 text-[8.5px] uppercase tracking-[0.12em] text-silver" title="A section needs both a badge and a headline to appear in the daily index.">
+                          Not indexed
+                        </span>
+                      )
+                    )}
                   </span>
                   <div className="flex items-center gap-1.5">
                     <MiniBtn label="Move up" disabled={i === 0} onClick={() => setSections((l) => move(l, i, i - 1))}>
@@ -218,6 +265,11 @@ export default function IssueComposer({
                         placeholder="MARKET"
                         className="w-full border rule bg-white px-3 py-2 text-[12.5px] uppercase tracking-[0.04em] text-ink outline-none transition-colors duration-300 placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
                       />
+                      {i > 0 && s.badge.trim() !== '' && s.badge === sections[i - 1]?.badge && (
+                        <p className="text-[10.5px] leading-relaxed text-graphite">
+                          Same badge as the section above — it prints once, at the first section.
+                        </p>
+                      )}
                     </div>
                     <Field label="Headline" size="sm" value={s.title} onChange={(v) => patch(s.uid, { title: v })} placeholder="SEC looking at more capital market reforms" max={300} />
                   </div>
@@ -235,7 +287,9 @@ export default function IssueComposer({
                     onChange={(v) => patch(s.uid, { aside: v })}
                     rows={3}
                     images={{ scope: 'newsletters', usedBy: 'Newsletter' }}
-                    hint="Optional. Fills the right half of the two-column rows the weekly issue uses."
+                    hint={cadence === 'monthly'
+                      ? 'Optional. Makes the block a 50/50 two-column spread — the body on the left, this on the right, exactly like the monthly macro-news pages.'
+                      : 'Optional. Prints beneath the body, inside the story row’s right-hand column.'}
                   />
 
                   {/* Chart strip */}
@@ -271,25 +325,27 @@ export default function IssueComposer({
         </div>
 
         {/* ── Live template preview ── */}
-        <div className="min-w-0">
-          <div className="sticky top-[calc(var(--cms-header-h)_+_1.5rem)]">
-            <div className="mb-3 flex items-baseline justify-between">
-              <span className="mono text-[10px] uppercase tracking-[0.2em] text-graphite">Template preview</span>
-              <span className="mono text-[10px] uppercase tracking-[0.2em] text-silver">{CADENCE_LABEL[cadence]} mailer</span>
+        {showPreview && (
+          <div className="min-w-0">
+            <div className="sticky top-[calc(var(--cms-header-h)_+_1.5rem)]">
+              <div className="mb-3 flex items-baseline justify-between">
+                <span className="mono text-[10px] uppercase tracking-[0.2em] text-graphite">Template preview</span>
+                <span className="mono text-[10px] uppercase tracking-[0.2em] text-silver">{CADENCE_LABEL[cadence]} mailer</span>
+              </div>
+              <div className="max-h-[78vh] overflow-y-auto overflow-x-hidden border rule shadow-sm">
+                <TemplatePreview cadence={cadence} date={date} subject={subject} intro={intro} sections={preview} rail={cadence === 'daily' ? [] : rail} />
+              </div>
+              <p className="mt-3 text-[11.5px] leading-relaxed text-graphite">
+                This is the exact layout recipients get. It updates as you type.
+              </p>
             </div>
-            <div className="max-h-[78vh] overflow-y-auto overflow-x-hidden border rule shadow-sm">
-              <TemplatePreview cadence={cadence} date={date} subject={subject} intro={intro} sections={preview} />
-            </div>
-            <p className="mt-3 text-[11.5px] leading-relaxed text-graphite">
-              This is the exact layout recipients get. It updates as you type.
-            </p>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Action bar — rides the bottom of the composer so saving, discarding and
-          the PDF export stay in reach however far down the section list you are.
-          The error lives here too: it is raised by Save, so it belongs next to it. */}
+      {/* Action bar — rides the bottom of the composer so saving and discarding
+          stay in reach however far down the section list you are. The error
+          lives here too: it is raised by Save, so it belongs next to it. */}
       <div className="sticky bottom-4 z-30 border rule bg-paper/95 shadow-[0_10px_30px_-12px_oklch(0.165_0.040_260_/_0.4)] backdrop-blur-md">
         <div className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -305,18 +361,6 @@ export default function IssueComposer({
             )}
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-3">
-            <BtnGhost
-              disabled={preparing}
-              onClick={() => {
-                setPreparing(true);
-                void downloadIssuePdf(
-                  { cadence, date, subject, intro, sections: preview },
-                  session ? { name: session.name, email: session.email } : null,
-                ).finally(() => setPreparing(false));
-              }}
-            >
-              <IconDownload size={14} /> {preparing ? 'Preparing…' : 'Download PDF'}
-            </BtnGhost>
             <BtnGhost onClick={onClose}>Discard</BtnGhost>
             <BtnPrimary onClick={() => void save()} disabled={saving}>
               {saving ? 'Saving…' : editingId ? 'Save changes' : 'Save issue'}
@@ -327,19 +371,130 @@ export default function IssueComposer({
 
       <ImagePicker
         open={picking !== null}
-        title="Add a chart"
+        title={picking?.startsWith('rail:') ? 'Right column graphic' : 'Add a chart'}
         usedBy="Newsletter"
         scope="newsletters"
         kind="graphic"
         aspect="4/3"
-        hint="PNG or JPG chart exports read best. They print centered under the section, in order."
+        hint={picking?.startsWith('rail:')
+          ? 'The chart or table export that prints under this block’s heading — a narrow crop for the monthly rail, a wider one for the weekly strip.'
+          : 'PNG or JPG chart exports read best. They print centered under the section, in order.'}
         onPick={(path) => {
           if (!picking) return;
+          if (picking.startsWith('rail:')) { patchRail(Number(picking.slice(5)), { image: path }); return; }
           const current = sections.find((s) => s.uid === picking)?.images ?? [];
           patch(picking, { images: [...new Set([...current, path])] });
         }}
         onClose={() => setPicking(null)}
       />
     </motion.div>
+  );
+}
+
+/* ── The issue's chart blocks ────────────────────────────────── */
+
+/**
+ * Editor for the chart blocks that ride alongside the commentary: the
+ * monthly prints them as the right-hand rail, the weekly as the strip
+ * under the week recap. Each block is a heading and the graphic under
+ * it, and the analyst adds as many as the issue needs. The daily
+ * template carries neither, so the panel never appears there.
+ */
+function MarketRail({ cadence, blocks, onPatch, onAdd, onRemove, onMove, onPickImage }: {
+  cadence: NewsletterCadence;
+  blocks: NewsletterRailBlock[];
+  onPatch: (i: number, p: Partial<NewsletterRailBlock>) => void;
+  onAdd: () => void;
+  onRemove: (i: number) => void;
+  onMove: (from: number, to: number) => void;
+  onPickImage: (i: number) => void;
+}) {
+  const [armed, confirm] = useConfirm();
+  const weekly = cadence === 'weekly';
+
+  return (
+    <div className="border rule bg-white">
+      <div className="flex items-center justify-between border-b rule px-4 py-2.5">
+        <span className="mono text-[10px] uppercase tracking-[0.2em] text-graphite">
+          {weekly ? 'Chart strip' : 'Right column'} <span className="text-silver">{blocks.length}</span>
+        </span>
+        <TinyBtn tone="accent" onClick={onAdd}>
+          <IconPlus size={11} /> Add block
+        </TinyBtn>
+      </div>
+
+      <div className="space-y-4 px-4 py-4">
+        {blocks.length === 0 ? (
+          <p className="border border-dashed rule px-5 py-6 text-[12.5px] leading-relaxed text-graphite">
+            {weekly
+              ? 'No charts yet. Blocks print as a strip under the week recap — three across, the way the desk runs the index chart, the flow chart, and the Key data table. Mark one full width and it spans the sheet on its own row, for the big market table.'
+              : 'Nothing in the right column — the commentary runs full width. Add a block to print the index chart and the Key data table beside it, or mark one full width to span the sheet below.'}
+          </p>
+        ) : (
+          blocks.map((b, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto] items-end gap-3 border-b rule pb-4 last:border-0 last:pb-0">
+              <Field
+                label={`Block ${String(i + 1).padStart(2, '0')} heading${b.wide ? ' · full width' : ''}`}
+                size="sm"
+                value={b.title}
+                onChange={(v) => onPatch(i, { title: v })}
+                placeholder={weekly ? 'PSEi +1.9% WoW | 6,404.11' : 'PSEi -4.5% MoM | 5,956.33'}
+                max={160}
+              />
+              <div className="flex items-end gap-2.5">
+                {b.image !== '' && (
+                  <span className="relative block h-14 w-20 overflow-hidden border rule bg-bone">
+                    <img src={b.image} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      aria-label="Remove graphic"
+                      onClick={() => onPatch(i, { image: '' })}
+                      className="absolute right-0 top-0 grid h-5 w-5 place-items-center bg-navy/80 text-paper transition-colors duration-200 hover:bg-[color:var(--color-warn)]"
+                    >
+                      <IconX size={11} />
+                    </button>
+                  </span>
+                )}
+                <TinyBtn onClick={() => onPickImage(i)}>
+                  <IconImage size={12} /> {b.image ? 'Replace' : 'Add graphic'}
+                </TinyBtn>
+                <button
+                  type="button"
+                  aria-pressed={b.wide}
+                  title={b.wide
+                    ? 'Prints across the full width of the sheet, on its own row.'
+                    : weekly
+                      ? 'Shares the strip with the blocks beside it, three across.'
+                      : 'Sits in the right-hand column beside the commentary.'}
+                  onClick={() => onPatch(i, { wide: !b.wide })}
+                  className={`mono border px-2.5 py-[7px] text-[9.5px] uppercase tracking-[0.14em] transition-colors duration-300 active:translate-y-px ${
+                    b.wide
+                      ? 'border-navy bg-navy text-paper'
+                      : 'rule text-graphite hover:border-[color:var(--color-amber-deep)] hover:text-ink'
+                  }`}
+                >
+                  Full width
+                </button>
+                <div className="flex items-center gap-1.5 pb-0.5">
+                  <MiniBtn label="Move up" disabled={i === 0} onClick={() => onMove(i, i - 1)}>
+                    <IconArrowUp size={12} />
+                  </MiniBtn>
+                  <MiniBtn label="Move down" disabled={i === blocks.length - 1} onClick={() => onMove(i, i + 1)}>
+                    <IconArrowDown size={12} />
+                  </MiniBtn>
+                  <MiniBtn
+                    label={armed === `rail-${i}` ? 'Confirm remove' : 'Remove block'}
+                    danger
+                    onClick={() => confirm(`rail-${i}`, () => onRemove(i))}
+                  >
+                    {armed === `rail-${i}` ? <IconCheck size={12} /> : <IconTrash size={12} />}
+                  </MiniBtn>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
   );
 }

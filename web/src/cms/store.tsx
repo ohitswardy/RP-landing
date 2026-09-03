@@ -6,7 +6,7 @@ import {
   type ServicePage, type ServicePillar, type ServiceProof,
   type Subscriber, type PageBlock, type AuditEntry, type Report, type MediaAsset, type ReportCategory, type ReportCompany, type Company,
   type ReportType, type ReportRating,
-  type NewsletterCadence, type NewsletterIssue, type NewsletterSection, type TrendingRules,
+  type NewsletterCadence, type NewsletterIssue, type NewsletterRailBlock, type NewsletterSection, type TrendingRules,
 } from './data';
 
 /* ─────────────────────────────────────────────────────────────
@@ -81,6 +81,8 @@ export type NewsletterPayload = {
   subject: string;
   intro: string;
   sections: NewsletterSection[];
+  /** The monthly right-hand rail; empty on the daily and weekly. */
+  rail: NewsletterRailBlock[];
 };
 
 /** Which module's upload route a picker posts to — permissions differ per module. */

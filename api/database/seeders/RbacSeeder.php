@@ -23,6 +23,7 @@ class RbacSeeder extends Seeder
             ['key' => 'media.manage', 'label' => 'Media library', 'group' => 'Site content'],
             ['key' => 'market.manage', 'label' => 'Market ribbon', 'group' => 'Systems'],
             ['key' => 'newsletter.manage', 'label' => 'Newsletter', 'group' => 'Systems'],
+            ['key' => 'email.manage', 'label' => 'Email desk', 'group' => 'Systems'],
             ['key' => 'access.manage', 'label' => 'Users & access', 'group' => 'Systems'],
             ['key' => 'logs.view', 'label' => 'Client logs', 'group' => 'Systems'],
         ];
@@ -51,7 +52,8 @@ class RbacSeeder extends Seeder
             ['name' => 'Analyst'],
             ['description' => 'Drafts research notes and posts reports. No site or system access.', 'is_system' => false],
         );
-        $analyst->permissions()->sync([$all['insights.manage'], $all['reports.manage']]);
+        // Analysts blast their own research, so the Email desk rides along.
+        $analyst->permissions()->sync([$all['insights.manage'], $all['reports.manage'], $all['email.manage']]);
 
         // Staff accounts — mirrors the roster that ran the workspace pre-API.
         $staff = [
@@ -72,6 +74,9 @@ class RbacSeeder extends Seeder
                     'kind' => User::KIND_STAFF,
                     'role_id' => $s['role']->id,
                     'firm' => null,
+                    // The desk runs on Microsoft 365, so the work address doubles
+                    // as the Outlook account blasts go out from.
+                    'outlook_email' => $s['email'],
                     'suspended' => $s['suspended'],
                     'last_active_at' => $s['last'].' 09:00:00',
                 ],

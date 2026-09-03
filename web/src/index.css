@@ -20,6 +20,10 @@
   --color-amber:       oklch(0.760 0.140 62);
   --color-amber-deep:  oklch(0.660 0.150 50);
 
+  /* Sovereign-wealth bronze — secondary drench for story panels (GIC register) */
+  --color-bronze:      oklch(0.455 0.082 63);
+  --color-bronze-deep: oklch(0.385 0.072 63);
+
   --color-signal:      oklch(0.640 0.130 145);
   --color-warn:        oklch(0.640 0.190 28);
 

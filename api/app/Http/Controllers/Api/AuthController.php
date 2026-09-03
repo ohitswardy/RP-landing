@@ -124,6 +124,8 @@ class AuthController extends Controller
             'email' => $user->email,
             'role' => $user->role?->name ?? 'Staff',
             'permissions' => $user->permissionKeys(),
+            // The Outlook account this staff member blasts from (Email desk).
+            'outlookEmail' => $user->outlook_email,
         ];
     }
 }

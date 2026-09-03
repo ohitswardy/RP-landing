@@ -15,8 +15,8 @@ import ImagePicker from '../kit/ImagePicker';
 import { PreviewFrame } from './services/PagePreview';
 import JournalPreview from './insights/JournalPreview';
 
-const STATUS_TONE = { published: 'live', review: 'amber', draft: 'muted' } as const;
-const FILTERS: Array<'all' | ArticleStatus> = ['all', 'published', 'review', 'draft'];
+const STATUS_TONE = { published: 'live', review: 'amber' } as const;
+const FILTERS: Array<'all' | ArticleStatus> = ['all', 'published', 'review'];
 
 type Tab = 'notes' | 'page';
 
@@ -29,7 +29,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 const BLANK = (): DraftForm => ({
   tag: ARTICLE_TAGS[0], title: '', author: '', excerpt: '',
-  status: 'draft', date: today(), featured: false,
+  status: 'review', date: today(), featured: false,
 });
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -130,8 +130,7 @@ export default function InsightsModule() {
   }
 
   function advance(a: Article) {
-    const next: ArticleStatus = a.status === 'draft' ? 'review' : 'published';
-    void updateArticle(a.id, { status: next });
+    void updateArticle(a.id, { status: 'published' });
   }
 
   /** A note only leads once it is public — the API demotes every other note. */
@@ -173,7 +172,7 @@ export default function InsightsModule() {
       <ModuleHeader
         code="01 / Insights"
         title="Research journal"
-        blurb="Every note that reaches the public Insights page and the client archive, and the page itself — its header, filter rail, ledger, and sign-in prompt. Drafts stay internal until an editor moves them through review."
+        blurb="Every note that reaches the public Insights page and the client archive, and the page itself — its header, filter rail, ledger, and sign-in prompt. Notes start in review and stay internal until published."
         actions={
           <>
             <a
@@ -215,10 +214,9 @@ export default function InsightsModule() {
       {tab === 'notes' && (
         <div className="space-y-8">
           {!loading && articles.length > 0 && (
-            <div className="grid grid-cols-2 gap-6 border-b rule pb-8 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-6 border-b rule pb-8 md:grid-cols-3">
               <Stat value={String(published.length)} label="Published" />
               <Stat value={String(articles.filter((a) => a.status === 'review').length)} label="In review" />
-              <Stat value={String(articles.filter((a) => a.status === 'draft').length)} label="Drafts" />
               <Stat value={reads.toLocaleString('en-PH')} label="Reads" />
             </div>
           )}
@@ -277,7 +275,7 @@ export default function InsightsModule() {
           ) : rows.length === 0 ? (
             <EmptyState
               title={query ? 'Nothing matches that search.' : 'No notes in this state.'}
-              hint={query ? 'Try a shorter fragment — search covers titles, analysts, and sector tags.' : 'Draft a note and it will appear in this ledger with its full production history.'}
+              hint={query ? 'Try a shorter fragment — search covers titles, analysts, and sector tags.' : 'Start a note and it will appear in this ledger with its full production history.'}
               action={<BtnGhost onClick={() => { setQuery(''); setFilter('all'); }}>Clear filters</BtnGhost>}
             />
           ) : (
@@ -321,7 +319,7 @@ export default function InsightsModule() {
                           {a.featured ? <IconBookmarkFilled /> : <IconBookmark />}
                         </RowAction>
                         {a.status !== 'published' && (
-                          <RowAction label={a.status === 'draft' ? 'Submit for review' : 'Publish'} onClick={() => advance(a)}>
+                          <RowAction label="Publish" onClick={() => advance(a)}>
                             <IconCheck />
                           </RowAction>
                         )}
@@ -568,7 +566,7 @@ export default function InsightsModule() {
           <TextField label="Working title" value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="The thesis in one declarative sentence." error={formError ?? undefined} />
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Sector tag" value={form.tag} onChange={(v) => setForm((f) => ({ ...f, tag: v }))} options={ARTICLE_TAGS} />
-            <SelectField label="Status" value={form.status} onChange={(v) => setForm((f) => ({ ...f, status: v as ArticleStatus }))} options={['draft', 'review', 'published']} />
+            <SelectField label="Status" value={form.status} onChange={(v) => setForm((f) => ({ ...f, status: v as ArticleStatus }))} options={['review', 'published']} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <DateField label="Publication date" value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />

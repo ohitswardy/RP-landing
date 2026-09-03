@@ -25,6 +25,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name', 'email', 'username', 'password', 'kind', 'status', 'role_id',
         'firm', 'position', 'phone', 'suspended', 'last_active_at', 'registered_at', 'approved_at',
+        'client_type', 'sector_prefs', 'preferred_analysts', 'outlook_email',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -38,6 +39,8 @@ class User extends Authenticatable
             'approved_at' => 'datetime',
             'password' => 'hashed',
             'suspended' => 'boolean',
+            'sector_prefs' => 'array',
+            'preferred_analysts' => 'array',
         ];
     }
 
@@ -64,6 +67,35 @@ class User extends Authenticatable
     public function isApproved(): bool
     {
         return $this->status === self::STATUS_APPROVED;
+    }
+
+    /** The client's mandate: the sectors and analyst bylines they are
+        provisioned to read, lowercased and trimmed so matching survives the
+        casing the desk happened to type. Empty lists on either side mean that
+        half places no restriction. */
+    public function coverage(): array
+    {
+        $clean = fn (?array $v) => array_values(array_unique(array_filter(
+            array_map(fn ($x) => mb_strtolower(trim((string) $x)), $v ?? []),
+            fn ($x) => $x !== '',
+        )));
+
+        return [
+            'sectors' => $clean($this->sector_prefs),
+            'analysts' => $clean($this->preferred_analysts),
+        ];
+    }
+
+    /** True once a client is narrowed to preferred sectors or analysts;
+        an unconfigured client keeps the whole catalog. */
+    public function hasCoverageFilter(): bool
+    {
+        if (! $this->isClient()) {
+            return false;
+        }
+        $c = $this->coverage();
+
+        return $c['sectors'] !== [] || $c['analysts'] !== [];
     }
 
     /** Permission keys granted through the user's role. */
@@ -96,6 +128,10 @@ class User extends Authenticatable
             'firm' => $this->firm,
             'position' => $this->position,
             'phone' => $this->phone,
+            'clientType' => $this->client_type,
+            'sectorPrefs' => $this->sector_prefs ?? [],
+            'preferredAnalysts' => $this->preferred_analysts ?? [],
+            'outlookEmail' => $this->outlook_email,
             'lastActive' => $this->last_active_at?->toIso8601String(),
             'registeredAt' => $this->registered_at?->toIso8601String(),
             'approvedAt' => $this->approved_at?->toIso8601String(),

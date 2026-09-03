@@ -4,10 +4,9 @@ import type { PDFFont, PDFPage, RGB, Rotation } from 'pdf-lib';
    Download provenance for the client portal.
 
    Every PDF the portal hands over is stamped, page by page, with
-   the house mark and the name of the client who took the copy —
-   the same guarantee the newsletter desk prints (see
-   cms/modules/newsletter/printIssue.ts), applied here to files
-   the CMS uploaded rather than to markup we render ourselves.
+   the house mark and the name of the client who took the copy,
+   applied to files the CMS uploaded rather than to markup we
+   render ourselves.
 
    The stamp is written into the document, so it survives a
    re-save, a forward, and a print to paper. A leaked copy points

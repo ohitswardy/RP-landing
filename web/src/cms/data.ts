@@ -4,7 +4,7 @@
    contract returned by /api endpoints.
    ───────────────────────────────────────────────────────────── */
 
-export type ArticleStatus = 'published' | 'review' | 'draft';
+export type ArticleStatus = 'published' | 'review';
 
 export type Article = {
   id: string;
@@ -181,15 +181,30 @@ export type ServicePage = {
 
 export type NewsletterCadence = 'daily' | 'weekly' | 'monthly';
 
-/** One story block in an issue. `aside` fills the right column of the
-    two-column rows used by the weekly template; images stack under the
-    body exactly like the pasted chart strips in the legacy mailer. */
+/** One story block in an issue. On the monthly mailer `aside` makes the
+    block a 50/50 two-column macro-news spread; on the daily and weekly it
+    prints beneath the body in the story row's right-hand column. Images
+    print full width — above the text on the monthly (the movers-table
+    treatment), beneath the story row on the daily and weekly. */
 export type NewsletterSection = {
   badge: string;
   title: string;
   body: string;
   aside: string;
   images: string[];
+};
+
+/** One block of charts the issue carries alongside its commentary: a
+    grey heading and the exported graphic under it — the index chart,
+    the flow chart, the Key data table. The monthly prints them as the
+    right-hand rail, the weekly as a strip below the recap. */
+export type NewsletterRailBlock = {
+  title: string;
+  image: string;
+  /** A wide block spans the sheet on its own row instead of sharing the
+      strip (weekly) or the rail (monthly) — the big market table the
+      desk drops under the week's charts. */
+  wide: boolean;
 };
 
 export type NewsletterIssue = {
@@ -199,8 +214,23 @@ export type NewsletterIssue = {
   subject: string;
   intro: string;
   sections: NewsletterSection[];
+  /** The issue's chart blocks — the monthly rail, the weekly strip.
+      Empty on the daily, which carries neither. */
+  rail: NewsletterRailBlock[];
   updated: string;     // ISO
 };
+
+export const BLANK_RAIL_BLOCK = (): NewsletterRailBlock => ({ title: '', image: '', wide: false });
+
+/** Blocks read back from the API may predate a field; this fills them in. */
+export function railBlock(b: Partial<NewsletterRailBlock>): NewsletterRailBlock {
+  return { ...BLANK_RAIL_BLOCK(), ...b, wide: b.wide === true };
+}
+
+/** Blocks with nothing in them print nothing. */
+export function filledRail(rail: NewsletterRailBlock[] | null | undefined): NewsletterRailBlock[] {
+  return (rail ?? []).map(railBlock).filter((b) => b.title.trim() !== '' || b.image.trim() !== '');
+}
 
 export const NEWSLETTER_CADENCES: Array<{ value: NewsletterCadence; label: string }> = [
   { value: 'daily', label: 'Daily' },
@@ -429,6 +459,14 @@ export type Account = {
   firm: string | null;
   position: string | null;
   phone: string | null;
+  /** Local | Foreign classification; null until set. Clients only. */
+  clientType: 'Local' | 'Foreign' | null;
+  /** Research sectors this client wants to hear about. Clients only. */
+  sectorPrefs: string[];
+  /** Analysts whose work this client follows. Clients only. */
+  preferredAnalysts: string[];
+  /** The Outlook account this staff member blasts from. Staff only. */
+  outlookEmail: string | null;
   lastActive: string | null;  // ISO
   registeredAt: string | null;
   approvedAt: string | null;
@@ -441,6 +479,68 @@ export const CLIENT_STATUS: Record<ClientStatus, { label: string; tone: 'live' |
   pending: { label: 'Awaiting approval', tone: 'amber' },
   approved: { label: 'Approved', tone: 'live' },
   declined: { label: 'Declined', tone: 'warn' },
+};
+
+/* ── Email desk ────────────────────────────────────────────── */
+
+export type BlastKind = 'newsletter' | 'report' | 'adhoc';
+export type BlastStatus = 'draft' | 'ready' | 'sent';
+
+export type EmailRecipient = {
+  email: string;
+  name?: string | null;
+  /** users.id when the recipient is a portal client. */
+  userId?: string | null;
+  source: 'client' | 'subscriber' | 'manual';
+};
+
+export type EmailBlast = {
+  id: string;
+  kind: BlastKind;
+  subject: string;
+  htmlBody: string | null;
+  reportId: string | null;
+  newsletterIssueId: string | null;
+  /** Jefferies (or other external) link for foreign-client research. */
+  externalLink: string | null;
+  recipients: EmailRecipient[];
+  status: BlastStatus;
+  notes: string | null;
+  senderOutlook: string | null;
+  sentBy: string | null;
+  sentByName: string | null;
+  sentAt: string | null;   // ISO
+  createdAt: string;       // ISO
+  updatedAt: string;       // ISO
+};
+
+export const BLAST_STATUS: Record<BlastStatus, { label: string; tone: 'live' | 'amber' | 'muted' }> = {
+  draft: { label: 'Draft', tone: 'muted' },
+  ready: { label: 'Ready', tone: 'amber' },
+  sent: { label: 'Sent', tone: 'live' },
+};
+
+export const BLAST_KIND: Record<BlastKind, string> = {
+  newsletter: 'Newsletter',
+  report: 'Report',
+  adhoc: 'Ad hoc',
+};
+
+/** One row of the recipient pool served by /cms/email-blasts/audience. */
+export type AudienceClient = {
+  id: string;
+  name: string;
+  email: string;
+  firm: string | null;
+  clientType: 'Local' | 'Foreign' | null;
+  sectorPrefs: string[];
+  preferredAnalysts: string[];
+};
+
+export type AudienceSubscriber = {
+  id: string;
+  email: string;
+  firm: string;
 };
 
 export type RoleDef = {

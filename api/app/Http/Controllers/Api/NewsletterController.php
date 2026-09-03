@@ -20,6 +20,7 @@ class NewsletterController extends Controller
             ...$data,
             'intro' => $data['intro'] ?? '',
             'sections' => $data['sections'] ?? [],
+            'rail' => $data['rail'] ?? [],
         ]);
 
         $audit = Audit::log('Filed '.$issue->cadence.' issue', $issue->subject);
@@ -90,6 +91,11 @@ class NewsletterController extends Controller
             'sections.*.aside' => ['present', 'nullable', 'string', 'max:60000'],
             'sections.*.images' => ['present', 'array', 'max:12'],
             'sections.*.images.*' => ['required', 'string', 'max:500'],
+            // The monthly right-hand rail: a heading and a graphic per block.
+            'rail' => ['sometimes', 'array', 'max:12'],
+            'rail.*.title' => ['present', 'nullable', 'string', 'max:160'],
+            'rail.*.image' => ['present', 'nullable', 'string', 'max:500'],
+            'rail.*.wide' => ['sometimes', 'boolean'],
         ]);
 
         if (array_key_exists('intro', $data)) {
@@ -104,6 +110,24 @@ class NewsletterController extends Controller
                 'aside' => Html::clean($s['aside'] ?? ''),
                 'images' => array_values($s['images']),
             ], $data['sections']));
+        }
+
+        if (array_key_exists('rail', $data)) {
+            // Rebuilt key by key, plain text throughout — a rail block
+            // prints as a heading and an image, never as markup. Blocks
+            // with neither drop out, so an emptied rail stores as [] and
+            // the commentary goes back to full width.
+            $rail = array_map(static fn (array $b): array => [
+                'title' => (string) ($b['title'] ?? ''),
+                'image' => (string) ($b['image'] ?? ''),
+                // A wide block spans the sheet on its own row.
+                'wide' => (bool) ($b['wide'] ?? false),
+            ], $data['rail']);
+
+            $data['rail'] = array_values(array_filter(
+                $rail,
+                static fn (array $b): bool => trim($b['title'].$b['image']) !== '',
+            ));
         }
 
         return $data;

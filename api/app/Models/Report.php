@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Report extends Model
 {
@@ -31,6 +33,41 @@ class Report extends Model
     public function reportType(): BelongsTo
     {
         return $this->belongsTo(ReportType::class);
+    }
+
+    /** Narrow the catalog to what a client is provisioned to read. A client
+        with preferred sectors or preferred analysts sees only research that
+        lands on one of them; everyone else — staff, and clients with no
+        preferences set — sees the whole shelf. */
+    public function scopeVisibleTo(Builder $query, ?User $user): Builder
+    {
+        if (! $user || ! $user->hasCoverageFilter()) {
+            return $query;
+        }
+
+        ['sectors' => $sectors, 'analysts' => $analysts] = $user->coverage();
+
+        return $query->where(function (Builder $w) use ($sectors, $analysts) {
+            if ($sectors !== []) {
+                $w->orWhereIn(DB::raw('LOWER(TRIM(category))'), $sectors);
+            }
+            if ($analysts !== []) {
+                $w->orWhereIn(DB::raw('LOWER(TRIM(analyst))'), $analysts);
+            }
+        });
+    }
+
+    /** The same rule as scopeVisibleTo, for a report already in hand. */
+    public function isVisibleTo(?User $user): bool
+    {
+        if (! $user || ! $user->hasCoverageFilter()) {
+            return true;
+        }
+
+        ['sectors' => $sectors, 'analysts' => $analysts] = $user->coverage();
+
+        return in_array(mb_strtolower(trim((string) $this->category)), $sectors, true)
+            || in_array(mb_strtolower(trim((string) $this->analyst)), $analysts, true);
     }
 
     public function toWire(): array

@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import { useCms, type UploadScope } from '../store';
 import type { MediaAsset } from '../data';
 import { BtnGhost, BtnPrimary, EASE } from '../ui';
-import { IconCheck, IconSearch, IconUpload } from '../icons';
+import { IconCheck, IconCopy, IconSearch, IconUpload } from '../icons';
 import { Field, Modal } from './parts';
+import { clipboardEventImage, readClipboardImage } from '@/lib/clipboard';
 
 type Tab = 'upload' | 'library' | 'path';
 
@@ -57,6 +58,35 @@ export default function ImagePicker({
     setBusy(false);
     setHover(false);
   }, [open]);
+
+  /* Ctrl+V anywhere in the dialog files whatever image is on the Windows
+     clipboard — a Bloomberg or Excel chart copied straight out of the
+     app it was built in, with no save-to-disk round trip. */
+  useEffect(() => {
+    if (!open) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const file = clipboardEventImage(e);
+      if (!file) return;
+      e.preventDefault();
+      setTab('upload');
+      void accept(file);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+    // `accept` is stable for the life of an open dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  /** The Paste button: asks the browser for the clipboard directly. */
+  async function pasteFromClipboard() {
+    setError(null);
+    const file = await readClipboardImage();
+    if (!file) {
+      setError('This browser will not hand over the clipboard. Press Ctrl+V instead.');
+      return;
+    }
+    await accept(file);
+  }
 
   const assets = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -157,13 +187,21 @@ export default function ImagePicker({
             />
             <div className="flex flex-col items-center gap-4">
               <span aria-hidden className="block h-[2px] w-6" style={{ background: 'var(--color-amber)' }} />
-              <p className="text-[14.5px] text-ink">{busy ? 'Uploading…' : 'Drop a photo here'}</p>
+              <p className="text-[14.5px] text-ink">{busy ? 'Uploading…' : 'Drop a photo here, or paste one'}</p>
               <p className="max-w-[42ch] text-[12.5px] leading-relaxed text-graphite">
                 {hint ?? 'JPG, PNG, WebP, or AVIF up to 8 MB. Landscape crops at roughly 16:9 read best in a page hero.'}
               </p>
-              <BtnPrimary onClick={() => input.current?.click()} disabled={busy}>
-                <IconUpload size={14} /> {busy ? 'Uploading…' : 'Choose file'}
-              </BtnPrimary>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <BtnPrimary onClick={() => input.current?.click()} disabled={busy}>
+                  <IconUpload size={14} /> {busy ? 'Uploading…' : 'Choose file'}
+                </BtnPrimary>
+                <BtnGhost onClick={() => void pasteFromClipboard()} disabled={busy}>
+                  <IconCopy size={13} /> Paste from clipboard
+                </BtnGhost>
+              </div>
+              <p className="mono text-[9.5px] uppercase tracking-[0.16em] text-silver">
+                Ctrl+V works anywhere in this dialog
+              </p>
             </div>
           </div>
         )}

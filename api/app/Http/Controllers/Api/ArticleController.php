@@ -18,7 +18,7 @@ class ArticleController extends Controller
             'title' => ['required', 'string', 'max:500'],
             'author' => ['required', 'string', 'max:120'],
             'excerpt' => ['nullable', 'string', 'max:2000'],
-            'status' => ['required', 'in:draft,review,published'],
+            'status' => ['required', 'in:review,published'],
             'date' => ['sometimes', 'date'],
             'featured' => ['sometimes', 'boolean'],
         ]);
@@ -33,7 +33,7 @@ class ArticleController extends Controller
 
         $this->keepOneLead($article);
 
-        $audit = Audit::log($article->status === 'published' ? 'Published' : 'Saved draft', $article->title);
+        $audit = Audit::log($article->status === 'published' ? 'Published' : 'Saved for review', $article->title);
 
         return response()->json(['item' => $article->toWire(), 'audit' => $audit->toWire()], 201);
     }
@@ -45,7 +45,7 @@ class ArticleController extends Controller
             'title' => ['sometimes', 'string', 'max:500'],
             'author' => ['sometimes', 'string', 'max:120'],
             'excerpt' => ['sometimes', 'nullable', 'string', 'max:2000'],
-            'status' => ['sometimes', 'in:draft,review,published'],
+            'status' => ['sometimes', 'in:review,published'],
             'date' => ['sometimes', 'date'],
             'featured' => ['sometimes', 'boolean'],
         ]);
@@ -56,7 +56,7 @@ class ArticleController extends Controller
         $this->keepOneLead($article);
 
         $action = $statusChanged
-            ? ($article->status === 'published' ? 'Published' : ($article->status === 'review' ? 'Submitted for review' : 'Returned to draft'))
+            ? ($article->status === 'published' ? 'Published' : 'Submitted for review')
             : (array_key_exists('featured', $data) ? ($article->featured ? 'Set as lead note' : 'Cleared lead note') : 'Updated note');
         $audit = Audit::log($action, $article->title);
 

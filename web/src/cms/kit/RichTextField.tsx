@@ -19,46 +19,10 @@ import {
    string; an empty document round-trips as ''.
    ───────────────────────────────────────────────────────────── */
 
-/** Escape a plain-text chunk for safe embedding in HTML. */
-function esc(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-export function looksLikeHtml(text: string): boolean {
-  return /<[a-z][^>]*>/i.test(text);
-}
-
-/** Upgrade the legacy plain-text convention ("- " bullets, two
-    leading spaces for a sub-bullet) into the editor's HTML. */
-export function plainToHtml(text: string): string {
-  if (!text.trim()) return '';
-  if (looksLikeHtml(text)) return text;
-
-  const out: string[] = [];
-  let depth = 0; // 0 = outside lists, 1 = in <ul>, 2 = in nested <ul>
-
-  const closeTo = (level: number) => {
-    while (depth > level) { out.push('</ul>'); depth -= 1; }
-  };
-
-  for (const raw of text.split('\n')) {
-    const line = raw.trimEnd();
-    if (!line.trim()) continue;
-    const sub = /^\s{2,}-\s+/.test(line);
-    const top = /^-\s+/.test(line.trim());
-    if (sub || top) {
-      const want = sub ? 2 : 1;
-      while (depth < want) { out.push('<ul>'); depth += 1; }
-      closeTo(want);
-      out.push(`<li><p>${esc(line.trim().replace(/^-\s+/, ''))}</p></li>`);
-    } else {
-      closeTo(0);
-      out.push(`<p>${esc(line.trim())}</p>`);
-    }
-  }
-  closeTo(0);
-  return out.join('');
-}
+// Re-exported so existing imports keep working; the implementations live
+// in kit/textFormat.ts, away from the TipTap bundle.
+import { plainToHtml, unwrapLayoutTables } from './textFormat';
+export { looksLikeHtml, plainToHtml } from './textFormat';
 
 /* ── Clipboard and drop images ─────────────────────────────── */
 
@@ -253,7 +217,9 @@ export default function RichTextField({
         if (clean !== html) {
           setNotice({ tone: 'info', text: 'A picture pasted from Word arrived without its file. Copy the picture on its own and paste it again to upload it.' });
         }
-        return clean;
+        // Word and Outlook wrap copied text in a one-cell table; without
+        // this the paste lands as a bordered box in the mailer.
+        return unwrapLayoutTables(clean);
       },
       handlePaste: (view, event) => {
         if (!ingest.current) return false;

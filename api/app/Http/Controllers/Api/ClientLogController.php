@@ -36,6 +36,13 @@ class ClientLogController extends Controller
         ]);
 
         $report = isset($data['reportId']) ? Report::find($data['reportId']) : null;
+
+        // A client off their mandate cannot log against research they cannot
+        // see — a stray beacon would otherwise rank a hidden report.
+        if ($report && ! $report->isVisibleTo($request->user())) {
+            return response()->json(['message' => 'That report is outside your coverage.'], 403);
+        }
+
         ClientLog::record($request, $data['event'], $report, $data['context'] ?? '');
 
         return response()->json(['ok' => true], 201);
