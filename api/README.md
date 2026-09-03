@@ -74,6 +74,36 @@ The flow, driven from **CMS → Users & access**:
 One-time links live in `portal_tokens`. Issuing a new link of the same purpose retires the
 previous unused one, and every link is single-use and expiring.
 
+## Email desk
+
+Blasts (research reports, newsletter issues, ad-hoc notes) are drafted and previewed in
+**CMS → Email desk** and leave one of two ways:
+
+- **Send now** — `POST /api/cms/email-blasts/{id}/send`. The API plans the batches, queues a
+  `SendEmailBlast` job, and the job sends through **Microsoft Graph** from the staff member's own
+  mailbox (`users.outlook_email`), so the mail lands in their Sent Items with Exchange's
+  SPF/DKIM standing. Clients and typed addresses ride BCC in batches of ≤500 (Exchange's
+  per-message cap); every newsletter subscriber gets a direct message carrying their own
+  unsubscribe link. Each batch is a row in `email_deliveries`; a blast with any failed batch
+  ends `failed`, and sending it again retries only those batches. Content is frozen once queued.
+- **Outlook hand-off** — copy the rendered HTML and BCC list into Outlook, then
+  `POST …/{id}/sent` records who sent it. This is the fallback while Graph consent is pending.
+
+Graph is inert until `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID`, and `MS_GRAPH_CLIENT_SECRET`
+are set. The Azure AD app needs the **Mail.Send application permission** with admin consent
+for the Regis tenant; restrict it to the desk's mailboxes with an Exchange
+`ApplicationAccessPolicy`, and the API additionally refuses any sender outside
+`MS_GRAPH_SENDER_DOMAIN`. Queued blasts need a worker: `php artisan queue:work`.
+
+- **Local / Foreign split** — a report blast carries one subject and body; the Local leg gets the
+  login-gated portal deep link, the Foreign leg gets the Jefferies link from `external_link`.
+- **Distribution lists** (`distribution_lists`) are saved audiences the composer and the
+  newsletter blast panel pick from; they are built from the same client/subscriber pool.
+- **Rendering** — report and ad-hoc bodies are sanitized (`Html::clean`) on save and set inside
+  `resources/views/email/blast.blade.php` (logo, ticker/sector/title, analyst signature, CTA),
+  with every field escaped. `POST …/render` returns that exact HTML for the composer preview.
+- **Unsubscribe** — `GET /api/newsletter/unsubscribe/{token}` clears `subscribers.verified`.
+
 ## RBAC model
 
 - `users.kind` is `staff` (CMS) or `client` (portal). Staff carry a `role_id`; clients carry a `firm`.
@@ -101,7 +131,9 @@ previous unused one, and every link is single-use and expiring.
 | Services | `PUT /api/cms/services/{id}`, `PUT /api/cms/services/page`, `PUT /api/cms/services/reorder`, `POST /api/cms/services/upload` (multipart image) |
 | Careers | `POST/PUT/DELETE /api/cms/careers[/{id}]` |
 | Market ribbon | `POST/PUT/DELETE /api/cms/watchlist[/{id}]`, `PUT /api/cms/watchlist/reorder` |
-| Newsletter | `DELETE /api/cms/subscribers/{id}` |
+| Newsletter | `DELETE /api/cms/subscribers/{id}`, `GET /api/newsletter/unsubscribe/{token}` (public, one-click opt-out) |
+| Email desk | `GET /api/cms/email-blasts` (ledger + monthly volume), `GET …/audience` (clients, subscribers, lists, dispatch readiness), `GET …/match?report=`, `POST …/render` (preview HTML), `POST/PUT/DELETE /api/cms/email-blasts[/{id}]`, `POST …/{id}/send` (Graph, queued), `GET …/{id}/deliveries`, `POST …/{id}/sent` (Outlook hand-off) |
+| Distribution lists | `GET/POST/PUT/DELETE /api/cms/distribution-lists[/{id}]` |
 | Page copy | `PUT /api/cms/pages/{id}` |
 | Users & access | `GET /api/cms/access`, `POST/PUT/DELETE /api/cms/users[/{id}]`, `POST/PUT/DELETE /api/cms/roles[/{id}]` |
 | Client onboarding | `POST /api/cms/portal-clients`, then `{id}/invite-link`, `{id}/approve`, `{id}/decline`, `{id}/reset-link`, `PUT {id}/password`, `PUT {id}/username` |

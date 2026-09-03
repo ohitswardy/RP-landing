@@ -2,20 +2,43 @@ import { useMemo, useState } from 'react';
 import { Chip } from '../../ui';
 import { TinyBtn } from '../../kit/parts';
 import { IconPlus, IconSearch, IconX } from '../../icons';
-import type { AudienceClient, AudienceSubscriber, EmailRecipient } from '../../data';
+import type { AudienceClient, AudienceSubscriber, DistributionList, EmailRecipient } from '../../data';
 
 /* ─────────────────────────────────────────────────────────────
-   Who a blast goes to. Three sources feed one deduplicated list:
-   approved portal clients (with their preference chips visible so
-   pruning an auto-matched list is informed), verified newsletter
-   subscribers, and manually typed addresses.
+   Who a blast goes to. One deduplicated list fed from several
+   directions: a client search (preference chips visible, so
+   pruning an auto-matched list is informed), one-click pools
+   (Local clients, Foreign clients, verified subscribers), saved
+   distribution lists, and manually typed addresses.
    ───────────────────────────────────────────────────────────── */
 
-export default function RecipientPicker({ clients, subscribers, value, onChange }: {
+export function clientRecipient(c: AudienceClient): EmailRecipient {
+  return { email: c.email.toLowerCase(), name: c.name, userId: c.id, source: 'client' };
+}
+
+type QuickAdd = { key: string; label: string; items: EmailRecipient[] };
+
+/** What a pool would add — only the addresses not already on the list, deduplicated. */
+function notYetOn(selected: Set<string>, items: EmailRecipient[]): EmailRecipient[] {
+  const seen = new Set(selected);
+  return items.filter((r) => {
+    const e = r.email.toLowerCase();
+    if (seen.has(e)) return false;
+    seen.add(e);
+    return true;
+  });
+}
+
+export default function RecipientPicker({
+  clients, subscribers, lists = [], value, onChange, label = 'Recipients', hint,
+}: {
   clients: AudienceClient[];
   subscribers: AudienceSubscriber[];
+  lists?: DistributionList[];
   value: EmailRecipient[];
   onChange: (next: EmailRecipient[]) => void;
+  label?: string;
+  hint?: string;
 }) {
   const [query, setQuery] = useState('');
   const [manual, setManual] = useState('');
@@ -35,14 +58,32 @@ export default function RecipientPicker({ clients, subscribers, value, onChange 
       .slice(0, 8);
   }, [clients, query, selected]);
 
-  const unselectedSubscribers = useMemo(
-    () => subscribers.filter((s) => !selected.has(s.email.toLowerCase())),
-    [subscribers, selected],
+  const pools = useMemo<QuickAdd[]>(() => [
+    { key: 'local', label: 'Local clients', items: notYetOn(selected, clients.filter((c) => c.clientType === 'Local').map(clientRecipient)) },
+    { key: 'foreign', label: 'Foreign clients', items: notYetOn(selected, clients.filter((c) => c.clientType === 'Foreign').map(clientRecipient)) },
+    { key: 'subscribers', label: 'Verified subscribers', items: notYetOn(selected, subscribers.map((s) => ({ email: s.email.toLowerCase(), source: 'subscriber' as const }))) },
+  ], [clients, subscribers, selected]);
+
+  const listPools = useMemo<QuickAdd[]>(
+    () => lists.map((l) => ({
+      key: `list:${l.id}`,
+      label: l.name,
+      items: notYetOn(selected, l.contacts.map((c) => ({ ...c, email: c.email.toLowerCase() }))),
+    })),
+    [lists, selected],
   );
 
-  const add = (r: EmailRecipient) => {
-    if (selected.has(r.email.toLowerCase())) return;
-    onChange([...value, { ...r, email: r.email.toLowerCase() }]);
+  const addMany = (items: EmailRecipient[]) => {
+    if (items.length === 0) return;
+    const next = [...value];
+    const seen = new Set(selected);
+    for (const r of items) {
+      const email = r.email.toLowerCase();
+      if (seen.has(email)) continue;
+      seen.add(email);
+      next.push({ ...r, email });
+    }
+    onChange(next);
   };
 
   const remove = (email: string) => {
@@ -57,16 +98,19 @@ export default function RecipientPicker({ clients, subscribers, value, onChange 
       return;
     }
     setManualError(null);
-    add({ email, source: 'manual' });
+    addMany([{ email, source: 'manual' }]);
     setManual('');
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
-        <span className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">
-          Recipients <span className="num text-silver">{value.length}</span>
-        </span>
+      <div className="flex items-baseline justify-between gap-4">
+        <div className="min-w-0">
+          <span className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">
+            {label} <span className="num text-silver">{value.length}</span>
+          </span>
+          {hint && <p className="mt-1 text-[11.5px] leading-relaxed text-graphite">{hint}</p>}
+        </div>
         {value.length > 0 && (
           <TinyBtn onClick={() => onChange([])}><IconX size={11} /> Clear all</TinyBtn>
         )}
@@ -109,7 +153,7 @@ export default function RecipientPicker({ clients, subscribers, value, onChange 
               <li key={c.id}>
                 <button
                   type="button"
-                  onClick={() => { add({ email: c.email, name: c.name, userId: c.id, source: 'client' }); setQuery(''); }}
+                  onClick={() => { addMany([clientRecipient(c)]); setQuery(''); }}
                   className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-bone"
                 >
                   <span className="min-w-0">
@@ -131,27 +175,39 @@ export default function RecipientPicker({ clients, subscribers, value, onChange 
         )}
       </div>
 
-      {/* Subscribers + manual */}
-      <div className="flex flex-wrap items-center gap-3">
-        <TinyBtn
-          onClick={() => onChange([
-            ...value,
-            ...unselectedSubscribers.map((s) => ({ email: s.email.toLowerCase(), source: 'subscriber' as const })),
-          ])}
-          disabled={unselectedSubscribers.length === 0}
-        >
-          <IconPlus size={11} /> Add all verified subscribers ({unselectedSubscribers.length})
-        </TinyBtn>
-        <div className="flex items-center gap-2">
-          <input
-            value={manual}
-            onChange={(e) => { setManual(e.target.value); setManualError(null); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addManual(); } }}
-            placeholder="Add address manually…"
-            className="mono w-[220px] border rule bg-white px-3 py-1.5 text-[11.5px] text-ink outline-none transition-colors placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
-          />
-          <TinyBtn onClick={addManual}><IconPlus size={11} /> Add</TinyBtn>
+      {/* Pools: one click adds everyone not already on the list */}
+      <div className="flex flex-wrap items-center gap-2">
+        {pools.map((p) => (
+          <TinyBtn key={p.key} onClick={() => addMany(p.items)} disabled={p.items.length === 0}>
+            <IconPlus size={11} /> {p.label} <span className="num text-silver">{p.items.length}</span>
+          </TinyBtn>
+        ))}
+      </div>
+
+      {/* Saved distribution lists */}
+      {listPools.length > 0 && (
+        <div className="space-y-2 border-t rule pt-3">
+          <span className="mono block text-[9.5px] uppercase tracking-[0.2em] text-silver">Distribution lists</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {listPools.map((p) => (
+              <TinyBtn key={p.key} onClick={() => addMany(p.items)} disabled={p.items.length === 0}>
+                <IconPlus size={11} /> {p.label} <span className="num text-silver">{p.items.length}</span>
+              </TinyBtn>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* Manual address */}
+      <div className="flex items-center gap-2">
+        <input
+          value={manual}
+          onChange={(e) => { setManual(e.target.value); setManualError(null); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addManual(); } }}
+          placeholder="Add address manually…"
+          className="mono w-[240px] border rule bg-white px-3 py-1.5 text-[11.5px] text-ink outline-none transition-colors placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
+        />
+        <TinyBtn onClick={addManual}><IconPlus size={11} /> Add</TinyBtn>
       </div>
       {manualError && <p className="text-[11.5px]" style={{ color: 'var(--color-warn)' }}>{manualError}</p>}
     </div>

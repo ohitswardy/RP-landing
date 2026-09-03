@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\CareerController;
 use App\Http\Controllers\Api\ClientLogController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\ContactController;
+use App\Http\Controllers\Api\DistributionListController;
 use App\Http\Controllers\Api\EmailBlastController;
 use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\MediaController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Api\ReportTypeController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SiteContentController;
 use App\Http\Controllers\Api\SubscriberController;
+use App\Http\Controllers\Api\UnsubscribeController;
 use App\Http\Controllers\Api\WatchlistController;
 use Illuminate\Support\Facades\Route;
 
@@ -49,6 +51,9 @@ Route::prefix('portal')->middleware('throttle:20,1')->group(function () {
     Route::get('/reset/{token}', [RegistrationController::class, 'showReset']);
     Route::post('/reset/{token}', [RegistrationController::class, 'submitReset']);
 });
+
+// One-click opt-out carried by every subscriber blast; renders a plain confirmation page.
+Route::get('/newsletter/unsubscribe/{token}', UnsubscribeController::class)->middleware('throttle:20,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -131,15 +136,25 @@ Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::delete('/subscribers/{subscriber}', [SubscriberController::class, 'destroy']);
     });
 
-    // The Email desk: blasts are composed and previewed here, sent from Outlook.
+    // The Email desk: blasts are composed and previewed here, then sent through
+    // Graph from the staff mailbox (send) or by hand through Outlook (sent).
     Route::middleware('permission:email.manage')->group(function () {
         Route::get('/email-blasts', [EmailBlastController::class, 'index']);
         Route::get('/email-blasts/audience', [EmailBlastController::class, 'audience']);
         Route::get('/email-blasts/match', [EmailBlastController::class, 'match']);
+        Route::post('/email-blasts/render', [EmailBlastController::class, 'render'])->middleware('throttle:120,1');
         Route::post('/email-blasts', [EmailBlastController::class, 'store']);
         Route::put('/email-blasts/{blast}', [EmailBlastController::class, 'update']);
+        Route::get('/email-blasts/{blast}/deliveries', [EmailBlastController::class, 'deliveries']);
+        Route::post('/email-blasts/{blast}/send', [EmailBlastController::class, 'send'])->middleware('throttle:6,1');
         Route::post('/email-blasts/{blast}/sent', [EmailBlastController::class, 'markSent']);
         Route::delete('/email-blasts/{blast}', [EmailBlastController::class, 'destroy']);
+
+        // Saved audiences the composer and the newsletter blast panel pick from.
+        Route::get('/distribution-lists', [DistributionListController::class, 'index']);
+        Route::post('/distribution-lists', [DistributionListController::class, 'store']);
+        Route::put('/distribution-lists/{list}', [DistributionListController::class, 'update']);
+        Route::delete('/distribution-lists/{list}', [DistributionListController::class, 'destroy']);
     });
 
     Route::middleware('permission:pages.manage')->group(function () {

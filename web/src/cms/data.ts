@@ -484,7 +484,12 @@ export const CLIENT_STATUS: Record<ClientStatus, { label: string; tone: 'live' |
 /* ── Email desk ────────────────────────────────────────────── */
 
 export type BlastKind = 'newsletter' | 'report' | 'adhoc';
-export type BlastStatus = 'draft' | 'ready' | 'sent';
+/** draft/ready are editorial; queued/sending mean the Graph job is in flight; sent/failed are terminal. */
+export type BlastStatus = 'draft' | 'ready' | 'queued' | 'sending' | 'sent' | 'failed';
+/** How a blast left: through Graph from the staff mailbox, or copied into Outlook by hand. */
+export type BlastChannel = 'graph' | 'outlook';
+/** The Local leg carries the portal deep link; the Foreign leg carries the Jefferies link. */
+export type BlastVariant = 'local' | 'foreign';
 
 export type EmailRecipient = {
   email: string;
@@ -503,21 +508,85 @@ export type EmailBlast = {
   newsletterIssueId: string | null;
   /** Jefferies (or other external) link for foreign-client research. */
   externalLink: string | null;
+  /** Attach the report PDF to the Graph message (report blasts only). */
+  attachReport: boolean;
   recipients: EmailRecipient[];
+  /** The Foreign leg; null when the blast has no foreign variant. */
+  recipientsForeign: EmailRecipient[] | null;
   status: BlastStatus;
   notes: string | null;
+  channel: BlastChannel | null;
   senderOutlook: string | null;
   sentBy: string | null;
   sentByName: string | null;
+  sentCount: number;
+  failedCount: number;
+  /** The first batch error, once any batch failed. */
+  sendError: string | null;
+  /** Delivery batches behind a Graph send; null until one was planned. */
+  batches: { total: number; sent: number; failed: number } | null;
+  queuedAt: string | null; // ISO
   sentAt: string | null;   // ISO
   createdAt: string;       // ISO
   updatedAt: string;       // ISO
 };
 
-export const BLAST_STATUS: Record<BlastStatus, { label: string; tone: 'live' | 'amber' | 'muted' }> = {
+export const BLAST_STATUS: Record<BlastStatus, { label: string; tone: 'live' | 'amber' | 'muted' | 'warn'; pulse?: boolean }> = {
   draft: { label: 'Draft', tone: 'muted' },
   ready: { label: 'Ready', tone: 'amber' },
+  queued: { label: 'Queued', tone: 'amber', pulse: true },
+  sending: { label: 'Sending', tone: 'amber', pulse: true },
   sent: { label: 'Sent', tone: 'live' },
+  failed: { label: 'Failed', tone: 'warn' },
+};
+
+export function blastInFlight(b: Pick<EmailBlast, 'status'>): boolean {
+  return b.status === 'queued' || b.status === 'sending';
+}
+
+/** Once queued, a blast's content is frozen to match what went out. */
+export function blastLocked(b: Pick<EmailBlast, 'status'>): boolean {
+  return blastInFlight(b) || b.status === 'sent' || b.status === 'failed';
+}
+
+/** One Graph message of a blast, as /cms/email-blasts/{id}/deliveries serves it. */
+export type EmailDelivery = {
+  id: string;
+  variant: BlastVariant;
+  batch: number;
+  /** bcc: clients hidden from each other; direct: one subscriber with a personal unsubscribe link. */
+  envelope: 'bcc' | 'direct';
+  recipients: string[];
+  recipientCount: number;
+  status: 'pending' | 'sent' | 'failed';
+  error: string | null;
+  sentAt: string | null;
+};
+
+/** A saved audience the composer and the newsletter blast panel pick from. */
+export type DistributionList = {
+  id: string;
+  name: string;
+  description: string | null;
+  contacts: EmailRecipient[];
+  count: number;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Sent volume for one calendar month (yyyy-mm). */
+export type BlastMonth = { month: string; blasts: number; recipients: number };
+
+/** What the desk needs to know about the outbound channel before offering "Send now". */
+export type DispatchInfo = {
+  graphReady: boolean;
+  /** The signed-in staff member's Outlook account; null when their profile has none. */
+  sender: string | null;
+  senderAllowed: boolean;
+  senderDomain: string;
+  batchSize: number;
+  attachmentMaxBytes: number;
 };
 
 export const BLAST_KIND: Record<BlastKind, string> = {

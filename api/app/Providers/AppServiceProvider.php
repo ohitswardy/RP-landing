@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Services\MicrosoftGraphMailer;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -13,7 +14,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // The Email desk's outbound channel; inert until the MS_GRAPH_* keys are set.
+        $this->app->singleton(MicrosoftGraphMailer::class, fn () => new MicrosoftGraphMailer((array) config('services.graph')));
     }
 
     /**

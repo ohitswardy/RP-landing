@@ -1,8 +1,9 @@
 /* ─────────────────────────────────────────────────────────────
-   Clipboard + Outlook-compose helpers shared by the Access,
-   Newsletter, Reports, and Email desk modules. Nothing is sent
-   from the system: staff copy the composed content and paste it
-   into the Outlook message that actually goes out.
+   Clipboard helpers shared by the Access, Newsletter, Reports,
+   and Email desk modules, for staff who would rather assemble the
+   message by hand. The blast surfaces lead with the composed
+   draft in lib/eml.ts instead, and the Email desk can send from
+   the server outright (Microsoft Graph).
    ───────────────────────────────────────────────────────────── */
 
 export async function writeClipboard(text: string): Promise<boolean> {
@@ -68,10 +69,19 @@ export async function writeClipboardHtml(html: string, plain: string): Promise<b
 }
 
 /**
- * Open the default mail client (Outlook) with the envelope pre-filled.
- * mailto: cannot carry an HTML body — the body is pasted from the clipboard.
- * Long BCC lists overflow the mailto URL (~2,000 chars on Windows/Outlook),
- * so callers should fall back to a copied BCC list when this returns false.
+ * Open the default mail client with the envelope pre-filled — the
+ * envelope only, since mailto: cannot carry an HTML body.
+ *
+ * This is the weaker of the two hand-offs and only a fallback: when
+ * Windows has no application registered for the mailto: scheme the
+ * browser discards the navigation without a word, so there is no way
+ * to tell a successful launch from nothing happening. Prefer
+ * downloadEmlDraft in lib/eml.ts, which carries the body too and
+ * leaves a visible download either way.
+ *
+ * Returns false when the address list overflows the mailto URL
+ * (~2,000 characters on Windows/Outlook) so the caller can fall back
+ * to a copied BCC list.
  */
 export function outlookCompose({ to = [], bcc = [], subject }: {
   to?: string[]; bcc?: string[]; subject: string;
@@ -81,7 +91,15 @@ export function outlookCompose({ to = [], bcc = [], subject }: {
   params.set('subject', subject);
   const url = `mailto:${to.join(';')}?${params.toString().replace(/\+/g, '%20')}`;
   if (url.length > 1800) return false;
-  window.location.href = url;
+
+  // An anchor click rather than a location assignment: browsers treat it
+  // as a user-driven external-scheme launch and are less apt to drop it.
+  const a = document.createElement('a');
+  a.href = url;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   return true;
 }
 
