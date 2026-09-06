@@ -18,7 +18,7 @@ import {
 } from './icons';
 import {
   ChalkboardSimpleIcon, ArticleIcon, ScrollIcon, SuitcaseIcon, UsersThreeIcon,
-  FileIcon, NewspaperIcon, EnvelopeSimpleIcon, LogIcon, FingerprintIcon,
+  FileIcon, NewspaperIcon, EnvelopeSimpleIcon, LogIcon, FingerprintIcon, HouseLineIcon,
 } from '@phosphor-icons/react';
 
 type NavItem = {
@@ -37,18 +37,19 @@ const OVERVIEW: NavItem = {
 };
 
 const CONTENT_NAV: NavItem[] = [
-  { to: '/cms/insights', label: 'Insights', code: '01', icon: (p) => <ArticleIcon {...p} weight="bold" />, perm: 'insights.manage' },
-  { to: '/cms/reports', label: 'Reports', code: '02', icon: (p) => <ScrollIcon {...p} weight="bold" />, perm: 'reports.manage' },
-  { to: '/cms/services', label: 'Services', code: '03', icon: (p) => <SuitcaseIcon {...p} weight="bold" />, perm: 'services.manage' },
-  { to: '/cms/people', label: 'People', code: '04', icon: (p) => <UsersThreeIcon {...p} weight="bold" />, perm: 'people.manage' },
-  { to: '/cms/pages', label: 'Pages', code: '05', icon: (p) => <FileIcon {...p} weight="bold" />, perm: 'pages.manage' },
+  { to: '/cms/home', label: 'Landing page', code: '01', icon: (p) => <HouseLineIcon {...p} weight="bold" />, perm: 'home.manage' },
+  { to: '/cms/insights', label: 'Insights', code: '02', icon: (p) => <ArticleIcon {...p} weight="bold" />, perm: 'insights.manage' },
+  { to: '/cms/reports', label: 'Reports', code: '03', icon: (p) => <ScrollIcon {...p} weight="bold" />, perm: 'reports.manage' },
+  { to: '/cms/services', label: 'Services', code: '04', icon: (p) => <SuitcaseIcon {...p} weight="bold" />, perm: 'services.manage' },
+  { to: '/cms/people', label: 'People', code: '05', icon: (p) => <UsersThreeIcon {...p} weight="bold" />, perm: 'people.manage' },
+  { to: '/cms/pages', label: 'Pages', code: '06', icon: (p) => <FileIcon {...p} weight="bold" />, perm: 'pages.manage' },
 ];
 
 const SITE_NAV: NavItem[] = [
-  { to: '/cms/newsletter', label: 'Newsletter', code: '06', icon: (p) => <NewspaperIcon {...p} weight="bold" />, perm: 'newsletter.manage' },
-  { to: '/cms/email', label: 'Email desk', code: '07', icon: (p) => <EnvelopeSimpleIcon {...p} weight="bold" />, perm: 'email.manage' },
-  { to: '/cms/access', label: 'Users & access', code: '08', icon: (p) => <LogIcon {...p} weight="bold" />, perm: 'access.manage' },
-  { to: '/cms/logs', label: 'Client logs', code: '09', icon: (p) => <FingerprintIcon {...p} weight="bold" />, perm: 'logs.view' },
+  { to: '/cms/newsletter', label: 'Newsletter', code: '07', icon: (p) => <NewspaperIcon {...p} weight="bold" />, perm: 'newsletter.manage' },
+  { to: '/cms/email', label: 'Email desk', code: '08', icon: (p) => <EnvelopeSimpleIcon {...p} weight="bold" />, perm: 'email.manage' },
+  { to: '/cms/access', label: 'Users & access', code: '09', icon: (p) => <LogIcon {...p} weight="bold" />, perm: 'access.manage' },
+  { to: '/cms/logs', label: 'Client logs', code: '10', icon: (p) => <FingerprintIcon {...p} weight="bold" />, perm: 'logs.view' },
 ];
 
 const PIN_KEY = 'regis-cms-rail-pinned';

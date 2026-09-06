@@ -14,6 +14,7 @@ class RbacSeeder extends Seeder
     public function run(): void
     {
         $permissions = [
+            ['key' => 'home.manage', 'label' => 'Landing page', 'group' => 'Site content'],
             ['key' => 'insights.manage', 'label' => 'Insights', 'group' => 'Site content'],
             ['key' => 'reports.manage', 'label' => 'Reports', 'group' => 'Site content'],
             ['key' => 'services.manage', 'label' => 'Services', 'group' => 'Site content'],

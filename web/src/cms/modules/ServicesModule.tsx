@@ -162,7 +162,7 @@ export default function ServicesModule() {
   return (
     <div className="space-y-9 pb-4">
       <ModuleHeader
-        code="03 / Services"
+        code="04 / Services"
         title="Service pages"
         blurb="Everything visitors read and see under /services — the landing page, the four practice briefs, their header photography, and the ledger of what each practice delivers."
         actions={

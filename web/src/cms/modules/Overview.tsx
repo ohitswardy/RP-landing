@@ -13,7 +13,7 @@ import { RingChart } from '../../components/charts/ring-chart';
 import { Ring } from '../../components/charts/ring';
 import { RingCenter } from '../../components/charts/ring-center';
 import type { RingData } from '../../components/charts/ring-context';
-import { fmtDate, timeAgo, type Account, type Article, type ReportCategory } from '../data';
+import { HOME_SECTIONS, fmtDate, timeAgo, type Account, type Article, type ReportCategory } from '../data';
 
 /* ─────────────────────────────────────────────────────────────
    Overview. The command surface of the workspace: what needs a
@@ -831,7 +831,7 @@ type AccessSnapshot = { users: Account[] };
 export default function Overview() {
   const { session, can } = useAuth();
   const {
-    status, articles, reports, people, services, newsletters, subscribers, pages, media, audit,
+    status, articles, reports, people, services, homePage, newsletters, subscribers, pages, media, audit,
   } = useCms();
   const reduce = useReducedMotion();
 
@@ -1114,6 +1114,11 @@ export default function Overview() {
           <section>
             <RailHeading>Site inventory</RailHeading>
             <ul className="border-y rule">
+              <InventoryRow
+                label="Landing page"
+                value={`${HOME_SECTIONS.filter((s) => homePage[s.key].enabled).length}/${HOME_SECTIONS.length} sections`}
+                to={can('home.manage') ? '/cms/home' : undefined}
+              />
               <InventoryRow
                 label="Service lines"
                 value={`${liveServices}/${services.length} live`}

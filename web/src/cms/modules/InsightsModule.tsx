@@ -170,7 +170,7 @@ export default function InsightsModule() {
   return (
     <div className="space-y-9 pb-4">
       <ModuleHeader
-        code="01 / Insights"
+        code="02 / Insights"
         title="Research journal"
         blurb="Every note that reaches the public Insights page and the client archive, and the page itself — its header, filter rail, ledger, and sign-in prompt. Notes start in review and stay internal until published."
         actions={

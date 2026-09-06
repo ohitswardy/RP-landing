@@ -5,7 +5,7 @@ import { IconArrowDown, IconArrowRight, IconArrowUp, IconExternal, IconPen, Icon
 import type { ContactChannel, ContactCopy } from '../../data';
 import ImagePicker from '../../kit/ImagePicker';
 import { Field, MiniBtn, Panel, TinyBtn, move } from '../../kit/parts';
-import SaveBar from './SaveBar';
+import SaveBar from '../../kit/SaveBar';
 
 /* ─────────────────────────────────────────────────────────────
    Everything /contact says — the hero caption over the sunray
@@ -92,10 +92,13 @@ export default function ContactCopyEditor({ onDirty }: { onDirty: (dirty: boolea
 
   // Follow the store when an untouched editor's baseline changes
   // (bootstrap landing late). A dirty draft is never overwritten.
+  // The previous baseline is captured before the updater is queued: the
+  // updater runs on the next render, after the ref has already moved on.
   const baseline = useRef(contactPage);
   useEffect(() => {
-    setDraft((d) => (same(d, baseline.current) ? clone(contactPage) : d));
+    const prev = baseline.current;
     baseline.current = contactPage;
+    setDraft((d) => (same(d, prev) ? clone(contactPage) : d));
   }, [contactPage]);
 
   const dirty = !same(draft, contactPage);

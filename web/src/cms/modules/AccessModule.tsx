@@ -399,7 +399,7 @@ export default function AccessModule() {
     return (
       <div className="space-y-9">
         <ModuleHeader
-          code="10 / Access"
+          code="09 / Access"
           title="Users & access"
           blurb="Every account on the system, the role that scopes what it can touch, and the trail of what it changed."
         />
@@ -415,7 +415,7 @@ export default function AccessModule() {
   return (
     <div className="space-y-12">
       <ModuleHeader
-        code="10 / Access"
+        code="09 / Access"
         title="Users & access"
         blurb="Every account on the system, the role that scopes what it can touch, and the trail of what it changed. Staff sign into this CMS; clients sign into the research portal."
         actions={

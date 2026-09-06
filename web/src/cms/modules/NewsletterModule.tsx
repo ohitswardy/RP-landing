@@ -60,7 +60,7 @@ export default function NewsletterModule() {
   return (
     <div className="space-y-9">
       <ModuleHeader
-        code="06 / Newsletter"
+        code="07 / Newsletter"
         title="Newsletter desk"
         blurb="The daily, weekly, and monthly REGIS mailers. Each issue is composed against the client's exact template and previewed live before it is filed."
         actions={

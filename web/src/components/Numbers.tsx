@@ -1,13 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { animate, useInView } from 'framer-motion';
 import Reveal from './Reveal';
-
-const STATS = [
-  { value: 1999, suffix: '',  label: 'Founded, member of the PSE' },
-  { value: 25,   suffix: '+', label: 'Years of partnership' },
-  { value: 120,  suffix: '+', label: 'PSE names under coverage' },
-  { value: 300,  suffix: '+', label: 'Institutional counterparties' },
-];
+import type { HomeCopy } from '../cms/data';
 
 function CountUp({ value, suffix }: { value: number; suffix: string }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -38,52 +32,55 @@ function CountUp({ value, suffix }: { value: number; suffix: string }) {
   );
 }
 
-export default function Numbers() {
+/** The firm-figures rail. Copy is authored in the CMS Landing page module. */
+export default function Numbers({ copy }: { copy: HomeCopy['numbers'] }) {
+  const stats = copy.stats;
+  const cols = stats.length >= 4 ? 'lg:grid-cols-4' : stats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2';
+
   return (
     <section className="bg-paper text-ink">
       <div className="container-fluid py-24 md:py-32">
         {/* Intro row — GIC title/text split */}
         <div className="grid grid-cols-12 gap-x-6 gap-y-8">
           <Reveal className="col-span-12 lg:col-span-4">
-            <div className="eyebrow mb-6">The firm</div>
+            {copy.eyebrow && <div className="eyebrow mb-6">{copy.eyebrow}</div>}
             <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.08] tracking-[-0.022em] max-w-[14ch]">
-              Strength in numbers.
+              {copy.heading}
             </h2>
           </Reveal>
-          <Reveal delay={0.08} className="col-span-12 lg:col-span-6 lg:col-start-6">
-            <p className="max-w-[58ch] text-slate leading-[1.7] text-[15.5px]">
-              Regis Partners is an independent Philippine brokerage built for a
-              single client base: institutions. One market, covered deeply. One
-              desk, answerable only to its clients. The franchise has compounded
-              through every cycle the PSE has traded since 1999.
-            </p>
-          </Reveal>
+          {copy.intro && (
+            <Reveal delay={0.08} className="col-span-12 lg:col-span-6 lg:col-start-6">
+              <p className="max-w-[58ch] text-slate leading-[1.7] text-[15.5px]">{copy.intro}</p>
+            </Reveal>
+          )}
         </div>
 
         {/* Numeral rail */}
-        <div className="mt-16 md:mt-20 border-t rule">
-          <div className="grid grid-cols-2 lg:grid-cols-4">
-            {STATS.map((s, i) => (
-              <Reveal
-                key={s.label}
-                delay={i * 0.07}
-                className={[
-                  'py-10 md:py-14 pr-6',
-                  i % 2 === 1 ? 'pl-6 border-l rule' : '',
-                  i >= 2 ? 'border-t lg:border-t-0 rule' : '',
-                  i >= 1 ? 'lg:border-l lg:pl-10' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <div className="text-[clamp(3rem,7vw,6rem)] leading-none tracking-[-0.03em] font-medium">
-                  <CountUp value={s.value} suffix={s.suffix} />
-                </div>
-                <div className="eyebrow mt-6 text-graphite">{s.label}</div>
-              </Reveal>
-            ))}
+        {stats.length > 0 && (
+          <div className="mt-16 md:mt-20 border-t rule">
+            <div className={`grid grid-cols-2 ${cols}`}>
+              {stats.map((s, i) => (
+                <Reveal
+                  key={`${i}-${s.label}`}
+                  delay={i * 0.07}
+                  className={[
+                    'py-10 md:py-14 pr-6',
+                    i % 2 === 1 ? 'pl-6 border-l rule' : '',
+                    i >= 2 ? 'border-t lg:border-t-0 rule' : '',
+                    i >= 1 ? 'lg:border-l lg:pl-10' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <div className="text-[clamp(3rem,7vw,6rem)] leading-none tracking-[-0.03em] font-medium">
+                    <CountUp value={s.value} suffix={s.suffix} />
+                  </div>
+                  <div className="eyebrow mt-6 text-graphite">{s.label}</div>
+                </Reveal>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </section>
   );

@@ -5,7 +5,7 @@ import { BtnGhost, BtnPrimary, EmptyState, ModuleHeader, SkeletonRows, EASE } fr
 import { Field, Modal, Panel } from '../kit/parts';
 import { fmtDate, type PageBlock } from '../data';
 import ContactCopyEditor from './pages/ContactCopyEditor';
-import SaveBar from './pages/SaveBar';
+import SaveBar from '../kit/SaveBar';
 
 /* ─────────────────────────────────────────────────────────────
    The standing pages: the Contact page's copy, and the two legal
@@ -149,7 +149,7 @@ export default function PagesModule() {
   return (
     <div className="space-y-9 pb-4">
       <ModuleHeader
-        code="05 / Pages"
+        code="06 / Pages"
         title="Pages"
         blurb="The standing pages: the Contact page's copy, and the Terms & Conditions and Privacy & Cookies Policy behind the footer links and every login portal. Pick a page below; each one publishes on its own."
       />
@@ -232,7 +232,7 @@ export default function PagesModule() {
             transition={{ duration: 0.45, ease: EASE }}
           >
             <Panel
-              code="05 / Legal"
+              code="06 / Legal"
               title={selected.title}
               hint="Read in the site footer and on every login portal. Blank lines separate paragraphs; a line opening with “## ” becomes a clause heading, and a line opening with “•” renders as a bullet."
               actions={

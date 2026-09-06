@@ -188,7 +188,7 @@ export default function EmailModule() {
   return (
     <div className="space-y-9 pb-4">
       <ModuleHeader
-        code="07 / Email desk"
+        code="08 / Email desk"
         title="Email desk"
         blurb={dispatch.graphReady
           ? 'Every blast that reaches clients — newsletter issues, research reports, and ad-hoc notes — drafted and previewed here, then sent from your own mailbox through Microsoft 365. Auto-matched recipients always stop here for review first.'

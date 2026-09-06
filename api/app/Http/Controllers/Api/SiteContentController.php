@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AboutPage;
 use App\Models\Article;
 use App\Models\ContactPage;
+use App\Models\HomePage;
 use App\Models\InsightPage;
 use App\Models\PageBlock;
 use App\Models\ServiceLine;
@@ -20,6 +21,12 @@ use Illuminate\Http\JsonResponse;
  */
 class SiteContentController extends Controller
 {
+    /** The landing page: every section's copy and photography, in page order. */
+    public function home(): JsonResponse
+    {
+        return response()->json(['copy' => HomePage::current()->toWire()]);
+    }
+
     public function services(): JsonResponse
     {
         return response()->json([

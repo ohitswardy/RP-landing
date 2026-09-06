@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DistributionListController;
 use App\Http\Controllers\Api\EmailBlastController;
+use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\NewsletterController;
@@ -35,6 +36,7 @@ Route::post('/portal/login', [AuthController::class, 'portalLogin'])->middleware
 
 /* ── Public site content ──────────────────────────────────────── */
 
+Route::get('/content/home', [SiteContentController::class, 'home']);
 Route::get('/content/services', [SiteContentController::class, 'services']);
 Route::get('/content/insights', [SiteContentController::class, 'insights']);
 Route::get('/content/people', [SiteContentController::class, 'people']);
@@ -68,6 +70,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::get('/bootstrap', BootstrapController::class);
+
+    // The landing page: one document covering every section's copy and photography.
+    Route::middleware('permission:home.manage')->group(function () {
+        Route::put('/home-page', [HomeController::class, 'update']);
+        Route::post('/home/upload', [HomeController::class, 'upload']);
+    });
 
     Route::middleware('permission:insights.manage')->group(function () {
         Route::post('/articles', [ArticleController::class, 'store']);

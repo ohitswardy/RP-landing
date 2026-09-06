@@ -22,6 +22,7 @@ import { PortalReportsProvider } from './portal/reports';
 // CMS chunks stay out of the public bundle.
 const CMSLayout = lazy(() => import('./cms/CMSLayout'));
 const Overview = lazy(() => import('./cms/modules/Overview'));
+const HomeModule = lazy(() => import('./cms/modules/HomeModule'));
 const InsightsModule = lazy(() => import('./cms/modules/InsightsModule'));
 const ReportsModule = lazy(() => import('./cms/modules/ReportsModule'));
 const ServicesModule = lazy(() => import('./cms/modules/ServicesModule'));
@@ -93,6 +94,7 @@ export default function App() {
           }
         >
           <Route index element={<Suspense fallback={null}><Overview /></Suspense>} />
+          <Route path="home" element={<RequirePermission permission="home.manage"><Suspense fallback={null}><HomeModule /></Suspense></RequirePermission>} />
           <Route path="insights" element={<RequirePermission permission="insights.manage"><Suspense fallback={null}><InsightsModule /></Suspense></RequirePermission>} />
           <Route path="reports" element={<RequirePermission permission="reports.manage"><Suspense fallback={null}><ReportsModule /></Suspense></RequirePermission>} />
           <Route path="services" element={<RequirePermission permission="services.manage"><Suspense fallback={null}><ServicesModule /></Suspense></RequirePermission>} />

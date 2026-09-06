@@ -262,7 +262,7 @@ export default function ClientLogsModule() {
     return (
       <div className="space-y-9">
         <ModuleHeader
-          code="09 / Client logs"
+          code="10 / Client logs"
           title="Client logs"
           blurb="A tamper-evident record of everything portal clients consume — every report viewed, downloaded, and clicked."
         />
@@ -278,7 +278,7 @@ export default function ClientLogsModule() {
   return (
     <div className="space-y-10">
       <ModuleHeader
-        code="09 / Client logs"
+        code="10 / Client logs"
         title="Client logs"
         blurb="A tamper-evident record of everything portal clients consume. Each entry is sealed to the one before it, so nothing can be edited or removed without breaking the chain."
         actions={

@@ -687,3 +687,68 @@ export function fmtBytes(bytes: number): string {
   if (kb < 1024) return `${Math.round(kb)} KB`;
   return `${(kb / 1024).toFixed(1)} MB`;
 }
+
+/* ── Landing page copy ─────────────────────────────────────── */
+
+/** A CTA on the landing page. An empty label drops the link from the page. */
+export type HomeLink = { label: string; href: string };
+/** One figure on the numbers rail; `suffix` is the small amber "+" mark. */
+export type HomeStat = { value: number; suffix: string; label: string };
+/** One row of the services index, with the photo that floats on hover. */
+export type HomeServiceRow = { title: string; blurb: string; href: string; image: string };
+/** One of the two featured notes above the research ledger. */
+export type HomeFeaturedNote = { kicker: string; title: string; blurb: string; meta: string; href: string; image: string };
+/** One row of the research ledger under the featured pair. */
+export type HomeNoteRow = { kicker: string; title: string; meta: string; href: string };
+
+/** Every text block and photograph on the landing page, in page order.
+    Each section carries `enabled`, so the desk can pull a section without
+    losing its copy. */
+export type HomeCopy = {
+  hero: {
+    enabled: boolean; eyebrow: string;
+    /** One reveal line per newline. */
+    headline: string;
+    dek: string; image: string;
+  };
+  numbers: { enabled: boolean; eyebrow: string; heading: string; intro: string; stats: HomeStat[] };
+  services: { enabled: boolean; eyebrow: string; heading: string; cta: HomeLink; rows: HomeServiceRow[] };
+  insights: {
+    enabled: boolean; eyebrow: string; heading: string; intro: string; cta: HomeLink;
+    featured: HomeFeaturedNote[]; rows: HomeNoteRow[];
+  };
+  culture: { enabled: boolean; eyebrow: string; heading: string; cta: HomeLink; image: string; imageAlt: string };
+  community: { enabled: boolean; eyebrow: string; heading: string; body: string; cta: HomeLink; image: string; imageAlt: string };
+  quote: { enabled: boolean; eyebrow: string; quote: string; name: string; role: string; cta: HomeLink; image: string };
+  careers: { enabled: boolean; eyebrow: string; heading: string; body: string; cta: HomeLink; image: string; imageAlt: string };
+};
+
+export type HomeSectionKey = keyof HomeCopy;
+
+/** The sections in the order the page stacks them, with the names the desk uses. */
+export const HOME_SECTIONS: Array<{ key: HomeSectionKey; label: string; hint: string }> = [
+  { key: 'hero', label: 'Hero', hint: 'Full-height opener' },
+  { key: 'numbers', label: 'Numbers', hint: 'Firm figures rail' },
+  { key: 'services', label: 'Services', hint: 'Practice index' },
+  { key: 'insights', label: 'Insights', hint: 'Featured research' },
+  { key: 'culture', label: 'Our story', hint: 'Navy panel over photo' },
+  { key: 'community', label: 'Community', hint: 'Bronze panel over photo' },
+  { key: 'quote', label: 'President\u2019s word', hint: 'Portrait and quote' },
+  { key: 'careers', label: 'Careers', hint: 'Closing banner' },
+];
+
+export const EMPTY_HOME: HomeCopy = {
+  hero: { enabled: true, eyebrow: '', headline: '', dek: '', image: '' },
+  numbers: { enabled: true, eyebrow: '', heading: '', intro: '', stats: [] },
+  services: { enabled: true, eyebrow: '', heading: '', cta: { label: '', href: '' }, rows: [] },
+  insights: { enabled: true, eyebrow: '', heading: '', intro: '', cta: { label: '', href: '' }, featured: [], rows: [] },
+  culture: { enabled: true, eyebrow: '', heading: '', cta: { label: '', href: '' }, image: '', imageAlt: '' },
+  community: { enabled: true, eyebrow: '', heading: '', body: '', cta: { label: '', href: '' }, image: '', imageAlt: '' },
+  quote: { enabled: true, eyebrow: '', quote: '', name: '', role: '', cta: { label: '', href: '' }, image: '' },
+  careers: { enabled: true, eyebrow: '', heading: '', body: '', cta: { label: '', href: '' }, image: '', imageAlt: '' },
+};
+
+/** The headline's reveal lines, as the hero animates them. */
+export function headlineLines(headline: string): string[] {
+  return headline.split('\n').map((l) => l.trim()).filter(Boolean);
+}

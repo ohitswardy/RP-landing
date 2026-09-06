@@ -9,6 +9,7 @@ use App\Models\AuditEntry;
 use App\Models\CareerPost;
 use App\Models\Company;
 use App\Models\ContactPage;
+use App\Models\HomePage;
 use App\Models\InsightPage;
 use App\Models\MediaAsset;
 use App\Models\NewsletterIssue;
@@ -40,6 +41,7 @@ class BootstrapController extends Controller
             'people' => StaffMember::orderBy('position')->orderBy('id')->get()->map->toWire()->values(),
             'services' => ServiceLine::orderBy('position')->orderBy('id')->get()->map->toWire()->values(),
             'servicePage' => ServicePage::current()->toWire(),
+            'homePage' => HomePage::current()->toWire(),
             'aboutPage' => AboutPage::current()->toWire(),
             'contactPage' => ContactPage::current()->toWire(),
             'insightsPage' => InsightPage::current()->toWire(),

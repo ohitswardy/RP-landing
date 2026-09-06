@@ -124,6 +124,7 @@ for the Regis tenant; restrict it to the desk's mailboxes with an Exchange
 |------|--------|
 | Auth | `POST /api/cms/login`, `POST /api/portal/login`, `POST /api/logout`, `GET /api/me` |
 | CMS bootstrap | `GET /api/cms/bootstrap` (all collections in one round-trip) |
+| Landing page | `PUT /api/cms/home-page` (full document; gated by `home.manage`), `POST /api/cms/home/upload` (multipart photo); public read `GET /api/content/home` |
 | Insights | `POST/PUT/DELETE /api/cms/articles[/{id}]` |
 | Reports | `POST /api/cms/reports` (multipart PDF), `PUT /api/cms/reports/{id}`, `DELETE …` |
 | People | `POST/PUT/DELETE /api/cms/people[/{id}]`, `PUT /api/cms/people/reorder`, `POST /api/cms/people/upload` (multipart portrait) |

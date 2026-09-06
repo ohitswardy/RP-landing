@@ -221,7 +221,7 @@ export default function PeopleModule() {
   return (
     <div className="space-y-9 pb-4">
       <ModuleHeader
-        code="04 / People"
+        code="05 / People"
         title="People of Regis"
         blurb={
           view === 'copy'

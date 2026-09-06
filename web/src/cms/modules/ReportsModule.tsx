@@ -387,7 +387,7 @@ export default function ReportsModule() {
   return (
     <div className="space-y-9">
       <ModuleHeader
-        code="02 / Reports"
+        code="03 / Reports"
         title="Research reports"
         blurb="Post PDF research to the client portal. Every report carries a publication date, a covered name and its ticker, a type, a rating and an analyst byline — clients filter and read on exactly those."
         actions={

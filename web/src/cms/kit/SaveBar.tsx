@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { BtnGhost, BtnPrimary, Chip, EASE } from '../../ui';
+import { BtnGhost, BtnPrimary, Chip, EASE } from '../ui';
 
 /* ─────────────────────────────────────────────────────────────
-   The publish bar shared by every editor in the Pages module.
-   It rides the bottom of the scroll container and only exists
-   while there is something to publish, discard, or report.
+   The publish bar shared by the single-document editors (Pages,
+   Landing page). It rides the bottom of the scroll container and
+   only exists while there is something to publish, discard, or
+   report.
    ───────────────────────────────────────────────────────────── */
 
 export default function SaveBar({
