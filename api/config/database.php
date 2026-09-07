@@ -84,6 +84,30 @@ return [
             ]) : [],
         ],
 
+        // The legacy CRMS schema, read through its own connection so a model
+        // can never fall back onto the CMS database by accident. Tests point
+        // it at sqlite in memory via CRMS_DB_DRIVER.
+        'crms' => env('CRMS_DB_DRIVER', 'mysql') === 'sqlite' ? [
+            'driver' => 'sqlite',
+            'database' => env('CRMS_DB_DATABASE', ':memory:'),
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+        ] : [
+            'driver' => 'mysql',
+            'host' => env('CRMS_DB_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('CRMS_DB_PORT', env('DB_PORT', '3306')),
+            'database' => env('CRMS_DB_DATABASE', 'crms'),
+            'username' => env('CRMS_DB_USERNAME', env('DB_USERNAME', 'root')),
+            'password' => env('CRMS_DB_PASSWORD', env('DB_PASSWORD', '')),
+            'charset' => 'utf8mb4',
+            'collation' => env('CRMS_DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            // Legacy rows carry zero dates and empty strings; strict mode would refuse them.
+            'strict' => false,
+            'engine' => null,
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DB_URL'),

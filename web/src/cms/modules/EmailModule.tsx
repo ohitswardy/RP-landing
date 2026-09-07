@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCms } from '../store';
 import { apiFetch } from '../../lib/api';
@@ -50,8 +51,23 @@ function monthLabel(key: string): string {
   return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 }
 
+/** A blast pre-filled from the CRMS (?compose=adhoc&subject=&body=&to=) — nothing is saved until the desk saves it. */
+function prefilledBlast(params: URLSearchParams): EmailBlast | null {
+  if (params.get('compose') !== 'adhoc') return null;
+  const to = (params.get('to') ?? '').split(/[,;\s]+/).map((x) => x.trim()).filter((x) => x.includes('@'));
+  const text = (params.get('body') ?? '').split('\n').map((l) => l.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch] ?? ch))).join('<br>');
+  return {
+    id: '', kind: 'adhoc', subject: params.get('subject') ?? '', htmlBody: text ? `<p>${text}</p>` : null,
+    reportId: null, newsletterIssueId: null, externalLink: null, attachReport: false,
+    recipients: to.map((email) => ({ email, source: 'manual' as const })), recipientsForeign: null,
+    status: 'draft', notes: 'Handed over from the CRMS interaction log.', channel: null, senderOutlook: null, sentBy: null, sentByName: null,
+    sentCount: 0, failedCount: 0, sendError: null, batches: null, queuedAt: null, sentAt: null, createdAt: new Date().toISOString(),
+  } as EmailBlast;
+}
+
 export default function EmailModule() {
   const { appendAudit } = useCms();
+  const [params, setParams] = useSearchParams();
 
   const [tab, setTab] = useState<Tab>('blasts');
   const [blasts, setBlasts] = useState<EmailBlast[]>([]);
@@ -61,7 +77,12 @@ export default function EmailModule() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
-  const [composer, setComposer] = useState<{ editingId: string | null; base: EmailBlast | null } | null>(null);
+  const [composer, setComposer] = useState<{ editingId: string | null; base: EmailBlast | null } | null>(() => {
+    const base = prefilledBlast(params);
+    return base ? { editingId: null, base } : null;
+  });
+  // Clear the hand-off from the URL once it has seeded the composer.
+  useEffect(() => { if (params.get('compose')) setParams({}, { replace: true }); }, [params, setParams]);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [armed, confirm] = useConfirm(4000);
   const alive = useRef(true);

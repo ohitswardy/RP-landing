@@ -149,3 +149,70 @@ Every CMS route is wrapped in `auth:sanctum` + `staff` middleware plus a `permis
 check, so the API enforces the same matrix the sidebar shows. Uploaded report PDFs live on
 the local disk (`storage/app/private/reports`); seeded catalog reports point at the public
 sample PDF served by the web app.
+
+## CRMS (`/crms`)
+
+The Client Relationship Management System is a third area of the same app (see
+`CRMSmasterplan.md` and `Database.md`). It has no accounts of its own: staff sign in at
+`/login/crms` with their CMS account, and only roles holding `crms.access` (seeded to
+**Administrator** and **Analyst**; Editors are refused) get in. Every `/api/crms/*` route
+sits behind `auth:sanctum` + `staff` + `permission:crms.*` (routes in `routes/crms.php`).
+
+The CRMS reads the legacy schema through its own `crms` database connection
+(`config/database.php`, `CRMS_DB_*` in `.env`; defaults to a `crms` database on the same
+MySQL server). Every model under `app/Models/Crms` pins that connection.
+
+```bash
+# One-time: the crms database beside regisph
+#   CREATE DATABASE crms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+php artisan migrate          # creates the legacy tables only where missing, plus the
+                             # additive columns/indexes/tables from CRMSmasterplan.md §11.5
+php artisan db:seed --class=CrmsConfigSeeder   # template bindings, sector groups, backfills
+php artisan db:seed --class=CrmsSeeder         # demo master data only; a no-op once clients exist
+```
+
+### Loading the client's dump
+
+The production dump (`crms_latest_0810_2026.sql`, MySQL 8) imports into the `crms` database
+with three adjustments, because XAMPP runs MariaDB 10.4:
+
+1. Keep only the live tables — everything except `token`, `distribution_list`, `email_log`,
+   `archive_email_log` and `archive_log` (retired per Database.md §8; the legacy `user` table
+   stays, read-only, because `interactions.user_id` still references it).
+2. Replace `utf8mb4_0900_ai_ci` with `utf8mb4_unicode_ci`.
+3. Raise `max_allowed_packet` (the dump has ~1 MB INSERT statements): `SET GLOBAL max_allowed_packet=64M`
+   before piping the file through `mysql --max_allowed_packet=64M crms`.
+
+Then `php artisan migrate` adds the additive columns and tables on top of the imported schema, and
+`php artisan db:seed --class=CrmsConfigSeeder` binds the six report-template clients (ids 10, 23, 59,
+72, 126, 139), builds the Domestic/Foreign sector groups from the corporates' tickers, backfills
+`corporate_contact.corporate_id` from the embedded JSON, and links portal accounts on exact email.
+
+What the data taught us (differs from the planning notes): `roadshow.category` 3 is **Analyst
+Marketing** (every category-3 row carries a travelling analyst), and one-off meetings live in the
+separate `event` table (`OneOffMeeting`, `/api/crms/one-off-meetings`). Form-builder fields keep the
+legacy shape (`textBox` / `select`, `Static` choices or a `Lookup` over Corporate, CorporateContact
+or SellsideContact), and lookup values are stored as snapshots of the picked row, exactly as before.
+The client row named "Generic Form" (id 81) is the legacy stand-in for the default form and the shared
+interaction types: a client without its own form or types falls back to it.
+
+| Permission | Unlocks |
+|---|---|
+| `crms.access` | sign-in, dashboard, calendar, every read |
+| `crms.contacts.manage` | clients, addresses, client contacts, portal link/unlink, corporates, Regis directory, sector groups |
+| `crms.interactions.manage` | interactions (create/edit/delete, send-to-recipients flag) |
+| `crms.events.manage` | events and their meetings / investors / flights / transport / hotels / Regis party; meeting → interaction |
+| `crms.reports.generate` | consumption workbooks (`POST /api/crms/reports/generate`) |
+| `crms.admin` | interaction types, form builder, report-template bindings, CRMS logs |
+
+Notes that differ from the legacy Angular app:
+
+- Times are stored in the legacy `{"hour":H,"minute":M,"second":S}` shape and exposed as
+  `HH:mm` through `App\Casts\LegacyTime`; JSON-in-TEXT columns go through `LegacyJson`.
+- Audit rows land in the CMS `audit_entries` ledger with a `CRMS · ` prefix, written server-side.
+- Itineraries are built server-side (`GET /api/crms/events/{id}/itinerary?contactId=`), with a
+  hotel line on every day of a stay, and printed to PDF from the browser's print dialog.
+- Reports apply the date range as a real `WHERE` and include every row regardless of author;
+  the Internal workbook carries Analysts, Sales and All-interactions sheets.
+- "Save and send to recipients" flags the interaction and opens **CMS → Email desk** pre-filled
+  (`/cms/email?compose=adhoc&subject=&body=&to=`); the CRMS never sends mail itself.

@@ -16,6 +16,7 @@ import ScrollToTop from './components/ScrollToTop';
 import { AuthProvider, RequireAuth, RequirePermission } from './cms/auth';
 import { CmsProvider } from './cms/store';
 import { PortalAuthProvider, RequirePortal } from './portal/auth';
+import { CrmsProvider } from './crms/store';
 import { PortalBookmarksProvider } from './portal/bookmarks';
 import { PortalReportsProvider } from './portal/reports';
 
@@ -32,6 +33,23 @@ const NewsletterModule = lazy(() => import('./cms/modules/NewsletterModule'));
 const EmailModule = lazy(() => import('./cms/modules/EmailModule'));
 const AccessModule = lazy(() => import('./cms/modules/AccessModule'));
 const ClientLogsModule = lazy(() => import('./cms/modules/ClientLogsModule'));
+
+// The CRMS: a third area, same staff session, Administrator and Analyst only.
+const CRMSLayout = lazy(() => import('./crms/CRMSLayout'));
+const CrmsDashboard = lazy(() => import('./crms/modules/Dashboard'));
+const CrmsInteractions = lazy(() => import('./crms/modules/InteractionsModule'));
+const CrmsEvents = lazy(() => import('./crms/modules/EventsModule'));
+const CrmsCalendar = lazy(() => import('./crms/modules/CalendarModule'));
+const CrmsClients = lazy(() => import('./crms/modules/ClientsModule'));
+const CrmsClientContacts = lazy(() => import('./crms/modules/ClientContactsModule'));
+const CrmsCorporates = lazy(() => import('./crms/modules/CorporatesModule'));
+const CrmsSellside = lazy(() => import('./crms/modules/SellsideModule'));
+const CrmsDistribution = lazy(() => import('./crms/modules/DistributionListModule'));
+const CrmsReports = lazy(() => import('./crms/modules/ReportsModule'));
+const CrmsTicker = lazy(() => import('./crms/modules/TickerSearchModule'));
+const CrmsInteractionTypes = lazy(() => import('./crms/modules/InteractionTypesModule'));
+const CrmsFormBuilder = lazy(() => import('./crms/modules/FormBuilderModule'));
+const CrmsLogs = lazy(() => import('./crms/modules/LogsModule'));
 
 // The client portal is its own lazy chunk, gated behind the portal session.
 const PortalDashboard = lazy(() => import('./portal/PortalDashboard'));
@@ -104,6 +122,40 @@ export default function App() {
           <Route path="email" element={<RequirePermission permission="email.manage"><Suspense fallback={null}><EmailModule /></Suspense></RequirePermission>} />
           <Route path="access" element={<RequirePermission permission="access.manage"><Suspense fallback={null}><AccessModule /></Suspense></RequirePermission>} />
           <Route path="logs" element={<RequirePermission permission="logs.view"><Suspense fallback={null}><ClientLogsModule /></Suspense></RequirePermission>} />
+        </Route>
+
+        <Route
+          path="/crms"
+          element={
+            <RequireAuth loginPath="/login/crms">
+              <RequirePermission permission="crms.access" fallback="/login/crms">
+                <CrmsProvider>
+                  <Suspense fallback={<CmsFallback />}>
+                    <CRMSLayout />
+                  </Suspense>
+                </CrmsProvider>
+              </RequirePermission>
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Suspense fallback={null}><CrmsDashboard /></Suspense>} />
+          <Route path="interactions" element={<Suspense fallback={null}><CrmsInteractions /></Suspense>} />
+          <Route path="interactions/:id" element={<Suspense fallback={null}><CrmsInteractions /></Suspense>} />
+          <Route path="events/calendar" element={<Suspense fallback={null}><CrmsCalendar /></Suspense>} />
+          <Route path="events/:type" element={<Suspense fallback={null}><CrmsEvents /></Suspense>} />
+          <Route path="events/:type/:id" element={<Suspense fallback={null}><CrmsEvents /></Suspense>} />
+          <Route path="clients" element={<Suspense fallback={null}><CrmsClients /></Suspense>} />
+          <Route path="clients/:id" element={<Suspense fallback={null}><CrmsClients /></Suspense>} />
+          <Route path="client-contacts" element={<Suspense fallback={null}><CrmsClientContacts /></Suspense>} />
+          <Route path="client-contacts/:id" element={<Suspense fallback={null}><CrmsClientContacts /></Suspense>} />
+          <Route path="corporates" element={<Suspense fallback={null}><CrmsCorporates /></Suspense>} />
+          <Route path="sellside-contacts" element={<Suspense fallback={null}><CrmsSellside /></Suspense>} />
+          <Route path="distribution-list" element={<Suspense fallback={null}><CrmsDistribution /></Suspense>} />
+          <Route path="reports" element={<RequirePermission permission="crms.reports.generate" fallback="/crms"><Suspense fallback={null}><CrmsReports /></Suspense></RequirePermission>} />
+          <Route path="ticker-search" element={<Suspense fallback={null}><CrmsTicker /></Suspense>} />
+          <Route path="interaction-types" element={<RequirePermission permission="crms.admin" fallback="/crms"><Suspense fallback={null}><CrmsInteractionTypes /></Suspense></RequirePermission>} />
+          <Route path="form-builder" element={<RequirePermission permission="crms.admin" fallback="/crms"><Suspense fallback={null}><CrmsFormBuilder /></Suspense></RequirePermission>} />
+          <Route path="logs" element={<RequirePermission permission="crms.admin" fallback="/crms"><Suspense fallback={null}><CrmsLogs /></Suspense></RequirePermission>} />
         </Route>
 
         <Route

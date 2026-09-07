@@ -212,3 +212,7 @@ Route::prefix('portal')->middleware(['auth:sanctum', 'client'])->group(function 
     Route::delete('/bookmarks/{report}', [PortalController::class, 'removeBookmark']);
     Route::delete('/bookmarks', [PortalController::class, 'clearBookmarks']);
 });
+
+/* ── CRMS (staff, Administrator + Analyst) ────────────────────── */
+
+require __DIR__.'/crms.php';

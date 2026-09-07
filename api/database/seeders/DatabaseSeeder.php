@@ -11,6 +11,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RbacSeeder::class,
             ContentSeeder::class,
+            CrmsSeeder::class,
+            CrmsConfigSeeder::class,
         ]);
     }
 }

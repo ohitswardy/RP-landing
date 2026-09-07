@@ -15,7 +15,8 @@ export type Session = {
 
 type AuthContextValue = {
   session: Session | null;
-  signIn: (identity: string, password: string) => Promise<string | null>;
+  /** Sign in through /cms/login or /crms/login. Both issue the same staff session. */
+  signIn: (identity: string, password: string, area?: 'cms' | 'crms') => Promise<string | null>;
   signOut: () => void;
   /** Permission check against the signed-in staff account. */
   can: (permission: string) => boolean;
@@ -47,7 +48,7 @@ type LoginResponse = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(readSession);
 
-  const signIn = useCallback(async (identity: string, password: string) => {
+  const signIn = useCallback(async (identity: string, password: string, area: 'cms' | 'crms' = 'cms') => {
     const email = identity.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return 'Enter a valid staff email address.';
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const data = await apiFetch<LoginResponse>('/cms/login', {
+      const data = await apiFetch<LoginResponse>(`/${area}/login`, {
         method: 'POST',
         body: { email, password },
       });
@@ -102,20 +103,22 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-/** Route guard: module pages bounce to the Overview when the role lacks the permission. */
-export function RequirePermission({ permission, children }: { permission: string; children: ReactNode }) {
+/** Route guard: module pages bounce to the area's landing when the role lacks the permission. */
+export function RequirePermission({ permission, children, fallback = '/cms' }: {
+  permission: string; children: ReactNode; fallback?: string;
+}) {
   const { can } = useAuth();
   if (!can(permission)) {
-    return <Navigate to="/cms" replace />;
+    return <Navigate to={fallback} replace />;
   }
   return <>{children}</>;
 }
 
-export function RequireAuth({ children }: { children: ReactNode }) {
+export function RequireAuth({ children, loginPath = '/login/cms' }: { children: ReactNode; loginPath?: string }) {
   const { session } = useAuth();
   const location = useLocation();
   if (!session) {
-    return <Navigate to="/login/cms" replace state={{ from: location.pathname }} />;
+    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
   }
   return <>{children}</>;
 }

@@ -18,6 +18,7 @@ api/bootstrap/cache/*.php
 .DS_Store
 Thumbs.db
 node_modules
+*.sql
 dist
 .env
 .env.local
