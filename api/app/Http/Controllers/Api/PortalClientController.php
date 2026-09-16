@@ -23,7 +23,8 @@ class PortalClientController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:190', 'unique:users,email'],
+            // Unique among clients: staff may hold a portal account under their work address.
+            'email' => ['required', 'email', 'max:190', Rule::unique('users', 'email')->where('kind', User::KIND_CLIENT)],
             'username' => ['nullable', 'string', 'max:60', 'alpha_dash', 'unique:users,username'],
             'firm' => ['required', 'string', 'max:120'],
             'clientType' => ['sometimes', 'nullable', 'in:Local,Foreign'],

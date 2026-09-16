@@ -7,12 +7,12 @@ import {
   BtnGhost, BtnPrimary, Chip, Drawer, EmptyState, ModuleHeader,
   RowAction, SelectField, SkeletonRows, Stat, TextField, useConfirm, EASE,
 } from '../ui';
-import { IconCheck, IconPen, IconPlus, IconSearch, IconShield, IconTrash } from '../icons';
+import { IconCheck, IconEye, IconPen, IconPlus, IconSearch, IconShield, IconTrash } from '../icons';
 import {
   CLIENT_STATUS, REPORT_CATEGORIES, fmtDate, timeAgo,
-  type Account, type AccountKind, type AuditEntry, type PermissionDef, type RoleDef,
+  type Account, type AccountKind, type AuditEntry, type ClientStatus, type PermissionDef, type RoleDef,
 } from '../data';
-import { Segmented } from './access/parts';
+import { CopyButton, Segmented } from './access/parts';
 import ClientProvisioning from './access/ClientProvisioning';
 import ClientApprovals from './access/ClientApprovals';
 import ClientPasswordReset from './access/ClientPasswordReset';
@@ -23,7 +23,11 @@ import ClientPasswordReset from './access/ClientPasswordReset';
    audit trail. Backed by /api/cms/access + /users + /roles.
    ───────────────────────────────────────────────────────────── */
 
-type AccessData = { users: Account[]; roles: RoleDef[]; permissions: PermissionDef[] };
+type AccessData = {
+  users: Account[]; roles: RoleDef[]; permissions: PermissionDef[];
+  /** True for the super admin: unlocks the current-password readout in the drawer. */
+  canRevealPasswords?: boolean;
+};
 
 /** Ledger tabs list accounts; the rest are onboarding workflows. */
 type AccessTab = 'staff' | 'client' | 'provision' | 'approvals' | 'passwords';
@@ -37,8 +41,30 @@ const TABS: Array<{ value: AccessTab; label: string }> = [
 ];
 type ItemResponse<T> = { item: T; audit?: AuditEntry };
 type DeleteResponse = { audit?: AuditEntry };
+/** null = the password was never set through this system (legacy import). */
+type PasswordResponse = { password: string | null; audit?: AuditEntry };
 
 const AUDIT_PAGE_SIZE = 10;
+/** The legacy import brought 560-odd clients; the ledger pages so it stays readable. */
+const LEDGER_PAGE_SIZE = 25;
+
+/** Narrows the client ledger. Suspended cuts across the onboarding statuses. */
+type ClientFilter = 'all' | ClientStatus | 'suspended';
+
+const CLIENT_FILTERS: Array<{ value: ClientFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'invited', label: 'Invited' },
+  { value: 'pending', label: 'Awaiting approval' },
+  { value: 'suspended', label: 'Suspended' },
+  { value: 'declined', label: 'Declined' },
+];
+
+function matchesFilter(u: Account, f: ClientFilter): boolean {
+  if (f === 'all') return true;
+  if (f === 'suspended') return u.suspended;
+  return !u.suspended && u.status === f;
+}
 
 type AccountForm = {
   name: string; email: string; password: string;
@@ -91,32 +117,58 @@ export default function AccessModule() {
   const kindTab: AccountKind = tab === 'client' ? 'client' : 'staff';
   const isLedger = tab === 'staff' || tab === 'client';
   const [query, setQuery] = useState('');
+  const [clientFilter, setClientFilter] = useState<ClientFilter>('all');
+  const [ledgerPage, setLedgerPage] = useState(1);
   const [accountEditing, setAccountEditing] = useState<Account | 'new' | null>(null);
   const [accountForm, setAccountForm] = useState<AccountForm>(BLANK_ACCOUNT);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [savingAccount, setSavingAccount] = useState(false);
   const [armedUser, confirmUser] = useConfirm(4000);
+  /* Super admin only: the account's current password, fetched on demand. */
+  const [revealed, setRevealed] = useState<{ id: string; password: string | null } | null>(null);
+  const [revealing, setRevealing] = useState(false);
+  const [revealError, setRevealError] = useState<string | null>(null);
 
   const users = data?.users ?? [];
   const roles = data?.roles ?? [];
   const permissions = data?.permissions ?? [];
+  // The API decides per request, so a session cached before the flag existed still works.
+  const canRevealPasswords = data?.canRevealPasswords ?? session?.superAdmin ?? false;
 
   const shownUsers = useMemo(() => {
     const q = query.trim().toLowerCase();
     return users
       .filter((u) => u.kind === kindTab)
+      .filter((u) => kindTab === 'staff' || matchesFilter(u, clientFilter))
       .filter((u) => !q
         || u.name.toLowerCase().includes(q)
         || u.email.toLowerCase().includes(q)
+        || (u.username ?? '').toLowerCase().includes(q)
         || (u.role ?? '').toLowerCase().includes(q)
         || (u.firm ?? '').toLowerCase().includes(q));
-  }, [users, kindTab, query]);
+  }, [users, kindTab, query, clientFilter]);
+
+  // A new view starts at its first page.
+  useEffect(() => { setLedgerPage(1); }, [tab, query, clientFilter]);
+
+  const ledgerPages = Math.max(1, Math.ceil(shownUsers.length / LEDGER_PAGE_SIZE));
+  const ledgerPageSafe = Math.min(ledgerPage, ledgerPages);
+  const pagedUsers = useMemo(
+    () => shownUsers.slice((ledgerPageSafe - 1) * LEDGER_PAGE_SIZE, ledgerPageSafe * LEDGER_PAGE_SIZE),
+    [shownUsers, ledgerPageSafe],
+  );
 
   const clients = useMemo(() => users.filter((u) => u.kind === 'client'), [users]);
   const clientCount = clients.length;
   const staffCount = users.length - clientCount;
   const activeStaff = users.filter((u) => u.kind === 'staff' && !u.suspended).length;
   const pendingCount = clients.filter((c) => c.status === 'pending').length;
+  const liveClients = clients.filter((c) => c.status === 'approved' && !c.suspended).length;
+  const filterCounts = useMemo(() => {
+    const m = new Map<ClientFilter, number>();
+    for (const f of CLIENT_FILTERS) m.set(f.value, clients.filter((c) => matchesFilter(c, f.value)).length);
+    return m;
+  }, [clients]);
 
   const setUser = (item: Account) => {
     setData((d) => d && ({
@@ -137,8 +189,24 @@ export default function AccessModule() {
     }
   }, []);
 
+  async function revealPassword(u: Account) {
+    setRevealing(true);
+    setRevealError(null);
+    try {
+      const res = await apiFetch<PasswordResponse>(`/cms/users/${u.id}/password`, { audience: 'cms' });
+      setRevealed({ id: u.id, password: res.password });
+      appendAudit(res.audit);
+    } catch (e) {
+      setRevealError(e instanceof Error ? e.message : 'The password could not be read.');
+    } finally {
+      setRevealing(false);
+    }
+  }
+
   function openAccountEditor(target: Account | 'new') {
     setAccountError(null);
+    setRevealed(null);
+    setRevealError(null);
     if (target === 'new') {
       // Clients are provisioned through the registration flow, never here.
       setAccountForm({ ...BLANK_ACCOUNT, kind: 'staff', roleId: roles.find((r) => !r.system)?.id ?? roles[0]?.id ?? '' });
@@ -445,7 +513,7 @@ export default function AccessModule() {
       <div className="grid grid-cols-3 gap-6 border-y rule py-7">
         <div className="px-1 md:px-4"><Stat value={String(activeStaff)} label="Active staff" /></div>
         <div className="border-l px-4 md:px-8" style={{ borderColor: 'color-mix(in oklab, var(--color-amber) 45%, transparent)' }}>
-          <Stat value={String(clientCount)} label="Client mandates" />
+          <Stat value={String(liveClients)} label="Live client mandates" />
         </div>
         <div className="border-l px-4 md:px-8" style={{ borderColor: 'color-mix(in oklab, var(--color-amber) 45%, transparent)' }}>
           <Stat value={String(roles.length)} label="Roles" />
@@ -488,14 +556,35 @@ export default function AccessModule() {
         </div>
 
         {isLedger && (
-          <div className="mt-6 flex justify-end">
+          <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            {tab === 'client' ? (
+              <div role="group" aria-label="Filter clients by status" className="flex flex-wrap gap-1.5">
+                {CLIENT_FILTERS.map((f) => {
+                  const on = clientFilter === f.value;
+                  return (
+                    <button
+                      key={f.value}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setClientFilter(f.value)}
+                      className={`mono border px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] transition-colors duration-300 active:translate-y-px ${
+                        on ? 'border-navy bg-navy text-paper' : 'rule bg-transparent text-graphite hover:text-ink'
+                      }`}
+                    >
+                      {f.label}
+                      <span className={`num ml-2 ${on ? 'opacity-60' : 'text-silver'}`}>{filterCounts.get(f.value) ?? 0}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : <span />}
             <label className="relative block w-full md:w-[280px]">
               <span className="sr-only">Search accounts</span>
               <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-silver" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Name, email, role, firm…"
+                placeholder={kindTab === 'staff' ? 'Name, email, role…' : 'Name, email, user id, firm…'}
                 className="w-full border rule bg-white py-2.5 pl-9 pr-3 text-[13.5px] outline-none transition-colors placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
               />
             </label>
@@ -528,11 +617,13 @@ export default function AccessModule() {
         ) : shownUsers.length === 0 ? (
           <div className="mt-6">
             <EmptyState
-              title={query ? 'No account matches that search.' : kindTab === 'staff' ? 'No staff accounts yet.' : 'No client mandates yet.'}
-              hint={query ? 'Search covers names, emails, roles, and firms.' : 'Provision the first account and it will appear in this ledger.'}
+              title={query ? 'No account matches that search.' : clientFilter !== 'all' && kindTab === 'client' ? 'No client in this state.' : kindTab === 'staff' ? 'No staff accounts yet.' : 'No client mandates yet.'}
+              hint={query ? 'Search covers names, emails, user ids, roles, and firms.' : clientFilter !== 'all' && kindTab === 'client' ? 'Pick another status, or show all.' : 'Provision the first account and it will appear in this ledger.'}
               action={
                 query ? (
                   <BtnGhost onClick={() => setQuery('')}>Clear search</BtnGhost>
+                ) : clientFilter !== 'all' && kindTab === 'client' ? (
+                  <BtnGhost onClick={() => setClientFilter('all')}>Show all</BtnGhost>
                 ) : kindTab === 'client' ? (
                   <BtnPrimary onClick={() => setTab('provision')}><IconPlus size={14} /> Provision a client</BtnPrimary>
                 ) : (
@@ -542,9 +633,10 @@ export default function AccessModule() {
             />
           </div>
         ) : (
-          <ul className="mt-6 divide-y rule border-y rule">
+          <>
+          <ul className="mt-6 divide-y rule border-t rule">
             <AnimatePresence initial={false}>
-              {shownUsers.map((u, i) => (
+              {pagedUsers.map((u, i) => (
                 <motion.li
                   key={u.id}
                   layout
@@ -604,6 +696,8 @@ export default function AccessModule() {
               ))}
             </AnimatePresence>
           </ul>
+          <Pager page={ledgerPageSafe} pages={ledgerPages} total={shownUsers.length} size={LEDGER_PAGE_SIZE} onPage={setLedgerPage} />
+          </>
         ))}
       </section>
 
@@ -745,32 +839,7 @@ export default function AccessModule() {
           )}
 
           {audit.length > 0 && (
-            <div className="flex items-center justify-between border-t rule py-3">
-              <span className="mono num text-[10.5px] uppercase tracking-[0.14em] text-graphite">
-                {(auditPageSafe - 1) * AUDIT_PAGE_SIZE + 1}–{Math.min(auditPageSafe * AUDIT_PAGE_SIZE, audit.length)} of {audit.length}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
-                  disabled={auditPageSafe <= 1}
-                  className="mono border rule px-3.5 py-1.5 text-[10px] uppercase tracking-[0.14em] text-slate transition-colors hover:border-[color:var(--color-amber-deep)] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  ← Prev
-                </button>
-                <span className="mono num px-1 text-[10.5px] text-graphite">
-                  {auditPageSafe} / {auditPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setAuditPage((p) => Math.min(auditPages, p + 1))}
-                  disabled={auditPageSafe >= auditPages}
-                  className="mono border rule px-3.5 py-1.5 text-[10px] uppercase tracking-[0.14em] text-slate transition-colors hover:border-[color:var(--color-amber-deep)] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
+            <Pager page={auditPageSafe} pages={auditPages} total={audit.length} size={AUDIT_PAGE_SIZE} onPage={setAuditPage} />
           )}
         </div>
       </section>
@@ -890,6 +959,41 @@ export default function AccessModule() {
             </div>
           )}
 
+          {canRevealPasswords && accountEditing !== 'new' && accountEditing && (
+            <div className="flex flex-col gap-2">
+              <span className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">Current password</span>
+              <div className="flex items-stretch gap-2">
+                <input
+                  readOnly
+                  aria-label="Current password"
+                  value={revealed?.id === accountEditing.id
+                    ? (revealed.password ?? 'Not on record')
+                    : '••••••••••••'}
+                  className={`mono min-w-0 flex-1 border rule bg-bone px-3.5 py-2.5 text-[13px] outline-none ${
+                    revealed?.id === accountEditing.id && revealed.password === null ? 'text-graphite' : 'text-ink'
+                  }`}
+                />
+                {revealed?.id === accountEditing.id && revealed.password ? (
+                  <CopyButton text={revealed.password} />
+                ) : (
+                  <BtnGhost onClick={() => void revealPassword(accountEditing)} disabled={revealing}>
+                    <IconEye size={13} /> {revealing ? 'Reading…' : 'Reveal'}
+                  </BtnGhost>
+                )}
+              </div>
+              <p className="text-[11.5px] leading-relaxed text-graphite">
+                {revealed?.id === accountEditing.id && revealed.password === null
+                  ? 'This password was never set through this system (legacy import), so it cannot be read back. Set one below and it will be on record.'
+                  : 'Visible to the super admin only. Every reveal is written to the audit trail.'}
+              </p>
+              {revealError && (
+                <p className="border-l-2 pl-3 text-[12.5px] leading-relaxed" style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}>
+                  {revealError}
+                </p>
+              )}
+            </div>
+          )}
+
           <TextField
             label={accountEditing === 'new' ? 'Password' : 'Reset password'}
             value={accountForm.password}
@@ -993,6 +1097,32 @@ export default function AccessModule() {
           )}
         </div>
       </Drawer>
+    </div>
+  );
+}
+
+/* ── Pager ─────────────────────────────────────────────────── */
+
+/** Range readout plus prev / next, shared by the account ledger and the audit trail. */
+function Pager({ page, pages, total, size, onPage }: {
+  page: number; pages: number; total: number; size: number;
+  onPage: (next: number) => void;
+}) {
+  const btn = 'mono border rule px-3.5 py-1.5 text-[10px] uppercase tracking-[0.14em] text-slate transition-colors hover:border-[color:var(--color-amber-deep)] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40';
+  return (
+    <div className="flex items-center justify-between border-t rule py-3">
+      <span className="mono num text-[10.5px] uppercase tracking-[0.14em] text-graphite">
+        {(page - 1) * size + 1}–{Math.min(page * size, total)} of {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => onPage(Math.max(1, page - 1))} disabled={page <= 1} className={btn}>
+          ← Prev
+        </button>
+        <span className="mono num px-1 text-[10.5px] text-graphite">{page} / {pages}</span>
+        <button type="button" onClick={() => onPage(Math.min(pages, page + 1))} disabled={page >= pages} className={btn}>
+          Next →
+        </button>
+      </div>
     </div>
   );
 }

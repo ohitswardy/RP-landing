@@ -44,7 +44,7 @@ class EmailBlastController extends Controller
     public function audience(Request $request, MicrosoftGraphMailer $mailer): JsonResponse
     {
         $actor = $request->user();
-        $sender = $actor->outlook_email;
+        $sender = $mailer->senderFor($actor->outlook_email);
 
         return response()->json([
             'clients' => User::where('kind', User::KIND_CLIENT)
@@ -68,6 +68,7 @@ class EmailBlastController extends Controller
                 'graphReady' => $mailer->enabled(),
                 'sender' => $sender,
                 'senderAllowed' => $sender ? $mailer->senderAllowed($sender) : false,
+                'senderShared' => $sender !== null && ! $actor->outlook_email,
                 'senderDomain' => (string) config('services.graph.sender_domain'),
                 'batchSize' => $mailer->batchSize(),
                 'attachmentMaxBytes' => $mailer->attachmentMaxBytes(),
@@ -173,14 +174,15 @@ class EmailBlastController extends Controller
     public function send(Request $request, EmailBlast $blast, MicrosoftGraphMailer $mailer): JsonResponse
     {
         $actor = $request->user();
+        $sender = $mailer->senderFor($actor->outlook_email);
 
         if (! $mailer->enabled()) {
             return response()->json(['message' => 'Server-side sending is not configured yet. Use the Outlook hand-off.'], 422);
         }
-        if (! $actor->outlook_email) {
-            return response()->json(['message' => 'Your staff profile has no Outlook account to send from. An administrator can add one under Users & access.'], 422);
+        if (! $sender) {
+            return response()->json(['message' => 'There is no mailbox to send from. Set MS_GRAPH_SENDER, or add an Outlook account to your staff profile under Users & access.'], 422);
         }
-        if (! $mailer->senderAllowed($actor->outlook_email)) {
+        if (! $mailer->senderAllowed($sender)) {
             return response()->json(['message' => 'Blasts can only leave from a '.config('services.graph.sender_domain').' mailbox.'], 422);
         }
         if ($blast->isInFlight()) {
@@ -195,7 +197,7 @@ class EmailBlastController extends Controller
             return response()->json(['message' => $problem], 422);
         }
 
-        $queued = DB::transaction(function () use ($blast, $actor, $mailer, $retry) {
+        $queued = DB::transaction(function () use ($blast, $actor, $mailer, $retry, $sender) {
             $fresh = EmailBlast::whereKey($blast->id)->lockForUpdate()->first();
             if (! $fresh || $fresh->isInFlight() || $fresh->status === 'sent') {
                 return null;
@@ -219,7 +221,7 @@ class EmailBlastController extends Controller
                 'status' => 'queued',
                 'queued_at' => now(),
                 'sent_by' => $actor->id,
-                'sender_outlook' => $actor->outlook_email,
+                'sender_outlook' => $sender,
                 'channel' => 'graph',
                 'send_error' => null,
             ])->save();

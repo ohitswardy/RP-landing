@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Reveal from '../components/Reveal';
-import Newsletter from '../components/Newsletter';
 import {
   fmtNoteDate, useInsightsContent,
   type InsightsPage, type JournalNote,
@@ -154,8 +153,6 @@ function Journal({ page, notes }: { page: InsightsPage; notes: JournalNote[] }) 
           </div>
         )}
       </section>
-
-      {page.newsletter.enabled && <Newsletter />}
     </>
   );
 }

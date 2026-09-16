@@ -26,7 +26,7 @@ export default function IssueViewer({ issue, onEdit, onBlast, onClose }: {
         </>
       }
     >
-      <div className="mx-auto w-full max-w-[700px] overflow-x-auto border rule bg-white shadow-sm">
+      <div className="theme-light mx-auto w-full max-w-[700px] overflow-x-auto border rule bg-white shadow-sm">
         <div className="min-w-[560px]">
           <TemplatePreview
             cadence={issue.cadence}

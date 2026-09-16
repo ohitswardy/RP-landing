@@ -332,7 +332,7 @@ export default function IssueComposer({
                 <span className="mono text-[10px] uppercase tracking-[0.2em] text-graphite">Template preview</span>
                 <span className="mono text-[10px] uppercase tracking-[0.2em] text-silver">{CADENCE_LABEL[cadence]} mailer</span>
               </div>
-              <div className="max-h-[78vh] overflow-y-auto overflow-x-hidden border rule shadow-sm">
+              <div className="theme-light max-h-[78vh] overflow-y-auto overflow-x-hidden border rule shadow-sm">
                 <TemplatePreview cadence={cadence} date={date} subject={subject} intro={intro} sections={preview} rail={cadence === 'daily' ? [] : rail} />
               </div>
               <p className="mt-3 text-[11.5px] leading-relaxed text-graphite">

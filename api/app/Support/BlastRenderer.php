@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Report;
 use App\Models\StaffMember;
+use TijsVerkoyen\CssToInlineStyles\CssToInlineStyles;
 
 /**
  * Turns a blast into the HTML that actually goes out. Newsletter blasts
@@ -33,7 +34,9 @@ final class BlastRenderer
         $body = (string) ($f['html_body'] ?? '');
 
         if (self::isDocument($body)) {
-            return $unsubscribeUrl ? self::withUnsubscribeFooter($body, $unsubscribeUrl) : $body;
+            $doc = self::forEmail($body);
+
+            return $unsubscribeUrl ? self::withUnsubscribeFooter($doc, $unsubscribeUrl) : $doc;
         }
 
         /** @var Report|null $report */
@@ -56,6 +59,37 @@ final class BlastRenderer
             'logo' => self::frontend().'/newsletter/logo.png',
             'unsubscribeUrl' => $unsubscribeUrl,
         ])->render();
+    }
+
+    /**
+     * Make a document survive real mail clients. The house template keeps its
+     * stylesheet in a <style> block inside the body, which browsers honour and
+     * Gmail throws away, so every class rule is copied onto the elements it
+     * matches as an inline style, and the block itself is hoisted into <head>
+     * for the clients that do read it. The preview endpoint renders through
+     * here too, so what the desk sees is what leaves.
+     */
+    public static function forEmail(string $doc): string
+    {
+        $inlined = (new CssToInlineStyles)->convert($doc);
+
+        // Hoist every <style> out of the body and into <head>.
+        $blocks = [];
+        $stripped = preg_replace_callback('~<style\b[^>]*>.*?</style>~is', function (array $m) use (&$blocks): string {
+            $blocks[] = $m[0];
+
+            return '';
+        }, $inlined) ?? $inlined;
+
+        if ($blocks === []) {
+            return $inlined;
+        }
+        $at = stripos($stripped, '</head>');
+        if ($at === false) {
+            return $inlined;
+        }
+
+        return substr($stripped, 0, $at).implode("\n", $blocks)."\n".substr($stripped, $at);
     }
 
     /** A full document (the newsletter mailer) rather than an editor fragment. */

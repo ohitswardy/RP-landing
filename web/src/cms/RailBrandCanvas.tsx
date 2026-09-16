@@ -6,8 +6,11 @@ import * as THREE from 'three';
    giving the flat graph-paper rail a quiet sense of depth. Transparent canvas,
    so the underlying bg-paper-grid stays visible beneath it. */
 
-const INK = new THREE.Color('#000000');
-const AMBER = new THREE.Color('#e6a24e');
+const INK_LIGHT = new THREE.Color('#000000');   // ink points on the light rail
+const INK_DARK  = new THREE.Color('#f1ede6');   // paper points on the dark rail
+const AMBER     = new THREE.Color('#e6a24e');
+
+const isDark = () => document.documentElement.classList.contains('dark');
 
 function makeDisc() {
   const s = 64;
@@ -52,6 +55,7 @@ export default function RailBrandCanvas() {
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
     const seeds = new Float32Array(count);
+    const amberAt = new Uint8Array(count);
 
     let i = 0;
     for (let x = 0; x < COLS; x++) {
@@ -59,10 +63,7 @@ export default function RailBrandCanvas() {
         positions[i * 3] = (x / (COLS - 1) - 0.5) * 15;
         positions[i * 3 + 1] = (y / (ROWS - 1) - 0.5) * 4.2;
         positions[i * 3 + 2] = (Math.random() - 0.5) * 2.6;
-        const c = Math.random() < 0.09 ? AMBER : INK;
-        colors[i * 3] = c.r;
-        colors[i * 3 + 1] = c.g;
-        colors[i * 3 + 2] = c.b;
+        amberAt[i] = Math.random() < 0.09 ? 1 : 0;
         seeds[i] = Math.random() * Math.PI * 2;
         i++;
       }
@@ -72,6 +73,19 @@ export default function RailBrandCanvas() {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    // Ink points follow the theme: black on the light rail, paper on the dark one.
+    const paintColors = () => {
+      const ink = isDark() ? INK_DARK : INK_LIGHT;
+      for (let k = 0; k < count; k++) {
+        const c = amberAt[k] ? AMBER : ink;
+        colors[k * 3] = c.r;
+        colors[k * 3 + 1] = c.g;
+        colors[k * 3 + 2] = c.b;
+      }
+      geo.attributes.color.needsUpdate = true;
+    };
+    paintColors();
 
     const disc = makeDisc();
     const mat = new THREE.PointsMaterial({
@@ -126,6 +140,13 @@ export default function RailBrandCanvas() {
       renderer.render(scene, camera);
     };
 
+    // html.dark is toggled by the shell's theme hook; recolour when it flips.
+    const themeObserver = new MutationObserver(() => {
+      paintColors();
+      if (reduced) render();
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
     if (reduced) {
       render();
     } else {
@@ -140,6 +161,7 @@ export default function RailBrandCanvas() {
       cancelAnimationFrame(raf);
       window.removeEventListener('pointermove', onMove);
       ro.disconnect();
+      themeObserver.disconnect();
       geo.dispose();
       mat.dispose();
       disc.dispose();

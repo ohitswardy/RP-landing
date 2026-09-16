@@ -27,6 +27,29 @@ class SiteContentController extends Controller
         return response()->json(['copy' => HomePage::current()->toWire()]);
     }
 
+    /**
+     * The photography behind the navbar's mega-menu panels. Each entry is
+     * the hero image of the page that menu opens onto, so replacing a hero
+     * in the CMS re-dresses its menu with it. Served on its own so the
+     * navbar — which renders on every public page — does not have to pull
+     * four whole content documents for four filenames.
+     */
+    public function nav(): JsonResponse
+    {
+        $insights = InsightPage::current()->toWire();
+        $about = AboutPage::current()->toWire();
+        $contact = ContactPage::current()->toWire();
+
+        return response()->json([
+            'media' => [
+                'services' => (string) (ServicePage::current()->toWire()['heroImage'] ?? ''),
+                'insights' => (string) ($insights['hero']['image'] ?? ''),
+                'about' => (string) ($about['hero']['image'] ?? ''),
+                'contact' => (string) ($contact['hero']['image'] ?? ''),
+            ],
+        ]);
+    }
+
     public function services(): JsonResponse
     {
         return response()->json([

@@ -1,7 +1,6 @@
 import PageHeader from '../components/PageHeader';
 import Reveal from '../components/Reveal';
 import { Link, useParams } from 'react-router-dom';
-import Newsletter from '../components/Newsletter';
 import { useServicesContent, type ServiceLine, type ServicePage } from '../lib/servicesContent';
 
 export default function Services() {
@@ -49,7 +48,6 @@ function ServicesIndex({ page, services }: { page: ServicePage; services: Servic
           </div>
         </div>
       </section>
-      <Newsletter />
     </>
   );
 }
@@ -109,8 +107,6 @@ function PracticePage({ service }: { service: ServiceLine }) {
           </div>
         </div>
       </section>
-
-      <Newsletter />
     </>
   );
 }

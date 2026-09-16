@@ -44,7 +44,6 @@ export const CONTACT_FALLBACK: ContactCopy = {
     emailLabel: 'Email',
     email: 'info@regis.ph',
   },
-  newsletter: { enabled: true },
 };
 
 type ContactContent = { copy: ContactCopy };
@@ -60,7 +59,6 @@ function normalizeContact(raw: unknown): ContactContent {
       hero: { ...CONTACT_FALLBACK.hero, ...(c.hero ?? {}) },
       inquiry: { ...CONTACT_FALLBACK.inquiry, ...(c.inquiry ?? {}) },
       offices: { ...CONTACT_FALLBACK.offices, ...(c.offices ?? {}) },
-      newsletter: { ...CONTACT_FALLBACK.newsletter, ...(c.newsletter ?? {}) },
     },
   };
 }

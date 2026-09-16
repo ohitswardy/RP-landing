@@ -47,7 +47,8 @@ class BootstrapController extends Controller
             'insightsPage' => InsightPage::current()->toWire(),
             'careers' => CareerPost::orderByDesc('posted')->orderByDesc('id')->get()->map->toWire()->values(),
             'watchlist' => WatchSymbol::orderBy('position')->orderBy('id')->get()->map->toWire()->values(),
-            'newsletters' => NewsletterIssue::orderByDesc('date')->orderByDesc('id')->get()->map->toWire()->values(),
+            // Summaries only; the desk fetches an issue's body when it opens one.
+            'newsletters' => NewsletterIssue::summaries()->values(),
             'subscribers' => Subscriber::orderByDesc('joined')->orderByDesc('id')->get()->map->toWire()->values(),
             // Only the legal documents are editable copy — see the Legal module.
             'pages' => PageBlock::whereIn('page', LegalDefaults::titles())

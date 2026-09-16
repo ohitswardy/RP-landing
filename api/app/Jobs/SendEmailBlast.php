@@ -11,6 +11,7 @@ use App\Support\Audit;
 use App\Support\BlastRenderer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
@@ -33,6 +34,9 @@ class SendEmailBlast implements ShouldQueue
 
     /** Seconds to wait when Graph asks us to back off without saying how long. */
     private const BACKOFF = 60;
+
+    /** Images fetched for inline embedding this run, keyed by URL, so a logo used twice is attached once. */
+    private array $inlineImages = [];
 
     public function __construct(public readonly int $blastId) {}
 
@@ -113,11 +117,13 @@ class SendEmailBlast implements ShouldQueue
             $unsubscribe = $subscriber?->unsubscribeUrl();
         }
 
+        [$html, $inline] = $this->embedImages(BlastRenderer::render($fields, $delivery->variant, $unsubscribe));
+
         $message = [
             'subject' => $blast->subject,
             'body' => [
                 'contentType' => 'HTML',
-                'content' => BlastRenderer::render($fields, $delivery->variant, $unsubscribe),
+                'content' => $html,
             ],
             // Custom headers must start with x-; this ties a Sent Items copy back to the ledger.
             'internetMessageHeaders' => [
@@ -133,11 +139,90 @@ class SendEmailBlast implements ShouldQueue
             $message['bccRecipients'] = array_map($address, $contacts);
         }
 
+        $attachments = $inline;
         if ($attachment !== null) {
-            $message['attachments'] = [$attachment];
+            $attachments[] = $attachment;
+        }
+        if ($attachments !== []) {
+            $message['attachments'] = $attachments;
         }
 
         return $message;
+    }
+
+    /**
+     * Images the mail references from our own hosts (the site, the API, or a
+     * root-relative path) are not reachable from a recipient's mail client
+     * while this runs behind a firewall, and the logo is the first thing a
+     * reader sees. Each is fetched once, attached inline with a content id,
+     * and the tag rewritten to cid: — every client renders those. Anything
+     * on a third-party host is left as a link. Returns [html, attachments].
+     */
+    private function embedImages(string $html): array
+    {
+        $ours = array_values(array_filter(array_unique([
+            rtrim((string) config('app.frontend_url'), '/'),
+            rtrim((string) config('app.url'), '/'),
+        ])));
+        $frontend = $ours[0] ?? '';
+        $max = app(MicrosoftGraphMailer::class)->attachmentMaxBytes();
+        $attachments = [];
+
+        $rewritten = preg_replace_callback('~<img\b[^>]*\bsrc=(["\'])([^"\']+)\1~i', function (array $m) use ($ours, $frontend, $max, &$attachments): string {
+            $src = html_entity_decode($m[2]);
+            if (str_starts_with($src, 'cid:') || str_starts_with($src, 'data:')) {
+                return $m[0];
+            }
+            $url = null;
+            if (str_starts_with($src, '/') && ! str_starts_with($src, '//')) {
+                $url = $frontend.$src;
+            } else {
+                foreach ($ours as $origin) {
+                    if ($origin !== '' && str_starts_with($src, $origin.'/')) {
+                        $url = $src;
+                        break;
+                    }
+                }
+            }
+            if ($url === null) {
+                return $m[0];
+            }
+
+            $image = $this->inlineImages[$url] ??= $this->fetchImage($url, $max);
+            if ($image === null) {
+                return $m[0];
+            }
+            $attachments[$image['contentId']] = $image;
+
+            return str_replace($m[1].$m[2].$m[1], $m[1].'cid:'.$image['contentId'].$m[1], $m[0]);
+        }, $html);
+
+        return [$rewritten ?? $html, array_values($attachments)];
+    }
+
+    /** One image as a Graph inline fileAttachment, or null when it cannot be fetched or is too large. */
+    private function fetchImage(string $url, int $max): ?array
+    {
+        try {
+            $response = Http::timeout(15)->get($url);
+        } catch (Throwable) {
+            return null;
+        }
+        $type = strtolower(trim(explode(';', (string) $response->header('Content-Type'))[0]));
+        $bytes = $response->body();
+        if (! $response->successful() || ! str_starts_with($type, 'image/') || $bytes === '' || strlen($bytes) > $max) {
+            return null;
+        }
+        $name = basename((string) parse_url($url, PHP_URL_PATH)) ?: 'image';
+
+        return [
+            '@odata.type' => '#microsoft.graph.fileAttachment',
+            'name' => $name,
+            'contentType' => $type,
+            'contentId' => substr(sha1($url), 0, 20).'@regis',
+            'isInline' => true,
+            'contentBytes' => base64_encode($bytes),
+        ];
     }
 
     /** The report PDF as a Graph fileAttachment, when the desk asked for it. */

@@ -43,10 +43,6 @@ class InsightsDefaults
                 'label' => 'Sign in for the full archive',
                 'href' => '/login',
             ],
-
-            'newsletter' => [
-                'enabled' => true,
-            ],
         ];
     }
 }

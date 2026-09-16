@@ -544,7 +544,9 @@ export default function PeopleModule() {
                   <span className="mono text-[10px] uppercase tracking-[0.18em] text-graphite">Live preview</span>
                   <span className="mono text-[9.5px] uppercase tracking-[0.16em] text-graphite">Updates as you type</span>
                 </div>
-                <ProfilePreview draft={draft} />
+                <div className="theme-light">
+                  <ProfilePreview draft={draft} />
+                </div>
               </aside>
             )}
           </div>

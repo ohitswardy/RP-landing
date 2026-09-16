@@ -319,7 +319,9 @@ export default function HomeModule() {
                 <span className="mono text-[10px] uppercase tracking-[0.18em] text-graphite">Live preview</span>
                 <span className="mono text-[9.5px] uppercase tracking-[0.16em] text-graphite">Click a section to edit it</span>
               </div>
-              <HomePreview copy={draft} selected={selected} onSelect={select} />
+              <div className="theme-light">
+                <HomePreview copy={draft} selected={selected} onSelect={select} />
+              </div>
             </aside>
           )}
         </div>

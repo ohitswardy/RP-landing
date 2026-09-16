@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import SearchModal, { computeResults, SEARCH_PANEL_WIDTH, TRENDING } from './SearchModal';
+import { useNavMedia, type NavMenuKey } from '../lib/navMedia';
 
 const ease = [0.25, 1, 0.5, 1] as const;
 
@@ -10,13 +11,14 @@ const ease = [0.25, 1, 0.5, 1] as const;
 type MenuLink = { label: string; desc?: string; href: string };
 type MenuColumn = { heading: string; links: MenuLink[] };
 type MenuDef = {
-  feature: { href: string; image: string };
+  /** The panel's photo is the hero of this page, published from the CMS. */
+  feature: { href: string };
   columns: MenuColumn[];
 };
 
-const MENUS: Record<string, MenuDef> = {
+const MENUS: Record<NavMenuKey, MenuDef> = {
   services: {
-    feature: { href: '/services', image: '/Services Hero.png' },
+    feature: { href: '/services' },
     columns: [
       {
         heading: 'What We Do',
@@ -30,7 +32,7 @@ const MENUS: Record<string, MenuDef> = {
     ],
   },
   insights: {
-    feature: { href: '/insights', image: '/InsightsBG.png' },
+    feature: { href: '/insights' },
     columns: [
       {
         heading: 'Insights',
@@ -42,7 +44,7 @@ const MENUS: Record<string, MenuDef> = {
     ],
   },
   about: {
-    feature: { href: '/about', image: '/lobby.jpg' },
+    feature: { href: '/about' },
     columns: [
       {
         heading: 'About',
@@ -55,7 +57,7 @@ const MENUS: Record<string, MenuDef> = {
     ],
   },
   contact: {
-    feature: { href: '/contact', image: '/sunray.jpg' },
+    feature: { href: '/contact' },
     columns: [
       {
         heading: 'Get in Touch',
@@ -84,7 +86,7 @@ const NAV = [
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function Navbar() {
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<NavMenuKey | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
   const [menuLeft, setMenuLeft] = useState(0);
@@ -107,6 +109,7 @@ export default function Navbar() {
   const searchWrapRef = useRef<HTMLDivElement>(null);
   const loc = useLocation();
   const navigate = useNavigate();
+  const navMedia = useNavMedia();
 
   useEffect(() => { setOpen(null); setMobileOpen(false); setPortalOpen(false); }, [loc.pathname]);
 
@@ -540,7 +543,7 @@ export default function Navbar() {
                   style={{ background: 'var(--color-navy)' }}
                 >
                   <img
-                    src={MENUS[open].feature.image}
+                    src={navMedia[open]}
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[1100ms] ease-out group-hover/feat:scale-[1.05]"
                     draggable={false}

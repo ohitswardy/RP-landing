@@ -5,6 +5,8 @@ import { useCms } from './store';
 import { Chip } from './ui';
 import RailBrandCanvas from './RailBrandCanvas';
 import { usePublishedHeight } from './kit/stickyOffset';
+import { useAppTheme } from '@/lib/theme';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import {
   Sidebar,
   SidebarBody,
@@ -126,7 +128,7 @@ function RailLogo({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () =>
         <img
           src="/Regis Logo.PNG"
           alt="Regis Partners"
-          className="object-contain transition-all duration-300"
+          className="brand-mark object-contain transition-all duration-300"
           style={{ width: expanded ? 44 : 28, height: expanded ? 44 : 28 }}
         />
       </div>
@@ -219,6 +221,7 @@ export default function CMSLayout() {
   });
   const location = useLocation();
   const { audit, status, error, reload } = useCms();
+  const { theme, toggle: toggleTheme } = useAppTheme();
 
   const togglePin = () => {
     setPinned((v) => {
@@ -282,10 +285,11 @@ export default function CMSLayout() {
                 href="/"
                 target="_blank"
                 rel="noreferrer"
-                className="mono inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.16em] text-graphite transition-colors hover:text-ink"
+                className="mono inline-flex items-center gap-1.5 whitespace-nowrap text-[10.5px] uppercase tracking-[0.16em] text-graphite transition-colors hover:text-ink"
               >
                 View site <IconExternal size={12} />
               </a>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
             </div>
           </div>
         </header>

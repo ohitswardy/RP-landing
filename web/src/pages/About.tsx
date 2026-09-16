@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import Reveal from '../components/Reveal';
-import Newsletter from '../components/Newsletter';
 import TeamTabs, { type TeamTab } from '../components/TeamTabs';
 import { type Person } from '../components/PersonCard';
 import { useAboutContent, type AboutCopy } from '../lib/aboutContent';
@@ -567,8 +566,6 @@ export default function About() {
           </div>
         </div>
       </section>
-
-      <Newsletter />
     </>
   );
 }

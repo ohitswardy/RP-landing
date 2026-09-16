@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\SuperAdmin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -126,6 +127,8 @@ class AuthController extends Controller
             'permissions' => $user->permissionKeys(),
             // The Outlook account this staff member blasts from (Email desk).
             'outlookEmail' => $user->outlook_email,
+            // Unlocks the password readout in Users & access.
+            'superAdmin' => SuperAdmin::is($user),
         ];
     }
 }

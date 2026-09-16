@@ -2,7 +2,6 @@ import { useRef, useState, type ReactNode } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import emailjs from '@emailjs/browser';
 import Reveal from '../components/Reveal';
-import Newsletter from '../components/Newsletter';
 import { useContactContent, type ContactCopy } from '../lib/contactContent';
 
 const EMAILJS_PUBLIC_KEY      = import.meta.env.VITE_EMAILJS_PUBLIC_KEY      as string;
@@ -508,8 +507,6 @@ export default function Contact() {
           </div>
         </div>
       </section>
-
-      {copy.newsletter.enabled && <Newsletter />}
     </>
   );
 }

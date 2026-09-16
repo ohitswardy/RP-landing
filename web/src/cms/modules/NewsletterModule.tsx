@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCms } from '../store';
 import { BtnGhost, BtnPrimary, Chip, EmptyState, ModuleHeader, RowAction, SkeletonRows, Stat, useConfirm, EASE } from '../ui';
 import { IconCheck, IconCopy, IconDownload, IconEye, IconMail, IconPen, IconPlus, IconSearch, IconTrash } from '../icons';
 import {
   NEWSLETTER_CADENCES, fmtDate, timeAgo,
-  type NewsletterCadence, type NewsletterIssue, type Subscriber,
+  type NewsletterCadence, type NewsletterIssue, type NewsletterIssueSummary, type Subscriber,
 } from '../data';
 import IssueComposer from './newsletter/IssueComposer';
 import IssueViewer from './newsletter/IssueViewer';
@@ -13,13 +13,24 @@ import BlastPanel from './newsletter/BlastPanel';
 
 type Tab = NewsletterCadence | 'recipients';
 
+/** What the desk does with an issue once its body has loaded. */
+type OpenAs = 'view' | 'edit' | 'duplicate' | 'blast';
+
+/** Rows rendered before the list asks for more — the daily archive
+    alone runs to well over a thousand issues. */
+const PAGE = 60;
+
 export default function NewsletterModule() {
-  const { newsletters, subscribers, status, deleteNewsletter } = useCms();
+  const { newsletters, subscribers, status, deleteNewsletter, fetchNewsletter } = useCms();
   const [tab, setTab] = useState<Tab>('daily');
   const [query, setQuery] = useState('');
+  const [year, setYear] = useState<string>('all');
+  const [shown, setShown] = useState(PAGE);
   const [composer, setComposer] = useState<{ editingId: string | null; base: NewsletterIssue | null } | null>(null);
   const [viewing, setViewing] = useState<NewsletterIssue | null>(null);
   const [blasting, setBlasting] = useState<NewsletterIssue | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
   const [armed, confirm] = useConfirm();
 
   const loading = status === 'loading';
@@ -30,20 +41,52 @@ export default function NewsletterModule() {
     return m;
   }, [newsletters]);
 
+  /** Years this cadence has issues in, newest first. */
+  const years = useMemo(() => {
+    if (tab === 'recipients') return [];
+    const set = new Set<string>();
+    for (const n of newsletters) if (n.cadence === tab) set.add(n.date.slice(0, 4));
+    return [...set].sort((a, b) => b.localeCompare(a));
+  }, [newsletters, tab]);
+
   const rows = useMemo(() => {
     if (tab === 'recipients') return [];
     const q = query.trim().toLowerCase();
     return newsletters
       .filter((n) => n.cadence === tab)
+      .filter((n) => year === 'all' || n.date.startsWith(year))
       .filter((n) => !q || n.subject.toLowerCase().includes(q) || n.date.includes(q));
-  }, [newsletters, tab, query]);
+  }, [newsletters, tab, year, query]);
+
+  // A new filter starts the page count over.
+  useEffect(() => { setShown(PAGE); }, [tab, year, query]);
 
   function switchTab(next: Tab) {
     setTab(next);
     setQuery('');
+    setYear('all');
+    setOpenError(null);
+  }
+
+  /** Fetch the body, then hand the full issue to the viewer, composer, or blast panel. */
+  async function open(n: NewsletterIssueSummary, as: OpenAs) {
+    setOpening(n.id);
+    setOpenError(null);
+    try {
+      const full = await fetchNewsletter(n.id);
+      if (as === 'view') setViewing(full);
+      else if (as === 'edit') setComposer({ editingId: full.id, base: full });
+      else if (as === 'duplicate') setComposer({ editingId: null, base: full });
+      else setBlasting(full);
+    } catch (e) {
+      setOpenError(e instanceof Error ? e.message : 'Could not load the issue.');
+    } finally {
+      setOpening(null);
+    }
   }
 
   const cadenceLabel = tab === 'recipients' ? '' : NEWSLETTER_CADENCES.find((c) => c.value === tab)!.label.toLowerCase();
+  const visible = rows.slice(0, shown);
 
   /* Composing replaces the list entirely — the editor needs the room. */
   if (composer && tab !== 'recipients') {
@@ -62,7 +105,7 @@ export default function NewsletterModule() {
       <ModuleHeader
         code="07 / Newsletter"
         title="Newsletter desk"
-        blurb="The daily, weekly, and monthly REGIS mailers. Each issue is composed against the client's exact template and previewed live before it is filed."
+        blurb="The daily, weekly, and monthly REGIS mailers, back to the first issues filed in 2020. Each issue is composed against the client's exact template and previewed live before it is filed."
         actions={
           tab !== 'recipients' && (
             <BtnPrimary onClick={() => setComposer({ editingId: null, base: null })}>
@@ -86,22 +129,39 @@ export default function NewsletterModule() {
         <RecipientsPanel />
       ) : (
         <>
-          <label className="relative block w-full max-w-[320px]">
-            <span className="sr-only">Search issues</span>
-            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-silver" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Subject or date…"
-              className="w-full border rule bg-white py-2.5 pl-9 pr-3 text-[13.5px] outline-none transition-colors placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
-            />
-          </label>
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <label className="relative block w-full max-w-[320px]">
+              <span className="sr-only">Search issues</span>
+              <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-silver" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Subject or date…"
+                className="w-full border rule bg-white py-2.5 pl-9 pr-3 text-[13.5px] outline-none transition-colors placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
+              />
+            </label>
+
+            {years.length > 1 && (
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by year">
+                <YearBtn active={year === 'all'} label="All" onClick={() => setYear('all')} />
+                {years.map((y) => (
+                  <YearBtn key={y} active={year === y} label={y} onClick={() => setYear(y)} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {openError && (
+            <p className="mono border-l-2 pl-3 text-[11.5px] text-[color:var(--color-amber-deep)]" style={{ borderColor: 'var(--color-amber)' }}>
+              {openError}
+            </p>
+          )}
 
           {loading ? (
             <SkeletonRows rows={6} />
           ) : rows.length === 0 ? (
             <EmptyState
-              title={query ? 'No issues match.' : `No ${cadenceLabel} issues yet.`}
+              title={query ? 'No issues match.' : year !== 'all' ? `No ${cadenceLabel} issues in ${year}.` : `No ${cadenceLabel} issues yet.`}
               hint={query
                 ? 'Search covers the subject line and the ISO date.'
                 : 'Compose the first one. Duplicating a filed issue is the fastest way to start the next.'}
@@ -119,43 +179,58 @@ export default function NewsletterModule() {
               </div>
               <ul className="divide-y rule">
                 <AnimatePresence initial={false}>
-                  {rows.map((n, i) => (
-                    <motion.li
-                      key={n.id}
-                      layout
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE, delay: Math.min(i * 0.03, 0.2) } }}
-                      exit={{ opacity: 0, height: 0, transition: { duration: 0.25 } }}
-                      className="group grid grid-cols-12 items-center gap-4 py-4"
-                    >
-                      <span className="mono num col-span-3 text-[12px] text-graphite md:col-span-2">{fmtDate(n.date)}</span>
-                      <div className="col-span-9 min-w-0 md:col-span-6 lg:col-span-5">
-                        <button
-                          type="button"
-                          onClick={() => setViewing(n)}
-                          className="block max-w-full truncate text-left text-[14.5px] text-ink transition-colors hover:text-[color:var(--color-amber-deep)]"
-                        >
-                          {n.subject}
-                        </button>
-                        <p className="mono mt-0.5 truncate text-[10px] uppercase tracking-[0.12em] text-silver">
-                          {n.sections.length === 1 ? '1 section' : `${n.sections.length} sections`}
-                          {n.sections.slice(0, 3).filter((s) => s.badge).map((s) => ` · ${s.badge}`).join('')}
-                        </p>
-                      </div>
-                      <span className="mono hidden text-[11.5px] text-graphite lg:block lg:col-span-2">{timeAgo(n.updated)}</span>
-                      <div className="col-span-12 flex items-center justify-end gap-1.5 md:col-span-4 lg:col-span-3">
-                        <RowAction label="View issue" onClick={() => setViewing(n)}><IconEye /></RowAction>
-                        <RowAction label="Email blast" onClick={() => setBlasting(n)}><IconMail size={14} /></RowAction>
-                        <RowAction label="Edit issue" onClick={() => setComposer({ editingId: n.id, base: n })}><IconPen /></RowAction>
-                        <RowAction label="Duplicate into a new issue" onClick={() => setComposer({ editingId: null, base: n })}><IconCopy /></RowAction>
-                        <RowAction label={armed === n.id ? 'Confirm delete' : 'Delete issue'} danger onClick={() => confirm(n.id, () => { void deleteNewsletter(n.id); })}>
-                          {armed === n.id ? <IconCheck /> : <IconTrash />}
-                        </RowAction>
-                      </div>
-                    </motion.li>
-                  ))}
+                  {visible.map((n, i) => {
+                    const busy = opening === n.id;
+                    return (
+                      <motion.li
+                        key={n.id}
+                        layout
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: busy ? 0.55 : 1, y: 0, transition: { duration: 0.4, ease: EASE, delay: Math.min(i * 0.03, 0.2) } }}
+                        exit={{ opacity: 0, height: 0, transition: { duration: 0.25 } }}
+                        className="group grid grid-cols-12 items-center gap-4 py-4"
+                        aria-busy={busy}
+                      >
+                        <span className="mono num col-span-3 text-[12px] text-graphite md:col-span-2">{fmtDate(n.date)}</span>
+                        <div className="col-span-9 min-w-0 md:col-span-6 lg:col-span-5">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => { void open(n, 'view'); }}
+                            className="block max-w-full truncate text-left text-[14.5px] text-ink transition-colors hover:text-[color:var(--color-amber-deep)]"
+                          >
+                            {n.subject}
+                          </button>
+                          <p className="mono mt-0.5 truncate text-[10px] uppercase tracking-[0.12em] text-silver">
+                            {n.sectionCount === 1 ? '1 section' : `${n.sectionCount} sections`}
+                            {n.badges.slice(0, 3).map((b) => ` · ${b}`).join('')}
+                          </p>
+                        </div>
+                        <span className="mono hidden text-[11.5px] text-graphite lg:block lg:col-span-2">{timeAgo(n.updated)}</span>
+                        <div className="col-span-12 flex items-center justify-end gap-1.5 md:col-span-4 lg:col-span-3">
+                          <RowAction label="View issue" onClick={() => { void open(n, 'view'); }}><IconEye /></RowAction>
+                          <RowAction label="Email blast" onClick={() => { void open(n, 'blast'); }}><IconMail size={14} /></RowAction>
+                          <RowAction label="Edit issue" onClick={() => { void open(n, 'edit'); }}><IconPen /></RowAction>
+                          <RowAction label="Duplicate into a new issue" onClick={() => { void open(n, 'duplicate'); }}><IconCopy /></RowAction>
+                          <RowAction label={armed === n.id ? 'Confirm delete' : 'Delete issue'} danger onClick={() => confirm(n.id, () => { void deleteNewsletter(n.id); })}>
+                            {armed === n.id ? <IconCheck /> : <IconTrash />}
+                          </RowAction>
+                        </div>
+                      </motion.li>
+                    );
+                  })}
                 </AnimatePresence>
               </ul>
+              {rows.length > shown && (
+                <div className="flex items-center justify-between gap-4 border-t rule py-3.5">
+                  <span className="mono num text-[10.5px] uppercase tracking-[0.16em] text-silver">
+                    {shown} of {rows.length}
+                  </span>
+                  <BtnGhost onClick={() => setShown((s) => s + PAGE)}>
+                    Show {Math.min(PAGE, rows.length - shown)} more
+                  </BtnGhost>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -188,6 +263,22 @@ function TabBtn({ active, label, count, onClick }: { active: boolean; label: str
     >
       {label}
       <span className={`num text-[10px] ${active ? 'text-[color:var(--color-amber-deep)]' : 'text-silver'}`}>{count}</span>
+    </button>
+  );
+}
+
+/** One year in the archive filter — a hairline chip, mono like the tabs. */
+function YearBtn({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`mono num border px-2.5 py-1 text-[10.5px] tracking-[0.14em] transition-colors duration-300 ${
+        active ? 'border-navy bg-navy text-paper' : 'rule text-graphite hover:text-ink'
+      }`}
+    >
+      {label}
     </button>
   );
 }

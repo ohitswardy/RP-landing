@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme {
   /* Corporate banking palette in OKLCH, tinted toward 260° (true corporate blue).
      Drenched navy is the dominant surface. Amber is the conviction accent. */
@@ -181,4 +183,219 @@
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+:root {
+  --chart-1:        oklch(0.32 0 none);
+  --chart-2:        oklch(0.41 0 none);
+  --chart-3:        oklch(0.54 0 none);
+  --chart-4:        oklch(0.71 0 none);
+  --chart-5:        oklch(0.89 0 none);
+  --chart-background:        oklch(1 0 0);
+  --chart-foreground:        oklch(0.145 0.004 285);
+  --chart-foreground-muted:        oklch(0.55 0.014 260);
+  --chart-line-primary:        var(--chart-1);
+  --chart-line-secondary:        var(--chart-2);
+  --chart-crosshair:        oklch(0.4 0.1828 274.34);
+  --chart-grid:        oklch(0.9 0 0);
+  --chart-brush-border:        var(--chart-grid);
+  --chart-tooltip-background:        oklch(0.21 0.006 285 / 0.8);
+  --chart-tooltip-foreground:        oklch(0.985 0 0);
+  --chart-tooltip-muted:        oklch(0.65 0.01 260);
+  --chart-marker-background:        oklch(0.97 0.005 260);
+  --chart-marker-border:        oklch(0.85 0.01 260);
+  --chart-marker-foreground:        oklch(0.3 0.01 260);
+  --chart-label:        oklch(0.45 0.01 260);
+  --chart-scale-01:        oklch(0.98 0.003 106);
+  --chart-scale-02:        oklch(0.92 0.008 106);
+  --chart-scale-03:        oklch(0.82 0.015 106);
+  --chart-scale-04:        oklch(0.68 0.02 106);
+  --chart-scale-05:        oklch(0.55 0.025 106);
+  --chart-scale-pattern-color:        oklch(0.96 0.005 106);
+}
+
+.dark {
+  --chart-1:        oklch(1 0 none);
+  --chart-2:        oklch(0.73 0 none);
+  --chart-3:        oklch(0.51 0 none);
+  --chart-4:        oklch(0.39 0 none);
+  --chart-5:        oklch(0.32 0 none);
+  --chart-background:        var(--tone-dark-paper);
+  --chart-foreground:        oklch(0.935 0.006 80);
+  --chart-foreground-muted:        oklch(0.65 0.01 260);
+  --chart-crosshair:        oklch(0.45 0 0);
+  --chart-grid:        oklch(0.27 0.02 260);
+  --chart-brush-border:        var(--chart-grid);
+  --chart-marker-background:        oklch(0.25 0.01 260);
+  --chart-marker-border:        oklch(0.4 0.01 260);
+  --chart-marker-foreground:        oklch(0.9 0 0);
+  --chart-label:        oklch(0.75 0.01 260);
+  --chart-scale-01:        oklch(0.28 0.03 270);
+  --chart-scale-02:        oklch(0.38 0.04 270);
+  --chart-scale-03:        oklch(0.48 0.05 270);
+  --chart-scale-04:        oklch(0.58 0.06 270);
+  --chart-scale-05:        oklch(0.68 0.07 270);
+  --chart-scale-pattern-color:        var(--tone-dark-paper);
+}
+
+@theme inline {
+  --color-chart-1:        var(--chart-1);
+  --color-chart-2:        var(--chart-2);
+  --color-chart-3:        var(--chart-3);
+  --color-chart-4:        var(--chart-4);
+  --color-chart-5:        var(--chart-5);
+  --color-chart-background:        var(--chart-background);
+  --color-chart-foreground:        var(--chart-foreground);
+  --color-chart-foreground-muted:        var(--chart-foreground-muted);
+  --color-chart-line-primary:        var(--chart-line-primary);
+  --color-chart-line-secondary:        var(--chart-line-secondary);
+  --color-chart-crosshair:        var(--chart-crosshair);
+  --color-chart-grid:        var(--chart-grid);
+  --color-chart-brush-border:        var(--chart-brush-border);
+  --color-chart-tooltip-background:        var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground:        var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted:        var(--chart-tooltip-muted);
+  --color-chart-marker-background:        var(--chart-marker-background);
+  --color-chart-marker-border:        var(--chart-marker-border);
+  --color-chart-marker-foreground:        var(--chart-marker-foreground);
+  --color-chart-label:        var(--chart-label);
+  --color-chart-scale-01:        var(--chart-scale-01);
+  --color-chart-scale-02:        var(--chart-scale-02);
+  --color-chart-scale-03:        var(--chart-scale-03);
+  --color-chart-scale-04:        var(--chart-scale-04);
+  --color-chart-scale-05:        var(--chart-scale-05);
+  --color-chart-scale-pattern-color:        var(--chart-scale-pattern-color);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Dark mode — Client Portal, CMS and CRMS only.
+
+   The whole back office is written against named tokens (paper /
+   bone / white for surfaces, ink / slate / graphite / silver for
+   text, navy for the primary register), so dark mode is a remap of
+   those tokens on html.dark rather than a per-component rewrite.
+
+   Two ideas make it read as the same brand rather than a generic
+   inversion:
+
+   · The canvas is still navy. Surfaces are deep, 260°-tinted
+     navy-blacks (not zinc), and the drenched-navy panels
+     (bg-blueprint, bg-navy-deep, bg-bronze) keep their light-mode
+     colours so they sit as lifted panels on the darker canvas.
+
+   · The primary register inverts. `bg-navy text-paper` (active
+     chips, primary buttons) becomes a paper-light button with
+     navy-deep text — the same light-on-navy CTA the public site
+     uses on its hero — so the conviction of the active state
+     survives the flip.
+
+   `.theme-light` restores the light tokens for a subtree; it wraps
+   the live previews of the public site so they always render as the
+   site does. Charts already read the `.dark` block above.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Light-mode values pinned by name so nested restores can reach them. */
+  --tone-paper:      oklch(0.992 0.003 80);
+  --tone-bone:       oklch(0.965 0.006 80);
+  --tone-white:      #fff;
+  --tone-ink:        oklch(0.180 0.018 260);
+  --tone-slate:      oklch(0.380 0.014 260);
+  --tone-graphite:   oklch(0.555 0.010 260);
+  --tone-silver:     oklch(0.800 0.006 260);
+  --tone-navy:       oklch(0.215 0.048 260);
+  --tone-navy-deep:  oklch(0.165 0.040 260);
+  --tone-amber-deep: oklch(0.660 0.150 50);
+
+  /* Dark-mode values. */
+  --tone-dark-bone:     oklch(0.140 0.026 260);   /* page canvas            */
+  --tone-dark-paper:    oklch(0.175 0.030 260);   /* panels, rail, header   */
+  --tone-dark-white:    oklch(0.212 0.030 260);   /* inputs, cards on panel */
+  --tone-dark-ink:      oklch(0.935 0.006 80);    /* body text — warm, like paper */
+  --tone-dark-slate:    oklch(0.790 0.010 260);
+  --tone-dark-graphite: oklch(0.650 0.012 260);
+  --tone-dark-silver:   oklch(0.420 0.014 260);
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+.dark,
+.dark .cms-scope {
+  --color-paper:    var(--tone-dark-paper);
+  --color-bone:     var(--tone-dark-bone);
+  --color-white:    var(--tone-dark-white);
+  --color-ink:      var(--tone-dark-ink);
+  --color-slate:    var(--tone-dark-slate);
+  --color-graphite: var(--tone-dark-graphite);
+  --color-silver:   var(--tone-dark-silver);
+
+  /* The primary register inverts: navy chips and buttons go paper-light. */
+  --color-navy:     var(--tone-dark-ink);
+
+  /* Accents lift a step so amber-deep text and warn/signal chips clear
+     contrast on the deeper canvas. */
+  --color-amber-deep: oklch(0.730 0.145 55);
+  --color-signal:     oklch(0.700 0.130 145);
+  --color-warn:       oklch(0.700 0.180 28);
+}
+
+/* Inside an inverted navy button/chip, "paper" is the text colour, so it
+   flips to navy-deep. Chips inside a preview or a drenched panel are
+   excluded — there navy is still navy and paper is still paper. */
+.dark :is(.bg-navy, .bg-navy\/80):not(.theme-light *, .bg-blueprint *, .bg-navy-deep *, .bg-bronze *, .bg-bronze-deep *, .navy-drench *) {
+  --color-paper: var(--tone-navy-deep);
+  --color-bone:  var(--tone-navy);
+}
+
+/* Drenched panels keep their light-mode palette: navy stays navy and
+   the paper-on-navy text inside stays paper. */
+.dark :is(.bg-blueprint, .bg-navy-deep, .bg-navy-mid, .bg-bronze, .bg-bronze-deep, .navy-drench) {
+  --color-navy:       var(--tone-navy);
+  --color-paper:      var(--tone-paper);
+  --color-bone:       var(--tone-bone);
+  --color-white:      var(--tone-white);
+  --color-ink:        var(--tone-ink);
+  --color-amber-deep: var(--tone-amber-deep);
+}
+
+/* A light island inside the dark shell — live previews of the public
+   site, print-like documents. Everything under it renders exactly as
+   light mode does. */
+.dark .theme-light {
+  color-scheme: light;
+  --color-paper:      var(--tone-paper);
+  --color-bone:       var(--tone-bone);
+  --color-white:      var(--tone-white);
+  --color-ink:        var(--tone-ink);
+  --color-slate:      var(--tone-slate);
+  --color-graphite:   var(--tone-graphite);
+  --color-silver:     var(--tone-silver);
+  --color-navy:       var(--tone-navy);
+  --color-amber-deep: var(--tone-amber-deep);
+  --color-signal:     oklch(0.640 0.130 145);
+  --color-warn:       oklch(0.640 0.190 28);
+}
+
+/* Brand bitmaps are navy on transparent (mark) and navy on white (banner).
+   Invert + hue-rotate keeps the brand hue while lifting it to a light
+   steel blue; the banner's white field becomes black, which `screen`
+   then dissolves into the header. */
+.dark .brand-mark   { filter: invert(1) hue-rotate(180deg) saturate(0.85); }
+.dark .brand-banner { filter: invert(1) hue-rotate(180deg) saturate(0.85); mix-blend-mode: screen; }
+
+/* Native scrollbars pick up the surface instead of the OS default. */
+.dark ::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--tone-dark-ink) 18%, transparent); }
+
+/* Theme switch crossfade (View Transitions API, when available). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 260ms;
+  animation-timing-function: var(--ease-quart);
+  mix-blend-mode: normal;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none; }
 }

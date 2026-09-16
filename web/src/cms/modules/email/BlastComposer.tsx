@@ -60,7 +60,7 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
   onSaved: (item: EmailBlast, audit?: AuditEntry) => void;
   onClose: () => void;
 }) {
-  const { reports, newsletters, appendAudit } = useCms();
+  const { reports, newsletters, fetchNewsletter, appendAudit } = useCms();
 
   const [kind, setKind] = useState<BlastKind>(base?.kind ?? 'report');
   const [subject, setSubject] = useState(base?.subject ?? '');
@@ -134,12 +134,20 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
     }
   }
 
+  /** The list carries summaries; the body renders from the fetched issue. */
+  async function fillFromIssue(id: string) {
+    try {
+      const n = await fetchNewsletter(id);
+      setSubject(n.subject);
+      setHtmlBody(renderIssueHtml(n));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load the issue.');
+    }
+  }
+
   function pickIssue(id: string) {
     setIssueId(id);
-    const n = newsletters.find((x) => x.id === id);
-    if (!n) return;
-    setSubject(n.subject);
-    setHtmlBody(renderIssueHtml(n));
+    if (id) void fillFromIssue(id);
   }
 
   async function prefillMatches() {
@@ -452,7 +460,7 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
               </div>
               {issue && (
                 <div className="flex flex-wrap items-center gap-3">
-                  <TinyBtn onClick={() => setHtmlBody(renderIssueHtml(issue))}>
+                  <TinyBtn onClick={() => { void fillFromIssue(issue.id); }}>
                     <IconCheck size={11} /> Regenerate from the issue
                   </TinyBtn>
                   <span className="text-[11.5px] text-graphite">
@@ -562,8 +570,9 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
               </p>
             ) : !dispatch.sender ? (
               <p className="mt-1.5 text-[12px] leading-relaxed" style={{ color: 'var(--color-amber-deep)' }}>
-                No Outlook account on your staff profile — an administrator can add it under{' '}
-                <Link to="/cms/access" className="underline">Users &amp; access</Link>. Until then, use the Outlook hand-off.
+                No mailbox to send from — an administrator can set the shared desk mailbox, or add an Outlook account
+                to your profile under <Link to="/cms/access" className="underline">Users &amp; access</Link>.
+                Until then, use the Outlook hand-off.
               </p>
             ) : !dispatch.senderAllowed ? (
               <p className="mt-1.5 text-[12px] leading-relaxed" style={{ color: 'var(--color-amber-deep)' }}>
@@ -571,7 +580,9 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
               </p>
             ) : (
               <p className="mt-1.5 text-[12px] leading-relaxed text-slate">
-                <span className="mono">{dispatch.sender}</span> via Microsoft 365. The mail lands in your Sent Items; clients ride BCC in batches of {dispatch.batchSize}.
+                <span className="mono">{dispatch.sender}</span> via Microsoft 365
+                {dispatch.senderShared ? ', the shared desk mailbox' : ', your own mailbox'}. Clients ride BCC in batches of {dispatch.batchSize}
+                {dispatch.senderShared ? '' : '; the mail lands in your Sent Items'}.
               </p>
             )}
           </div>

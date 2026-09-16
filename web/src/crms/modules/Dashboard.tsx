@@ -7,19 +7,19 @@ import { Chip, DateField, EASE, ModuleHeader, SkeletonRows, Stat } from '../../c
 import { useCrms } from '../store';
 import { fmtMinutes, timeAgo, type DashboardSummary } from '../data';
 import { errorText } from '../kit/toast';
+import { AreaChart } from '@/components/charts/area-chart';
+import { Area } from '@/components/charts/area';
+import { Grid } from '@/components/charts/grid';
+import { XAxis } from '@/components/charts/x-axis';
+import { ChartTooltip } from '@/components/charts/tooltip';
 
 /* ─────────────────────────────────────────────────────────────
-   Dashboard (§7.7). Interaction load by month as unit blocks —
-   one block per logged interaction, height carrying minutes —
-   the clients carrying the most contact time, the stocks most
-   discussed, and reverse-roadshow demand fanned out to the
-   clients who asked. All server-aggregated, read-only.
+   Dashboard (§7.7). Interaction load by month as a Bklit area
+   chart carrying logged minutes over time, the clients taking
+   the most contact time, the stocks most discussed, and
+   reverse-roadshow demand fanned out to the clients who asked.
+   All server-aggregated, read-only.
    ───────────────────────────────────────────────────────────── */
-
-function monthLabel(ym: string): string {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-PH', { month: 'short' });
-}
 
 function firstOfMonthsAgo(n: number): string {
   const d = new Date();
@@ -46,7 +46,13 @@ export default function Dashboard() {
     return () => { alive = false; };
   }, [from, to]);
 
-  const maxMinutes = useMemo(() => Math.max(1, ...(data?.byMonth.map((m) => m.minutes) ?? [1])), [data]);
+  const loadByMonth = useMemo(
+    () => (data?.byMonth ?? []).map((m) => {
+      const [y, mo] = m.month.split('-').map(Number);
+      return { date: new Date(y, mo - 1, 1), minutes: m.minutes, count: m.count };
+    }),
+    [data],
+  );
   const maxClient = useMemo(() => Math.max(1, ...(data?.byClient.map((c) => c.minutes) ?? [1])), [data]);
   const firstName = session?.name.split(' ')[0] ?? 'there';
 
@@ -87,35 +93,39 @@ export default function Dashboard() {
           <header className="mb-6 flex items-end justify-between">
             <div>
               <div className="eyebrow mb-2">Interaction load</div>
-              <p className="text-[13px] text-graphite">Minutes of logged contact per month. Each block is one interaction.</p>
+              <p className="text-[13px] text-graphite">Minutes of logged contact per month.</p>
             </div>
             <Chip tone="muted">{data ? `${data.byMonth.length} months` : '…'}</Chip>
           </header>
           {!data ? <SkeletonRows rows={4} /> : data.byMonth.length === 0 ? (
             <p className="border rule border-dashed px-6 py-10 text-[13px] text-graphite">No interactions logged in this range.</p>
           ) : (
-            <div className="flex h-[220px] items-end gap-2 border-b rule pb-px">
-              {data.byMonth.map((m, i) => {
-                const h = Math.max(6, Math.round((m.minutes / maxMinutes) * 200));
-                const blocks = Math.min(m.count, 24);
-                return (
-                  <div key={m.month} className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-2">
-                    <span className="mono num text-[10px] tracking-[0.04em] text-graphite opacity-0 transition-opacity group-hover:opacity-100">{fmtMinutes(m.minutes)}</span>
-                    <motion.div
-                      initial={reduce ? false : { height: 0 }}
-                      animate={{ height: h }}
-                      transition={{ duration: 0.6, ease: EASE, delay: Math.min(i * 0.04, 0.4) }}
-                      className="flex w-full max-w-[38px] flex-col-reverse gap-px overflow-hidden"
-                      title={`${m.count} interactions · ${fmtMinutes(m.minutes)}`}
-                    >
-                      {Array.from({ length: blocks }).map((_, b) => (
-                        <span key={b} className="block w-full flex-1 transition-colors group-hover:bg-[color:var(--color-amber-deep)]" style={{ background: 'var(--color-navy)', minHeight: 2 }} />
-                      ))}
-                    </motion.div>
-                    <span className="mono text-[9.5px] uppercase tracking-[0.14em] text-graphite">{monthLabel(m.month)}</span>
-                  </div>
-                );
-              })}
+            <div className="border-b rule pb-px">
+              <AreaChart
+                data={loadByMonth}
+                xDataKey="date"
+                aspectRatio="auto"
+                style={{ height: 220 }}
+                margin={{ top: 16, right: 12, bottom: 28, left: 16 }}
+                animationDuration={reduce ? 0 : 1100}
+              >
+                <Grid horizontal numTicksRows={4} />
+                <Area
+                  dataKey="minutes"
+                  fill="var(--color-navy)"
+                  stroke="var(--color-navy)"
+                  fillOpacity={0.14}
+                  strokeWidth={2}
+                  animate={!reduce}
+                />
+                <XAxis numTicks={Math.min(loadByMonth.length, 6)} />
+                <ChartTooltip
+                  rows={(point) => [
+                    { color: 'var(--color-navy)', label: 'Contact time', value: fmtMinutes(Number(point.minutes)) },
+                    { color: 'var(--color-amber-deep)', label: 'Interactions', value: Number(point.count) },
+                  ]}
+                />
+              </AreaChart>
             </div>
           )}
         </section>

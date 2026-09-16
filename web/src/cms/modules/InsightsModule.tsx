@@ -488,25 +488,6 @@ export default function InsightsModule() {
                 <Field label="Destination" value={page.cta.href} max={200} onChange={(v) => setCta('href', v)} />
               </div>
             </Panel>
-
-            <Panel
-              code="Footer"
-              title="Newsletter band"
-              hint="The subscribe block that closes the page. Subscribers land in the Newsletter module either way."
-              actions={
-                <Switch
-                  on={page.newsletter.enabled}
-                  onToggle={() => { setPageError(null); setPage((p) => ({ ...p, newsletter: { enabled: !p.newsletter.enabled } })); }}
-                  label="Show the newsletter band"
-                />
-              }
-            >
-              <p className="text-[12.5px] leading-relaxed text-graphite">
-                {page.newsletter.enabled
-                  ? 'The journal closes with the subscribe band, as it does on every other marketing page.'
-                  : 'The journal ends at the sign-in prompt — readers reach the subscribe form from the footer instead.'}
-              </p>
-            </Panel>
           </div>
 
           {showPreview && (

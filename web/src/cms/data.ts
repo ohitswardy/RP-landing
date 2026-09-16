@@ -36,7 +36,6 @@ export type InsightsPage = {
     emptyText: string;
   };
   cta: { enabled: boolean; label: string; href: string };
-  newsletter: { enabled: boolean };
 };
 
 export const EMPTY_INSIGHTS: InsightsPage = {
@@ -47,7 +46,6 @@ export const EMPTY_INSIGHTS: InsightsPage = {
     featureLead: true, noteHref: '/login', emptyText: '',
   },
   cta: { enabled: true, label: '', href: '/login' },
-  newsletter: { enabled: true },
 };
 
 export type StaffTeam = 'Board of Directors' | 'Research' | 'Sales & Trading' | 'Operations';
@@ -129,7 +127,6 @@ export type ContactCopy = {
     emailLabel: string;
     email: string;
   };
-  newsletter: { enabled: boolean };
 };
 
 export const EMPTY_CONTACT: ContactCopy = {
@@ -142,7 +139,6 @@ export const EMPTY_CONTACT: ContactCopy = {
     eyebrow: '', heading: '', addressLabel: '', address: [],
     contactLabel: '', channels: [], emailLabel: '', email: '',
   },
-  newsletter: { enabled: true },
 };
 
 /** One numbered row in the "what the practice delivers" ledger. */
@@ -219,6 +215,31 @@ export type NewsletterIssue = {
   rail: NewsletterRailBlock[];
   updated: string;     // ISO
 };
+
+/** The row the desk's list carries: an issue without its body. Six years
+    of mailers sit in the archive, so bodies load when an issue is opened. */
+export type NewsletterIssueSummary = {
+  id: string;
+  cadence: NewsletterCadence;
+  date: string;        // ISO (yyyy-mm-dd)
+  subject: string;
+  sectionCount: number;
+  /** Distinct section badges, in print order. */
+  badges: string[];
+  updated: string;     // ISO
+};
+
+export function summarizeIssue(n: NewsletterIssue): NewsletterIssueSummary {
+  const badges: string[] = [];
+  for (const s of n.sections) {
+    const b = s.badge.trim();
+    if (b && !badges.includes(b)) badges.push(b);
+  }
+  return {
+    id: n.id, cadence: n.cadence, date: n.date, subject: n.subject,
+    sectionCount: n.sections.length, badges, updated: n.updated,
+  };
+}
 
 export const BLANK_RAIL_BLOCK = (): NewsletterRailBlock => ({ title: '', image: '', wide: false });
 
@@ -581,9 +602,11 @@ export type BlastMonth = { month: string; blasts: number; recipients: number };
 /** What the desk needs to know about the outbound channel before offering "Send now". */
 export type DispatchInfo = {
   graphReady: boolean;
-  /** The signed-in staff member's Outlook account; null when their profile has none. */
+  /** The mailbox blasts leave from: the staff member's own Outlook account, else the shared desk mailbox. */
   sender: string | null;
   senderAllowed: boolean;
+  /** True when `sender` is the shared desk mailbox rather than the staff member's own. */
+  senderShared: boolean;
   senderDomain: string;
   batchSize: number;
   attachmentMaxBytes: number;

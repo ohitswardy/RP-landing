@@ -6,7 +6,8 @@ import {
   type ServicePage, type ServicePillar, type ServiceProof,
   type Subscriber, type PageBlock, type AuditEntry, type Report, type MediaAsset, type ReportCategory, type ReportCompany, type Company,
   type ReportType, type ReportRating,
-  type NewsletterCadence, type NewsletterIssue, type NewsletterRailBlock, type NewsletterSection, type TrendingRules,
+  type NewsletterCadence, type NewsletterIssue, type NewsletterIssueSummary, type NewsletterRailBlock, type NewsletterSection, type TrendingRules,
+  summarizeIssue,
 } from './data';
 
 /* ─────────────────────────────────────────────────────────────
@@ -30,7 +31,8 @@ type CmsState = {
   contactPage: ContactCopy;
   homePage: HomeCopy;
   insightsPage: InsightsPage;
-  newsletters: NewsletterIssue[];
+  /** Summaries only — see fetchNewsletter for an issue's body. */
+  newsletters: NewsletterIssueSummary[];
   subscribers: Subscriber[];
   pages: PageBlock[];
   media: MediaAsset[];
@@ -138,6 +140,8 @@ type CmsStore = CmsState & {
   createNewsletter: (p: NewsletterPayload) => Promise<void>;
   updateNewsletter: (id: string, p: Partial<NewsletterPayload>) => Promise<void>;
   deleteNewsletter: (id: string) => Promise<void>;
+  /** The full issue document, fetched once and cached for the session. */
+  fetchNewsletter: (id: string) => Promise<NewsletterIssue>;
 
   removeSubscriber: (id: string) => Promise<void>;
 
@@ -461,21 +465,36 @@ export function CmsProvider({ children }: { children: ReactNode }) {
   /* ── Newsletter issues ────────────────────────────────────── */
 
   /** Issues sort newest first regardless of where the server put them. */
-  const byIssueDate = (list: NewsletterIssue[]): NewsletterIssue[] =>
+  const byIssueDate = (list: NewsletterIssueSummary[]): NewsletterIssueSummary[] =>
     list.slice().sort((a, b) => b.date.localeCompare(a.date) || Number(b.id) - Number(a.id));
+
+  /** Bodies fetched this session. Mutations write through so an issue
+      just saved never round-trips before it is opened again. */
+  const issueBodies = useRef(new Map<string, NewsletterIssue>());
+
+  const fetchNewsletter = useCallback(async (id: string) => {
+    const hit = issueBodies.current.get(id);
+    if (hit) return hit;
+    const res = await apiFetch<ItemResponse<NewsletterIssue>>(`/cms/newsletters/${id}`, { audience: 'cms' });
+    issueBodies.current.set(id, res.item);
+    return res.item;
+  }, []);
 
   const createNewsletter = useCallback(async (p: NewsletterPayload) => {
     const res = await apiFetch<ItemResponse<NewsletterIssue>>('/cms/newsletters', { method: 'POST', body: p, audience: 'cms' });
-    apply('newsletters', (prev) => byIssueDate(upsert(prev, res.item, true)), res.audit);
+    issueBodies.current.set(res.item.id, res.item);
+    apply('newsletters', (prev) => byIssueDate(upsert(prev, summarizeIssue(res.item), true)), res.audit);
   }, [apply]);
 
   const updateNewsletter = useCallback(async (id: string, p: Partial<NewsletterPayload>) => {
     const res = await apiFetch<ItemResponse<NewsletterIssue>>(`/cms/newsletters/${id}`, { method: 'PUT', body: p, audience: 'cms' });
-    apply('newsletters', (prev) => byIssueDate(upsert(prev, res.item)), res.audit);
+    issueBodies.current.set(res.item.id, res.item);
+    apply('newsletters', (prev) => byIssueDate(upsert(prev, summarizeIssue(res.item))), res.audit);
   }, [apply]);
 
   const deleteNewsletter = useCallback(async (id: string) => {
     const res = await apiFetch<DeleteResponse>(`/cms/newsletters/${id}`, { method: 'DELETE', audience: 'cms' });
+    issueBodies.current.delete(id);
     apply('newsletters', (prev) => prev.filter((x) => x.id !== id), res.audit);
   }, [apply]);
 
@@ -525,7 +544,7 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     createReportType, renameReportType, deleteReportType,
     createPerson, updatePerson, deletePerson, reorderPeople, updateAboutPage,
     updateService, reorderServices, updateServicePage, uploadImage,
-    createNewsletter, updateNewsletter, deleteNewsletter,
+    createNewsletter, updateNewsletter, deleteNewsletter, fetchNewsletter,
     removeSubscriber,
     updatePage, updateContactPage, updateHomePage,
   }), [
@@ -536,7 +555,7 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     createReportType, renameReportType, deleteReportType,
     createPerson, updatePerson, deletePerson, reorderPeople, updateAboutPage,
     updateService, reorderServices, updateServicePage, uploadImage,
-    createNewsletter, updateNewsletter, deleteNewsletter,
+    createNewsletter, updateNewsletter, deleteNewsletter, fetchNewsletter,
     removeSubscriber,
     updatePage, updateContactPage, updateHomePage,
   ]);

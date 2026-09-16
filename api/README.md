@@ -26,26 +26,73 @@ frontend needs no extra configuration.
 links emailed to clients are built against. Point it at the real site before going live,
 or clients will receive links to localhost.
 
-## Seeded accounts
+## Legacy newsletter archive
 
-All seeded passwords are `password`.
+The Daily / Weekly / Monthly mailers exported from the old regis.ph CMS (a
+`newsletter-index.csv` beside `Daily/`, `Weekly/`, `Monthly/` year folders) import
+into `newsletter_issues` with:
 
-| Kind   | Email                        | Role          |
-|--------|------------------------------|---------------|
-| Staff  | e.dagal@regis.ph             | Administrator |
-| Staff  | r.chu@regis.ph               | Editor        |
-| Staff  | c.sy@regis.ph                | Editor        |
-| Staff  | p.garcia@regis.ph            | Analyst       |
-| Staff  | c.resullar@regis.ph          | Analyst       |
-| Staff  | m.salvador@regis.ph          | Editor (suspended) |
-| Client | k.villaruel@arqcapital.ph    | ARQ Capital (approved) |
-| Client | mdizon@lakefieldam.com       | Lakefield Asset Mgmt (approved) |
-| Client | thea.abalos@sunwardpensions.ph | Sunward Pensions (approved) |
-| Client | r.ocampo@bataancapital.ph    | Bataan Capital (invited, mid-onboarding) |
-| Client | i.sarmiento@calderonpartners.com | Calderon Partners (awaiting approval) |
+```bash
+php artisan newsletters:import-legacy ../Newsletters --fresh   # --fresh drops existing issues first
+```
 
-Clients sign in with their Regis-issued user id (`kvillaruel`, `mdizon`, `tabalos`) or their
-email address. Staff sign in with email.
+Each issue keeps its old id in `legacy_id`, so re-running updates in place. The old
+system's `TEST` and `Copy of` rows are skipped unless `--include-tests` is passed. Chart
+images are copied from regis.ph into `storage/app/public/site/newsletter-legacy/` (served
+at `/api/media/...`), with a URL manifest in `storage/app/private/`; the old site is slow,
+so a full copy takes hours. `--no-images` leaves the URLs pointing at regis.ph.
+
+## Accounts
+
+The seeder creates exactly one account, the CWDevs super admin. Every other account comes
+from the legacy regis.ph export (`regis_accounts_export.sql` in the repo root, 23 CMS staff
+and 564 portal clients, dumped 2026-09-14):
+
+| Kind  | Email                   | Password       | Role          |
+|-------|-------------------------|----------------|---------------|
+| Staff | superadmin@cwdevs.com   | `CWDevs2021!`  | Administrator |
+
+Set `SUPER_ADMIN_PASSWORD` in `.env` to seed a different one. The account is re-asserted by
+every import run, so it can never be lost.
+
+The super admin, and only the super admin, can read an account's current password back from
+the Edit account drawer in Users & access (`GET /api/cms/users/{id}/password`, audited as
+"Viewed password"). Every password set through this system is kept beside its hash in
+`users.password_recoverable`, encrypted under `APP_KEY`; a password that arrived already
+hashed (the legacy import) reads "not on record" until it is next reset. Rotating `APP_KEY`
+makes every stored copy unreadable.
+
+```bash
+php artisan accounts:import-legacy ../regis_accounts_export.sql --fresh
+#   --fresh            drop every existing account first (super admin recreated)
+#   --staff-password=  give every imported staff account this temporary password
+#   --dry-run          map and report without writing
+```
+
+What the import does with the export:
+
+- **Staff** (`cms_user`): legacy passwords use an in-house encoding and cannot be migrated, so
+  imported staff get an unusable password until one is set in Users & access (or pass
+  `--staff-password`). Roles are rebuilt from each account's old permission blob: system and
+  super-admin logins become **Administrator**; everyone else lands on the smallest of
+  **Newsletter Desk** (mailers + Email desk), **Client Desk** (mailers + portal clients + client
+  logs) or **Site Editor** (public pages + mailers + clients) that covers what they had. Three
+  inactive accounts with no modules get no role. Accounts inactive in the old CMS are suspended,
+  as is the old vendor's master login (`dev@z3r0101.com`), which the super admin replaces.
+- **Clients** (`client_account`): bcrypt hashes migrate as-is, so existing passwords keep
+  working. Legacy statuses map to `approved` (Active with a password), `invited` (Active but
+  sign-up never completed, 106 of them), `pending` (Waiting for approval), `declined`
+  (Rejected); Blocked accounts are `approved` + suspended. `client_type` is Local for a
+  Philippine address, Foreign otherwise. The address, MiFID flag, rolled-up login and read
+  counts, and the export's data-quality flags are kept in `users.legacy_meta`.
+- Three duplicate emails are skipped (the copy with a password and logins wins) and one
+  duplicate user id is dropped; the command lists each. `legacy_id` keeps the old primary key,
+  so re-running updates in place. CRMS client contacts are re-linked to portal accounts on
+  exact email at the end.
+
+An email is unique per **kind**, not per table: 18 Regis staff also hold a portal client
+account under their work address, exactly as they did on the old system. Clients sign in with
+their Regis-issued user id or email; staff sign in with email.
 
 ## Portal-client onboarding
 
@@ -94,6 +141,21 @@ are set. The Azure AD app needs the **Mail.Send application permission** with ad
 for the Regis tenant; restrict it to the desk's mailboxes with an Exchange
 `ApplicationAccessPolicy`, and the API additionally refuses any sender outside
 `MS_GRAPH_SENDER_DOMAIN`. Queued blasts need a worker: `php artisan queue:work`.
+
+The sender mailbox resolves per staff member: their own `users.outlook_email` when the profile
+carries one, otherwise the shared desk mailbox in `MS_GRAPH_SENDER`. Most staff profiles have no
+personal Outlook address, so in practice the shared mailbox is the desk's sender. Whichever one
+is used must be a real licensed mailbox in the tenant; Graph answers `404 ErrorInvalidUser` for
+an address that does not exist and a bare `401` for one the app may not send as. The Email desk's
+readiness strip names the mailbox it will use and what is missing when it cannot send.
+
+Rendering for real mail clients: the house newsletter template keeps its stylesheet in a
+`<style>` block inside the body, which browsers honour and Gmail discards. `BlastRenderer::forEmail`
+copies every rule onto the elements it matches as inline styles and hoists the block into `<head>`;
+the preview endpoint renders through the same pass, so the desk sees what leaves. At send time the
+job replaces every image served from our own hosts (`FRONTEND_URL`, `APP_URL`, root-relative paths)
+with an inline `cid:` attachment fetched once per run, so the logo renders even while the site is
+not publicly reachable. Third-party image URLs are left alone.
 
 - **Local / Foreign split** — a report blast carries one subject and body; the Local leg gets the
   login-gated portal deep link, the Foreign leg gets the Jefferies link from `external_link`.

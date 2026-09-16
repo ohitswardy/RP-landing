@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCms } from '../store';
 import { apiFetch } from '../../lib/api';
@@ -43,7 +43,7 @@ type Audience = { clients: AudienceClient[]; subscribers: AudienceSubscriber[]; 
 type Ledger = { items: EmailBlast[]; months: BlastMonth[] };
 type ItemResponse = { item: EmailBlast; audit?: AuditEntry };
 
-const NO_DISPATCH: DispatchInfo = { graphReady: false, sender: null, senderAllowed: false, senderDomain: '', batchSize: 500, attachmentMaxBytes: 0 };
+const NO_DISPATCH: DispatchInfo = { graphReady: false, sender: null, senderAllowed: false, senderShared: false, senderDomain: '', batchSize: 500, attachmentMaxBytes: 0 };
 const POLL_MS = 4000;
 
 function monthLabel(key: string): string {
@@ -241,6 +241,8 @@ export default function EmailModule() {
         )
       ) : (
         <>
+          {status === 'ready' && <DispatchStrip dispatch={dispatch} inFlight={inFlight} />}
+
           {status === 'ready' && blasts.length > 0 && (
             <div className="grid grid-cols-2 gap-6 border-b rule pb-8 md:grid-cols-4">
               <Stat value={String(blasts.length)} label="Blasts" />
@@ -409,6 +411,42 @@ export default function EmailModule() {
           onDuplicate={() => { setComposer({ editingId: null, base: { ...viewing, status: 'draft' } }); setViewingId(null); }}
           onSend={() => void sendNow(viewing)}
         />
+      )}
+    </div>
+  );
+}
+
+/* ── Dispatch readiness: why "Send now" is (or isn't) on offer ── */
+
+function DispatchStrip({ dispatch, inFlight }: { dispatch: DispatchInfo; inFlight: boolean }) {
+  const live = dispatch.graphReady && Boolean(dispatch.sender) && dispatch.senderAllowed;
+  const tone = live ? 'live' : dispatch.graphReady ? 'amber' : 'muted';
+  const label = live ? 'Microsoft 365 · connected' : dispatch.graphReady ? 'Microsoft 365 · sender needed' : 'Outlook hand-off only';
+
+  return (
+    <div className="flex flex-col gap-2 border rule bg-white px-4 py-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        <Chip tone={tone} pulse={live && inFlight}>{label}</Chip>
+        <span className="text-[12.5px] leading-relaxed text-graphite">
+          {!dispatch.graphReady ? (
+            <>Set <span className="mono">MS_GRAPH_TENANT_ID</span>, <span className="mono">MS_GRAPH_CLIENT_ID</span>, and <span className="mono">MS_GRAPH_CLIENT_SECRET</span> in the API environment to send from the server.</>
+          ) : !dispatch.sender ? (
+            <>No mailbox to send from — set <span className="mono">MS_GRAPH_SENDER</span> in the API environment, or add an Outlook account to your profile under <Link to="/cms/access" className="underline">Users &amp; access</Link>.</>
+          ) : !dispatch.senderAllowed ? (
+            <><span className="mono">{dispatch.sender}</span> is outside the {dispatch.senderDomain} tenant, so it cannot send from the server.</>
+          ) : (
+            <>
+              Sending as <span className="mono">{dispatch.sender}</span>
+              {dispatch.senderShared ? ' · shared desk mailbox' : ' · your mailbox'} · BCC batches of {dispatch.batchSize}.
+              Queued blasts need <span className="mono">php artisan queue:work</span> running.
+            </>
+          )}
+        </span>
+      </div>
+      {live && (
+        <span className="mono shrink-0 text-[10px] uppercase tracking-[0.14em] text-silver">
+          To test: new ad-hoc blast → type your own address → Send now
+        </span>
       )}
     </div>
   );

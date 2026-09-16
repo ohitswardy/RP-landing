@@ -1,0 +1,97 @@
+Importing 1902 issue(s) from ../Newsletters
+
+
++---------+----------+
+| Cadence | Imported |
++---------+----------+
+| Daily   | 1501     |
+| Weekly  | 321      |
+| Monthly | 80       |
+| Total   | 1902     |
++---------+----------+
+Images: 4474 copied this run, 4636 cached, 78 failed.
+Skipped 33 test/"Copy of" issue(s) (pass --include-tests to import them):
+  #1 Daily 2020-07-05  Template Test
+  #4 Weekly 2020-07-06  Template Test
+  #6 Monthly 2020-07-08  Template Test
+  #21 Daily 2020-08-05  TEST
+  #23 Daily 2020-08-06  image test
+  #28 Daily 2020-08-10  REGIS REPORT (10 Aug) - TEST
+  #29 Daily 2020-08-10  Copy of REGIS REPORT (10 Aug) - TEST
+  #40 Weekly 2020-08-18  image test
+  #55 Monthly 2020-09-02  Copy of REGIS: Month in Review - Aug 2020
+  #61 Daily 2020-09-06  REGIS REPORT (6 SEP) - TEST
+  #72 Weekly 2020-09-18  Copy of REGIS Week in Review: Sept 18 2020
+  #73 Weekly 2020-09-18  Copy of Copy of REGIS Week in Review: Sept 18 2020
+  #80 Weekly 2020-09-25  Copy of REGIS Week in Review: Sept 25 2020
+  #82 Monthly 2020-09-28  Copy of REGIS: Month in Review - Aug 2020
+  #89 Monthly 2020-10-01  Copy of Month in Review - Sep 2020
+  #97 Weekly 2020-10-09  Copy of REGIS Week in Review: Oct 9 2020
+  #104 Weekly 2020-10-16  Copy of REGIS Week in Review: Oct 16 2020
+  #111 Weekly 2020-10-23  Copy of REGIS Week in Review: Oct 23 2020
+  #118 Weekly 2020-10-30  Copy of REGIS Week in Review: Oct 30 2020
+  #121 Monthly 2020-11-03  Copy of Month in Review: Oct 2020
+  #126 Weekly 2020-11-06  Copy of REGIS Week in Review: Nov 06 2020
+  #139 Weekly 2020-11-20  Copy of REGIS Week in Review: Nov 20 2020
+  #140 Weekly 2020-11-20  Copy of REGIS Week in Review: Nov 20 2020
+  #147 Weekly 2020-11-27  Copy of REGIS Week in Review: Nov 27 2020
+  #155 Weekly 2020-12-04  Copy of REGIS Week in Review: Dec 4 2020
+  #241 Weekly 2021-03-10  Copy of REGIS Week in Review: March 5 2021
+  #362 Weekly 2021-07-11  Copy of REGIS Week in Review: July 9 2021
+  #443 Daily 2021-10-11  test
+  #555 Weekly 2022-02-14  Copy of REGIS Week in Review Feb 11 2022
+  #1058 Weekly 2023-09-15  Copy of REGIS Week in Review September 08 2023
+  #1456 Daily 2024-02-12  TEST
+  #1250 Weekly 2024-04-19  Copy of REGIS Week in Review April 19 2024
+  #1451 Daily 2024-11-28  Copy of REGIS REPORT (28 NOV)
+
+6 warning(s):
+  #243 (Monthly 2020-03-10): empty issue
+  #24 (Daily 2020-08-05): empty issue
+  #317 (Daily 2021-05-24): empty issue
+  #1054 (Daily 2023-09-12): empty issue
+  #1281 (Daily 2024-05-24): empty issue
+  #1306 (Daily 2024-06-24): empty issue
+
+78 image(s) could not be copied and still point at regis.ph:
+  https://www.regis.ph/assets/newsletter/0129-bpi.png  (cURL error 28: Operation timed out after 25010 milliseconds with 118917 out of 314296 bytes received (see https://curl.se/libcurl/c/libcurl-errors.html) for https://www.regis.ph/assets/newsletter/0129-bpi.png)
+  https://www.regis.ph/assets/uploads/newsletter/2012/picture_3/key data.png  (HTTP 403)
+  https://www.regis.ph/assets/newsletter/2021-06-10-Infra%201-b.png  (cURL error 35: OpenSSL SSL_connect: Connection was reset in connection to www.regis.ph:443  (see https://curl.se/libcurl/c/libcurl-errors.html) for https://www.regis.ph/assets/newsletter/2021-06-10-Infra%201-b.png)
+  https://www.regis.ph/assets/newsletter/1221-loan5.png  (cURL error 28: Operation timed out after 25001 milliseconds with 0 bytes received (see https://curl.se/libcurl/c/libcurl-errors.html) for https://www.regis.ph/assets/newsletter/1221-loan5.png)
+  https://www.regis.ph/assets/newsletter/0701-loans2.png  (cURL error 28: Operation timed out after 25014 milliseconds with 0 out of 34960 bytes received (see https://curl.se/libcurl/c/libcurl-errors.html) for https://www.regis.ph/assets/newsletter/0701-loans2.png)
+  https://www.regis.ph/undefined/0819.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/remit1.  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/remit2.  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/1003-pulse%20asia%202.png  (cURL error 28: Operation timed out after 25011 milliseconds with 524288 out of 891815 bytes received (see https://curl.se/libcurl/c/libcurl-errors.html) for https://www.regis.ph/assets/newsletter/1003-pulse%20asia%202.png)
+  https://www.regis.ph/assets/uploads/newsletter/6399/picture_1/Oct 13 - 1.png  (HTTP 403)
+  https://www.regis.ph/assets/uploads/newsletter/6399/picture_2/Oct 13 - 2.png  (HTTP 403)
+  https://www.regis.ph/assets/uploads/newsletter/6399/picture_3/Oct 13 - 3.png  (HTTP 403)
+  https://www.regis.ph/assets/uploads/newsletter/6399/picture_4/Oct 13 - 4.png  (HTTP 403)
+  https://www.regis.ph/assets/newsletter/2023-10-16-Metro%20Manila%20office%20vacancy-b.png  (HTTP 403)
+  https://www.regis.ph/assets/newsletter/2023-10-16-nationwide%20office%20take%20up-b.png  (HTTP 403)
+  https://www.regis.ph/assets/newsletter/2023-10-16-BPO%20net%20office%20take%20up-b.png  (HTTP 403)
+  https://www.regis.ph/undefined/2024-04-12-BANK%202-b.png  (HTTP 403)
+  https://www.regis.ph/assets/newsletter/BPI.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/GDP.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/undefined/BLOOM.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/FB.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/undefined/banks2.png  (not an image (text/html; charset=utf-8))
+  https://attachments.office.net/owa/carissa.mangubat%40regis.ph/service.svc/s/GetAttachmentThumbnail?id=AAMkADI1NDFiMTM1LWNkMWUtNDM1ZC1iMGY4LTNjNTM5NjAyMjc0YgBGAAAAAABPUSmAwOxyT5gIvgS%2BjoEABwAFepTOQxetRIIbx7aEU5McAAAAAAEMAAAFepTOQxetRIIbx7aEU5McAAQ5h%2F74AAABEgAQAG9hVBgthSZBtY94Qf7G8LA%3D&thumbnailType=2&token=eyJhbGciOiJSUzI1NiIsImtpZCI6IkU1RDJGMEY4REE5M0I2NzA5QzQzQTlFOEE2MTQzQzAzRDYyRjlBODAiLCJ0eXAiOiJKV1QiLCJ4NXQiOiI1ZEx3LU5xVHRuQ2NRNm5vcGhROEE5WXZtb0EifQ.eyJvcmlnaW4iOiJodHRwczovL291dGxvb2sub2ZmaWNlLmNvbSIsInVjIjoiNzA3YTk3Yzc2MjM0NDA3YTk1MTU3OTMwZDA5M2U5YzYiLCJzaWduaW5fc3RhdGUiOlsiZHZjX21uZ2QiLCJkdmNfY21wIiwiZHZjX2RtamQiXSwidmVyIjoiRXhjaGFuZ2UuQ2FsbGJhY2suVjEiLCJhcHBjdHhzZW5kZXIiOiJPd2FEb3dubG9hZEBmMjIwZDZkMi01YWJiLTRjZDEtODU0OS0zNDFkZTIyZmU2OTAiLCJpc3NyaW5nIjoiU0lQIiwiYXBwY3R4Ijoie1wibXNleGNocHJvdFwiOlwib3dhXCIsXCJwdWlkXCI6XCIxMTUzODAxMTE2NDIzOTIzMDU5XCIsXCJzY29wZVwiOlwiT3dhRG93bmxvYWRcIixcIm9pZFwiOlwiMzljM2IyMjQtOTUwYi00MDc3LWE4Y2UtOGQ5NTIyMjg3MjNjXCIsXCJwcmltYXJ5c2lkXCI6XCJTLTEtNS0yMS00MTY3NTE0MTY4LTI3NDg1NTI2MDctMTg1OTcxMzAwMi0xNzU2OTQ3NVwifSIsIm5iZiI6MTcyMTg2ODE1NSwiZXhwIjoxNzIxODY4NDU1LCJpc3MiOiIwMDAwMDAwMi0wMDAwLTBmZjEtY2UwMC0wMDAwMDAwMDAwMDBAZjIyMGQ2ZDItNWFiYi00Y2QxLTg1NDktMzQxZGUyMmZlNjkwIiwiYXVkIjoiMDAwMDAwMDItMDAwMC0wZmYxLWNlMDAtMDAwMDAwMDAwMDAwL2F0dGFjaG1lbnRzLm9mZmljZS5uZXRAZjIyMGQ2ZDItNWFiYi00Y2QxLTg1NDktMzQxZGUyMmZlNjkwIiwiaGFwcCI6Im93YSJ9.COczdXsDvQYL_DfOYpeRJXwQ5QIWGqAhwxs6wjY3-jQ1iH-viGHesGpoItuavehW-VfcfhJKPRuFBMs83VGzkWIolyoZPXPk0B13vf7p0xalV-KaYKk6KoKN0v8prPSZ3u97g_Ri65nEttrcXcRtv3haHdFOSixjYtRQFqTwxNm5N1CNDyz2O3HfpMAEV2JikiGCwARyHpKhsq5OZ_Gy6-qcubu2JmSEuCFaDCEbj6OP-fEX7ltbunLWBU7KqbHP7qOO7xfHZhhWYXx-Z7QBPrLbbnsXaM2Qwk_Q9Y3jIn43gx0oyLiaM1i5BR6T7od2kcl_bAG1aAGZzXVbeUqpyQ&X-OWA-CANARY=X-OWA-CANARY_cookie_is_null_or_empty&owa=outlook.office.com&scriptVer=20240712002.14&clientId=D75ED91F584449599795DCB5A44BB377&animation=true&persistenceId=4286e1b3-240a-4dd9-8b27-c937fa072fc7  (HTTP 400)
+  https://www.regis.ph/assets/newsletter/CPI3.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/nikl1.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/SECB1.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/SECB4.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/SECB5.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/SECB6.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/SECB8.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/SECB9.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/undefined/sugar1.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/CPI1.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/undefined/CPI2.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/undefined/trade2.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/assets/newsletter/Table_BOP%20Projections%202024-2025_.jpg  (cURL error 28: Operation timed out after 25006 milliseconds with 286720 out of 1286521 bytes received (see https://curl.se/libcurl/c/libcurl-errors.html) for https://www.regis.ph/assets/newsletter/Table_BOP%20Projections%202024-2025_.jpg)
+  https://www.regis.ph/assets/newsletter/FLI1.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/undefined/chart%20ken%20sep%20%202024.png  (HTTP 403)
+  https://www.regis.ph/undefined/CPI1.png  (not an image (text/html; charset=utf-8))
+  https://www.regis.ph/undefined/trade5.png  (not an image (text/html; charset=utf-8))
+  …

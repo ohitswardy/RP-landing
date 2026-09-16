@@ -43,6 +43,8 @@ Route::get('/content/people', [SiteContentController::class, 'people']);
 Route::get('/content/about', [SiteContentController::class, 'about']);
 Route::get('/content/legal', [SiteContentController::class, 'legal']);
 Route::get('/content/contact', [SiteContentController::class, 'contact']);
+// The mega-menu photography: every hero image the navbar shows, in one call.
+Route::get('/content/nav', [SiteContentController::class, 'nav']);
 Route::get('/media/{path}', [MediaController::class, 'show'])->where('path', '.+');
 
 /* ── Public onboarding links (emailed to clients) ─────────────── */
@@ -70,6 +72,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::get('/bootstrap', BootstrapController::class);
+    // Issue bodies load on demand — the bootstrap list carries summaries only.
+    Route::get('/newsletters/{issue}', [NewsletterController::class, 'show']);
 
     // The landing page: one document covering every section's copy and photography.
     Route::middleware('permission:home.manage')->group(function () {
@@ -183,6 +187,7 @@ Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::get('/access', [AccessController::class, 'index']);
         Route::post('/users', [AccessController::class, 'storeUser']);
         Route::put('/users/{user}', [AccessController::class, 'updateUser']);
+        Route::get('/users/{user}/password', [AccessController::class, 'revealPassword']); // super admin only
         Route::delete('/users/{user}', [AccessController::class, 'destroyUser']);
         Route::post('/roles', [AccessController::class, 'storeRole']);
         Route::put('/roles/{role}', [AccessController::class, 'updateRole']);

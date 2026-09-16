@@ -53,6 +53,10 @@ return [
         'tenant' => env('MS_GRAPH_TENANT_ID'),
         'client_id' => env('MS_GRAPH_CLIENT_ID'),
         'client_secret' => env('MS_GRAPH_CLIENT_SECRET'),
+        // The shared desk mailbox every blast leaves from when the staff member
+        // has no personal Outlook address on their profile. Most staff do not,
+        // so in practice this is the sender for the whole desk.
+        'sender' => env('MS_GRAPH_SENDER'),
         'sender_domain' => env('MS_GRAPH_SENDER_DOMAIN', 'regis.ph'),
         // Exchange Online caps one message at 500 recipients; BCC batches never exceed it.
         'batch_size' => (int) env('MS_GRAPH_BATCH_SIZE', 500),

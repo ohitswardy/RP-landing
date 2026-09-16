@@ -50,10 +50,6 @@ class ContactDefaults
                 'emailLabel' => 'Email',
                 'email' => 'info@regis.ph',
             ],
-
-            'newsletter' => [
-                'enabled' => true,
-            ],
         ];
     }
 }

@@ -110,14 +110,6 @@ export default function JournalPreview({ page, notes }: { page: InsightsPage; no
           </span>
         </div>
       )}
-
-      {/* Newsletter band */}
-      {page.newsletter.enabled && (
-        <div className="border-t rule bg-white px-5 py-7 text-center">
-          <div className="text-[13px] font-medium tracking-[-0.02em] text-navy-deep">Stay current with updates.</div>
-          <div className="mx-auto mt-3 h-6 w-[70%] border border-gray-300 bg-white" />
-        </div>
-      )}
     </div>
   );
 }

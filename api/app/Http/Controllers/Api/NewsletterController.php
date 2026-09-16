@@ -12,6 +12,12 @@ use Illuminate\Http\Request;
 
 class NewsletterController extends Controller
 {
+    /** The full document — the list only carries summaries. */
+    public function show(NewsletterIssue $issue): JsonResponse
+    {
+        return response()->json(['item' => $issue->toWire()]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request, creating: true);

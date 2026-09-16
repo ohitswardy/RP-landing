@@ -31,7 +31,6 @@ export type InsightsPage = {
     emptyText: string;
   };
   cta: { enabled: boolean; label: string; href: string };
-  newsletter: { enabled: boolean };
 };
 
 export type InsightsContent = { page: InsightsPage; articles: JournalNote[] };
@@ -59,7 +58,6 @@ export const INSIGHTS_FALLBACK: InsightsContent = {
       emptyText: 'No notes published under this sector yet.',
     },
     cta: { enabled: true, label: 'Sign in for the full archive', href: '/login' },
-    newsletter: { enabled: true },
   },
   articles: [
     { id: 'f1', tag: 'Macro', title: 'Beyond the rate cycle: why Philippine consumption is the durable trade for 2026–2028.', author: 'M. Bautista', date: '2026-05-24', excerpt: '', featured: false },
@@ -85,7 +83,6 @@ function normalize(rawIn: unknown): InsightsContent {
       filters: { ...base.filters, ...(page.filters ?? {}) },
       list: { ...base.list, ...(page.list ?? {}) },
       cta: { ...base.cta, ...(page.cta ?? {}) },
-      newsletter: { ...base.newsletter, ...(page.newsletter ?? {}) },
     },
     // An empty published set is a legitimate answer — only a missing key falls back.
     articles: (raw.articles ?? INSIGHTS_FALLBACK.articles).map((a) => ({

@@ -7,16 +7,20 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\SuperAdmin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AccessController extends Controller
 {
     private const ACCESS_PERM = 'access.manage';
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         return response()->json([
+            // Whether the caller may read passwords back (the CWDevs super admin only).
+            'canRevealPasswords' => SuperAdmin::is($request->user()),
             'users' => User::with('role')
                 ->orderByRaw("kind = 'client'") // staff first
                 ->orderBy('name')
@@ -36,7 +40,8 @@ class AccessController extends Controller
         // registration link. This endpoint creates CMS staff only.
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:190', 'unique:users,email'],
+            // Unique among staff: a portal client may hold the same address.
+            'email' => ['required', 'email', 'max:190', Rule::unique('users', 'email')->where('kind', User::KIND_STAFF)],
             'password' => ['required', 'string', 'min:8'],
             'kind' => ['required', 'in:staff'],
             'roleId' => ['required', 'integer', 'exists:roles,id'],
@@ -129,6 +134,22 @@ class AccessController extends Controller
         $audit = Audit::log($action, $user->email);
 
         return response()->json(['item' => $user->load('role')->toAccountWire(), 'audit' => $audit->toWire()]);
+    }
+
+    /**
+     * The account's current password, for the super admin alone. Only
+     * passwords set through this system are on record; anything imported as a
+     * hash reads null until it is next reset. Every look is audited.
+     */
+    public function revealPassword(Request $request, User $user): JsonResponse
+    {
+        if (! SuperAdmin::is($request->user())) {
+            return response()->json(['message' => 'Only the super admin can view account passwords.'], 403);
+        }
+
+        $audit = Audit::log('Viewed password', $user->email);
+
+        return response()->json(['password' => $user->revealPassword(), 'audit' => $audit->toWire()]);
     }
 
     public function destroyUser(Request $request, User $user): JsonResponse

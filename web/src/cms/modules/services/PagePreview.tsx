@@ -17,7 +17,7 @@ export function PreviewFrame({ url, children }: { url: string; children: ReactNo
         </span>
         <span className="mono truncate text-[9.5px] tracking-[0.1em] text-graphite">regispartners.com{url}</span>
       </div>
-      <div className="max-h-[62vh] overflow-y-auto">{children}</div>
+      <div className="theme-light max-h-[62vh] overflow-y-auto">{children}</div>
     </div>
   );
 }

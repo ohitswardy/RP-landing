@@ -55,7 +55,6 @@ function tidy(c: ContactCopy): ContactCopy {
       emailLabel: t(c.offices.emailLabel),
       email: t(c.offices.email),
     },
-    newsletter: { enabled: c.newsletter.enabled },
   };
 }
 
@@ -325,24 +324,6 @@ export default function ContactCopyEditor({ onDirty }: { onDirty: (dirty: boolea
         </div>
       </Panel>
 
-      {/* ── Newsletter ─────────────────────────────────────── */}
-      <Panel
-        code="/contact · footer band"
-        title="Newsletter sign-up"
-        hint="The subscribe band between the office ledger and the site footer. Its copy is shared with every other page that carries it."
-      >
-        <label className="flex cursor-pointer items-center gap-3.5">
-          <Switch
-            on={draft.newsletter.enabled}
-            onToggle={() => patch((c) => { c.newsletter.enabled = !c.newsletter.enabled; })}
-            label="Show the newsletter band on the Contact page"
-          />
-          <span className="text-[13.5px] text-slate">
-            {draft.newsletter.enabled ? 'Shown on the Contact page' : 'Hidden on the Contact page'}
-          </span>
-        </label>
-      </Panel>
-
       <ImagePicker
         open={pickingHero}
         title="Contact hero photo"
@@ -434,7 +415,7 @@ function HeroMirror({
   return (
     <div className="flex flex-col gap-2">
       <div
-        className="group relative aspect-[21/9] w-full overflow-hidden border rule"
+        className="theme-light group relative aspect-[21/9] w-full overflow-hidden border rule"
         style={{ containerType: 'inline-size', backgroundColor: 'var(--color-navy)' }}
       >
         {/* Blueprint grid — the left panel of the live hero. */}

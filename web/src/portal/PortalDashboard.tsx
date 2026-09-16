@@ -7,6 +7,8 @@ import {
   type Company, type Report, type ReportCategory, type ReportCompany, type TrendingMetric,
 } from '../cms/data';
 import { usePortal } from './auth';
+import { useAppTheme } from '../lib/theme';
+import { ThemeToggle } from '../components/ui/theme-toggle';
 import { useBookmarks } from './bookmarks';
 import { downloadReport } from './download';
 import { trackActivity } from './track';
@@ -66,6 +68,7 @@ function ManilaClock() {
 export default function PortalDashboard() {
   const { reports, companies, trending, status } = useReports();
   const { client, signOut } = usePortal();
+  const { theme, toggle: toggleTheme } = useAppTheme();
   const saved = useBookmarks();
   const [query, setQuery] = useState('');
   const [searchFocus, setSearchFocus] = useState(false);
@@ -209,7 +212,7 @@ export default function PortalDashboard() {
       <header className="sticky top-0 z-30 border-b rule bg-white">
         <div className="mx-auto flex w-full max-w-[1200px] items-center gap-4 px-5 h-16 md:px-8">
           <Link to="/" className="flex items-center shrink-0">
-            <img src="/Banner.png" alt="Regis Partners" style={{ height: '56px', width: 'auto' }} draggable={false} />
+            <img src="/Banner.png" alt="Regis Partners" className="brand-banner" style={{ height: '56px', width: 'auto' }} draggable={false} />
           </Link>
 
           <div className="ml-auto flex items-center gap-5">
@@ -248,6 +251,7 @@ export default function PortalDashboard() {
               <div className="text-[13px] leading-tight text-ink">{client?.name}</div>
               <div className="mono text-[10px] uppercase tracking-[0.14em] text-graphite">{client?.firm}</div>
             </div>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <button
               type="button"
               onClick={signOut}

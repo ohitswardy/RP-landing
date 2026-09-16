@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -14,21 +17,25 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     public const KIND_STAFF = 'staff';
+
     public const KIND_CLIENT = 'client';
 
     /** Portal onboarding states. Staff accounts are always approved. */
     public const STATUS_INVITED = 'invited';
+
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_DECLINED = 'declined';
 
     protected $fillable = [
         'name', 'email', 'username', 'password', 'kind', 'status', 'role_id',
         'firm', 'position', 'phone', 'suspended', 'last_active_at', 'registered_at', 'approved_at',
-        'client_type', 'sector_prefs', 'preferred_analysts', 'outlook_email',
+        'client_type', 'sector_prefs', 'preferred_analysts', 'outlook_email', 'legacy_meta',
     ];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'password_recoverable', 'remember_token'];
 
     protected function casts(): array
     {
@@ -37,11 +44,40 @@ class User extends Authenticatable
             'last_active_at' => 'datetime',
             'registered_at' => 'datetime',
             'approved_at' => 'datetime',
-            'password' => 'hashed',
             'suspended' => 'boolean',
             'sector_prefs' => 'array',
             'preferred_analysts' => 'array',
+            // What the legacy regis.ph export carried that has no column here.
+            'legacy_meta' => 'array',
         ];
+    }
+
+    /**
+     * A plaintext password is hashed for sign-in and, beside that, kept
+     * encrypted under APP_KEY so the super admin can read it back. A value
+     * that is already a hash (the legacy import, unusable placeholders) has no
+     * plaintext to keep, so the recoverable copy is cleared.
+     */
+    protected function password(): Attribute
+    {
+        return Attribute::make(
+            set: function (?string $value) {
+                $hashed = $value === null || Hash::isHashed($value);
+
+                return [
+                    'password' => $hashed ? $value : Hash::make($value),
+                    'password_recoverable' => $hashed ? null : Crypt::encryptString($value),
+                ];
+            },
+        );
+    }
+
+    /** The current password, when it was set through this system; null otherwise. */
+    public function revealPassword(): ?string
+    {
+        $sealed = $this->attributes['password_recoverable'] ?? null;
+
+        return $sealed ? Crypt::decryptString($sealed) : null;
     }
 
     public function role(): BelongsTo

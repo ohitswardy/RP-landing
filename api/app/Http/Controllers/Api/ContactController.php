@@ -45,9 +45,6 @@ class ContactController extends Controller
             'offices.channels.*.value' => ['required', 'string', 'max:160'],
             'offices.emailLabel' => ['present', 'nullable', 'string', 'max:40'],
             'offices.email' => ['required', 'string', 'email', 'max:160'],
-
-            'newsletter' => ['required', 'array'],
-            'newsletter.enabled' => ['required', 'boolean'],
         ]);
 
         // Rebuild the document key by key rather than storing the request
@@ -82,9 +79,6 @@ class ContactController extends Controller
                 ),
                 'emailLabel' => (string) ($data['offices']['emailLabel'] ?? ''),
                 'email' => $data['offices']['email'],
-            ],
-            'newsletter' => [
-                'enabled' => (bool) $data['newsletter']['enabled'],
             ],
         ];
 

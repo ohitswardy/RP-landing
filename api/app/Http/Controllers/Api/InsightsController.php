@@ -40,9 +40,6 @@ class InsightsController extends Controller
             'cta.enabled' => ['required', 'boolean'],
             'cta.label' => ['required', 'string', 'max:120'],
             'cta.href' => ['required', 'string', 'max:200'],
-
-            'newsletter' => ['required', 'array'],
-            'newsletter.enabled' => ['required', 'boolean'],
         ]);
 
         // Rebuild key by key rather than storing the request wholesale, so
@@ -72,9 +69,6 @@ class InsightsController extends Controller
                 'enabled' => (bool) $data['cta']['enabled'],
                 'label' => $data['cta']['label'],
                 'href' => $data['cta']['href'],
-            ],
-            'newsletter' => [
-                'enabled' => (bool) $data['newsletter']['enabled'],
             ],
         ];
 

@@ -5,6 +5,8 @@ import { useCrms } from './store';
 import { Chip } from '../cms/ui';
 import RailBrandCanvas from '../cms/RailBrandCanvas';
 import { usePublishedHeight } from '../cms/kit/stickyOffset';
+import { useAppTheme } from '@/lib/theme';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { ToastProvider } from './kit/toast';
 import { Sidebar, SidebarBody, SidebarLabel, SidebarRow, SidebarSection, useSidebar } from '@/components/ui/sidebar';
 import { IconSignOut, IconMenu, IconX, IconExternal, IconPin } from '../cms/icons';
@@ -95,7 +97,7 @@ function RailFoot({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () =>
   return (
     <div className="shrink-0 border-t" style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }}>
       <div className="flex items-center justify-center border-b py-4" style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 8%, transparent)' }}>
-        <img src="/Regis Logo.PNG" alt="Regis Partners" className="object-contain transition-all duration-300" style={{ width: expanded ? 44 : 28, height: expanded ? 44 : 28 }} />
+        <img src="/Regis Logo.PNG" alt="Regis Partners" className="brand-mark object-contain transition-all duration-300" style={{ width: expanded ? 44 : 28, height: expanded ? 44 : 28 }} />
       </div>
       <div className="flex items-center gap-3.5 pb-2 pl-[26px] pr-5 pt-3">
         <span className="mono grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border text-[9.5px] tracking-[0.04em] text-ink" style={{ background: 'var(--color-bone)', borderColor: 'color-mix(in oklab, var(--color-ink) 15%, transparent)' }}>
@@ -148,6 +150,7 @@ export default function CRMSLayout() {
   const [pinned, setPinned] = useState(() => { try { return localStorage.getItem(PIN_KEY) === '1'; } catch { return false; } });
   const location = useLocation();
   const { audit, status, error, reload } = useCrms();
+  const { theme, toggle: toggleTheme } = useAppTheme();
 
   const togglePin = () => setPinned((v) => { const next = !v; try { localStorage.setItem(PIN_KEY, next ? '1' : '0'); } catch { /* ignore */ } return next; });
 
@@ -187,9 +190,10 @@ export default function CRMSLayout() {
                 )}
                 <Chip tone="live" pulse>ONLINE</Chip>
                 <ManilaClock />
-                <a href="/cms" target="_blank" rel="noreferrer" className="mono inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.16em] text-graphite transition-colors hover:text-ink">
+                <a href="/cms" target="_blank" rel="noreferrer" className="mono inline-flex items-center gap-1.5 whitespace-nowrap text-[10.5px] uppercase tracking-[0.16em] text-graphite transition-colors hover:text-ink">
                   Open CMS <IconExternal size={12} />
                 </a>
+                <ThemeToggle theme={theme} onToggle={toggleTheme} />
               </div>
             </div>
           </header>

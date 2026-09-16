@@ -36,6 +36,26 @@ class MicrosoftGraphMailer
         return true;
     }
 
+    /**
+     * The shared desk mailbox, used when a staff member has no personal Outlook
+     * address. Null when none is configured, which leaves the desk on the
+     * Outlook hand-off unless individual profiles carry a mailbox.
+     */
+    public function defaultSender(): ?string
+    {
+        $sender = mb_strtolower(trim((string) ($this->config['sender'] ?? '')));
+
+        return $sender === '' ? null : $sender;
+    }
+
+    /** The mailbox a given staff member sends as: their own, else the shared desk one. */
+    public function senderFor(?string $personal): ?string
+    {
+        $personal = mb_strtolower(trim((string) $personal));
+
+        return $personal !== '' ? $personal : $this->defaultSender();
+    }
+
     /** The app can send as any mailbox in the tenant; we only ever send as our own domain. */
     public function senderAllowed(string $email): bool
     {
@@ -127,7 +147,14 @@ class MicrosoftGraphMailer
         $detail = $response->json('error.message')
             ?? $response->json('error_description')
             ?? $response->body();
-        $transient = in_array($status, [401, 429, 500, 502, 503, 504], true);
+        // Graph answers sendMail with a bare 401 (no body) when the sender is not a
+        // mailbox in this tenant, or the app is not allowed to send as it. That never
+        // heals on retry, unlike a stale token, which comes back with an error body.
+        $bareUnauthorized = $status === 401 && trim((string) $detail) === '';
+        if ($bareUnauthorized) {
+            $detail = 'the sender is not a licensed mailbox in this tenant, or the app is not allowed to send as it';
+        }
+        $transient = ! $bareUnauthorized && in_array($status, [401, 429, 500, 502, 503, 504], true);
         $retryAfter = $transient ? max(30, (int) $response->header('Retry-After')) : null;
 
         return new GraphMailException(
