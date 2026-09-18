@@ -1,10 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { IconX } from './icons';
+import { DatePicker, Select, type FieldSize, type SelectOption } from './kit/pickers';
 
-export const EASE = [0.25, 1, 0.5, 1] as const;
-export const SPRING = { type: 'spring', stiffness: 100, damping: 20 } as const;
+import { EASE, SPRING } from './ease';
+export { EASE, SPRING };
 
 /* ── Module header ─────────────────────────────────────────── */
 
@@ -158,37 +159,49 @@ export function TextField({
   );
 }
 
-export function DateField({ label, value, onChange, helper }: {
-  label: string; value: string; onChange: (v: string) => void; helper?: string;
+/** ISO-day field. Empty string means unset; sits on the shared DatePicker. */
+export function DateField({ label, value, onChange, helper, hint, error, min, max, disabled, clearable = true, size, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; helper?: string; hint?: string; error?: string;
+  min?: string | null; max?: string | null; disabled?: boolean; clearable?: boolean; size?: FieldSize; placeholder?: string;
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">{label}</label>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-      />
-      {helper && <p className="text-[12px] text-graphite">{helper}</p>}
-    </div>
+    <DatePicker
+      label={label}
+      value={value || null}
+      onChange={(v) => onChange(v ?? '')}
+      helper={helper}
+      hint={hint}
+      error={error}
+      min={min}
+      max={max}
+      disabled={disabled}
+      clearable={clearable}
+      size={size}
+      placeholder={placeholder}
+    />
   );
 }
 
-export function SelectField({ label, value, onChange, options }: {
+/** Plain string choices. An empty-string option reads as “None”. Sits on the shared Select. */
+export function SelectField({ label, value, onChange, options, helper, hint, error, disabled, searchable, placeholder, size }: {
   label: string; value: string; onChange: (v: string) => void; options: string[];
+  helper?: string; hint?: string; error?: string; disabled?: boolean; searchable?: boolean; placeholder?: string; size?: FieldSize;
 }) {
+  const opts = useMemo<SelectOption[]>(() => options.map((o) => ({ id: o, label: o === '' ? 'None' : o })), [options]);
   return (
-    <div className="flex flex-col gap-2">
-      <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full appearance-none border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-      >
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
+    <Select
+      label={label}
+      options={opts}
+      value={value}
+      onChange={(v) => onChange(v ?? '')}
+      helper={helper}
+      hint={hint}
+      error={error}
+      disabled={disabled}
+      searchable={searchable}
+      placeholder={placeholder}
+      size={size}
+    />
   );
 }
 

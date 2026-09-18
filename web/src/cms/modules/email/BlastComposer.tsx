@@ -7,6 +7,7 @@ import { writeClipboard, writeClipboardHtml, outlookCompose } from '../../../lib
 import { downloadEmlDraft } from '../../../lib/eml';
 import { BtnGhost, BtnPrimary, Chip, TextField, Switch, EASE } from '../../ui';
 import { TinyBtn } from '../../kit/parts';
+import { Select } from '../../kit/pickers';
 import { Segmented } from '../access/parts';
 import RichTextField from '../../kit/RichTextField';
 import { IconCheck, IconCopy, IconMail } from '../../icons';
@@ -382,19 +383,15 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
 
           {kind === 'report' && (
             <div className="space-y-4">
-              <div className="flex flex-col gap-2">
-                <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">Report</label>
-                <select
-                  value={reportId}
-                  onChange={(e) => pickReport(e.target.value)}
-                  className="w-full appearance-none border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-                >
-                  <option value="">— Pick a report —</option>
-                  {reports.map((r) => (
-                    <option key={r.id} value={r.id}>{fmtDate(r.date)} · {r.title}</option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Report"
+                placeholder="Pick a report"
+                searchable
+                clearable
+                value={reportId || null}
+                onChange={(v) => pickReport(v ?? '')}
+                options={reports.map((r) => ({ id: r.id, label: r.title, hint: fmtDate(r.date) }))}
+              />
               {report && (
                 <div className="space-y-3 border-l-2 pl-4" style={{ borderColor: 'var(--color-amber)' }}>
                   <p className="text-[12.5px] leading-relaxed text-graphite">
@@ -445,19 +442,15 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
 
           {kind === 'newsletter' && (
             <div className="space-y-4">
-              <div className="flex flex-col gap-2">
-                <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">Issue</label>
-                <select
-                  value={issueId}
-                  onChange={(e) => pickIssue(e.target.value)}
-                  className="w-full appearance-none border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-                >
-                  <option value="">— Pick an issue —</option>
-                  {newsletters.map((n) => (
-                    <option key={n.id} value={n.id}>{n.cadence} · {fmtDate(n.date)} · {n.subject}</option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Issue"
+                placeholder="Pick an issue"
+                searchable
+                clearable
+                value={issueId || null}
+                onChange={(v) => pickIssue(v ?? '')}
+                options={newsletters.map((n) => ({ id: n.id, label: n.subject, hint: `${n.cadence} · ${fmtDate(n.date)}` }))}
+              />
               {issue && (
                 <div className="flex flex-wrap items-center gap-3">
                   <TinyBtn onClick={() => { void fillFromIssue(issue.id); }}>

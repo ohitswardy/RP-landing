@@ -6,9 +6,14 @@ use App\Enums\Crms\EventCategory;
 use App\Models\Crms\Event;
 use App\Models\Crms\Interaction;
 use App\Models\Crms\Meeting;
+use App\Services\Crms\InteractionTypeResolver;
+use App\Services\Crms\ItineraryPdf;
 use App\Services\Crms\ScheduleAggregator;
+use App\Services\GraphMailException;
+use App\Services\MicrosoftGraphMailer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 
 /**
@@ -101,27 +106,107 @@ class EventController extends CrmsController
         return response()->json($aggregator->build($event, $contactId));
     }
 
-    /** A meeting becomes an interaction — the record the firm is paid on. */
-    public function convert(Meeting $meeting): JsonResponse
+    /** The itinerary as a PDF download, optionally filtered to one client contact. */
+    public function itineraryPdf(Request $request, Event $event, ItineraryPdf $pdf): Response
+    {
+        $contactId = $request->integer('contactId') ?: null;
+        $event->load(['corporate', 'client']);
+
+        return response($pdf->render($event, $contactId), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$pdf->filename($event).'"',
+        ]);
+    }
+
+    /**
+     * Email the itinerary PDF, to the signed-in user by default — the legacy
+     * envelope button. Goes out through the same Graph mailbox as email
+     * blasts, so the copy lands in Sent Items too.
+     */
+    public function emailItinerary(Request $request, Event $event, ItineraryPdf $pdf, MicrosoftGraphMailer $mailer): JsonResponse
+    {
+        $data = $request->validate([
+            'contactId' => ['nullable', 'integer'],
+            'to' => ['nullable', 'email', 'max:255'],
+        ]);
+        $user = $request->user();
+        $to = mb_strtolower(trim((string) ($data['to'] ?? $user?->email)));
+        if ($to === '') {
+            return response()->json(['message' => 'There is no address to send the itinerary to.'], 422);
+        }
+        if (! $mailer->enabled()) {
+            return response()->json(['message' => 'Email is not configured on this server; download the PDF instead.'], 503);
+        }
+        $sender = $mailer->senderFor($user?->outlook_email);
+        if (! $sender || ! $mailer->senderAllowed($sender)) {
+            return response()->json(['message' => 'No sending mailbox is configured for the desk; download the PDF instead.'], 503);
+        }
+
+        $event->load(['corporate', 'client']);
+        $contactId = isset($data['contactId']) ? (int) $data['contactId'] : null;
+        $bytes = $pdf->render($event, $contactId);
+        if ($mailer->attachmentMaxBytes() > 0 && strlen($bytes) > $mailer->attachmentMaxBytes()) {
+            return response()->json(['message' => 'The itinerary PDF is too large to attach; download it instead.'], 422);
+        }
+
+        try {
+            $mailer->send($sender, [
+                'subject' => $pdf->title($event),
+                'body' => ['contentType' => 'HTML', 'content' => $pdf->emailHtml($event, $contactId)],
+                'toRecipients' => [['emailAddress' => ['address' => $to]]],
+                'attachments' => [[
+                    '@odata.type' => '#microsoft.graph.fileAttachment',
+                    'name' => $pdf->filename($event),
+                    'contentType' => 'application/pdf',
+                    'contentBytes' => base64_encode($bytes),
+                ]],
+            ]);
+        } catch (GraphMailException $e) {
+            return response()->json(['message' => $e->getMessage()], 502);
+        }
+
+        return response()->json([
+            'to' => $to,
+            'audit' => $this->audit('Emailed itinerary', $event->subject().' → '.$to)->toWire(),
+        ]);
+    }
+
+    /**
+     * A meeting becomes an interaction — the record the firm is paid on.
+     * The interaction type follows the legacy mapping (deal / non-deal
+     * roadshow, bespoke access, expert, analyst meeting) and the Regis
+     * party is the meeting's own analysts when the event names them.
+     */
+    public function convert(Meeting $meeting, InteractionTypeResolver $types): JsonResponse
     {
         if ($meeting->interaction_id && Interaction::whereKey($meeting->interaction_id)->exists()) {
             return response()->json(['message' => 'This meeting was already converted.', 'interactionId' => (string) $meeting->interaction_id], 409);
         }
-        $meeting->load(['event.client', 'client', 'corporate']);
-        $clientId = $meeting->client_id ?: $meeting->event?->client_id;
+        $meeting->load(['event.client', 'event.attendees.sellsideContact', 'client', 'corporate']);
+        $event = $meeting->event;
+        $clientId = $meeting->client_id ?: $event?->client_id;
         if (! $clientId) {
             return response()->json(['message' => 'Pick the client on the meeting first — an interaction is always logged against a client.'], 422);
         }
 
+        $type = $types->resolve((int) $clientId, $types->candidatesForEvent($event?->category(), $event?->classification, (string) $meeting->corporate_type));
+        // The Regis party: the meeting's own analysts on Analyst Marketing, else the header's
+        // sellside list, else the Regis tab — the legacy header never named the party.
+        $sellside = $event?->category() === EventCategory::AnalystMarketing && $meeting->corporate_contact !== []
+            ? $meeting->corporate_contact
+            : ($event?->sellside_contact ?: $event?->attendees->map(fn ($a) => $a->sellsideContact?->toSnapshot())->filter()->values()->all() ?? []);
+
         $interaction = Interaction::create([
             'client_id' => $clientId,
+            'interactions_type_id' => $type?->id,
             'interaction_date' => $meeting->date,
             'time_start' => $meeting->time_start,
             'time_end' => $meeting->time_end,
+            'duration' => self::minutesBetween($meeting->time_start, $meeting->time_end),
             'meeting_type' => $meeting->meeting_type,
-            'description' => trim(($meeting->event?->category()?->label() ?? 'Event').' · '.$meeting->counterparty()."\n".($meeting->description ?? '')),
-            'client_contact' => $meeting->client_contact ?: $meeting->event?->client_contact ?? [],
-            'sellside_contact' => $meeting->event?->sellside_contact ?? [],
+            'description' => trim(($event?->category()?->label() ?? 'Event').' · '.$meeting->counterparty()."\n".($meeting->description ?? '')),
+            'client_contact' => $meeting->client_contact ?: $event?->client_contact ?? [],
+            'sellside_contact' => $sellside,
             'form' => [],
             'disposition' => Interaction::DISPOSITION_CLOSED,
             'user_id' => $this->legacyUserId(),

@@ -7,6 +7,7 @@ import { writeClipboard, writeClipboardHtml, outlookCompose } from '../../../lib
 import { downloadEmlDraft } from '../../../lib/eml';
 import { BtnGhost, BtnPrimary, Chip } from '../../ui';
 import { Modal } from '../../kit/parts';
+import { Select } from '../../kit/pickers';
 import { IconCheck, IconCopy, IconExternal, IconMail } from '../../icons';
 import { fmtDate, type AuditEntry, type DistributionList, type EmailRecipient, type NewsletterIssue } from '../../data';
 import { renderIssueHtml, issuePlainText, openIssueHtml } from './emailHtml';
@@ -152,16 +153,17 @@ export default function BlastPanel({ issue, onClose }: {
           <div className="min-w-0">
             <div className="mono text-[9.5px] uppercase tracking-[0.2em] text-graphite">Audience</div>
             {emailDesk && lists.length > 0 ? (
-              <select
+              <Select
+                ariaLabel="Audience"
+                className="mt-1.5 w-[280px]"
+                size="sm"
                 value={audienceId}
-                onChange={(e) => setAudienceId(e.target.value)}
-                className="mt-1.5 appearance-none border rule bg-white px-3 py-2 text-[13px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-              >
-                <option value={ALL}>All verified subscribers ({verified.length})</option>
-                {lists.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name} ({l.count})</option>
-                ))}
-              </select>
+                onChange={(v) => setAudienceId(v ?? ALL)}
+                options={[
+                  { id: ALL, label: 'All verified subscribers', hint: String(verified.length) },
+                  ...lists.map((l) => ({ id: l.id, label: l.name, hint: String(l.count) })),
+                ]}
+              />
             ) : (
               <p className="mt-1 text-[13.5px] text-ink">{audienceLabel}</p>
             )}

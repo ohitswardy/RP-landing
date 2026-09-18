@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../../../lib/api';
 import { useAuth } from '../../../cms/auth';
 import { BtnGhost, BtnPrimary, DateField, RowAction, TextField, useConfirm } from '../../../cms/ui';
@@ -12,7 +12,7 @@ import { useOptions } from '../../kit/options';
 import { errorText, useToast } from '../../kit/toast';
 import {
   fmtDay, today, type Accommodation, type AuditEntry, type CrmsEvent, type EventAttendee, type EventChildren, type Flight,
-  type Investor, type Meeting, type MeetingClassification, type Transportation,
+  type Investor, type Meeting, type MeetingClassification, type SellsideContact, type Transportation,
 } from '../../data';
 
 /* ─────────────────────────────────────────────────────────────
@@ -36,7 +36,13 @@ type Config<T extends Row, D> = {
   wide?: boolean;
 };
 
-type Ctx = { event: CrmsEvent; options: ReturnType<typeof useOptions> };
+type Ctx = {
+  event: CrmsEvent;
+  options: ReturnType<typeof useOptions>;
+  /** Registered addresses, for the auto-fill when a counterparty is picked. */
+  addressOf: { client: (id: string | null) => string; corporate: (id: string | null) => string };
+  staffById: (id: string | null) => SellsideContact | null;
+};
 
 /** Free-text labels as the data holds them (MNL, SG, HK, HKG, KL, PH…); display-only, never converted. */
 const TZ = ['MNL', 'PH', 'SG', 'HK', 'HKG', 'HKT', 'KL', 'JP', 'GMT'];
@@ -62,6 +68,8 @@ type MeetingDraft = {
   date: string; timeStart: string | null; timeEnd: string | null; timezone: string; location: string; meetingType: string;
   classification: MeetingClassification; description: string; contact: string; bookedBy: string; note: string; corporateAddress: string;
   clientId: string | null; corporateId: string | null; clientContactIds: string[]; corporateContactIds: string[];
+  /** Analyst Marketing only: which of the travelling analysts sit in this meeting (kept in corporate_contact, as legacy did). */
+  analystIds: string[];
 };
 
 const CLASS_LABEL: Record<MeetingClassification, string> = { client: 'Client meeting', corporate: 'Corporate meeting', expert_meeting: 'Expert / site visit' };
@@ -82,13 +90,15 @@ const meetings: Config<Meeting, MeetingDraft> = {
     date: e.startDate, timeStart: '09:00', timeEnd: '10:00', timezone: 'MNL', location: '', meetingType: 'One-on-one',
     classification: e.category === 'reverse-roadshows' ? 'corporate' : 'client', description: '', contact: '', bookedBy: '', note: '', corporateAddress: '',
     clientId: e.clientId, corporateId: e.category === 'reverse-roadshows' ? null : e.corporateId, clientContactIds: [], corporateContactIds: [],
+    analystIds: e.category === 'analyst-marketing' ? e.sellsideContacts.map((s) => String(s.id)) : [],
   }),
   fromRow: (m) => ({
     date: m.date, timeStart: m.timeStart, timeEnd: m.timeEnd, timezone: m.timezone ?? 'MNL', location: m.location, meetingType: m.meetingType,
     classification: m.classification ?? 'client', description: m.description ?? '', contact: m.contact ?? '', bookedBy: m.bookedBy ?? '', note: m.note ?? '', corporateAddress: m.corporateAddress ?? '',
     clientId: m.clientId, corporateId: m.corporateId, clientContactIds: m.clientContacts.map((c) => String(c.id)), corporateContactIds: m.corporateContacts.map((c) => String(c.id)),
+    analystIds: m.corporateContacts.map((c) => String(c.id)),
   }),
-  fields: (d, set, { options }) => (
+  fields: (d, set, { event, options, addressOf }) => (
     <div className="space-y-5">
       <div role="radiogroup" aria-label="Meeting classification" className="grid gap-px border rule bg-[color:color-mix(in_oklab,var(--color-ink)_12%,transparent)] sm:grid-cols-3">
         {(Object.keys(CLASS_LABEL) as MeetingClassification[]).map((k) => (
@@ -98,13 +108,20 @@ const meetings: Config<Meeting, MeetingDraft> = {
       <div className="grid gap-5 sm:grid-cols-2">
         {d.classification !== 'expert_meeting' && (
           d.classification === 'client'
-            ? <Picker label="Client" options={options.clients} value={d.clientId} onChange={(v) => { set('clientId', v); set('clientContactIds', []); }} allowEmpty={false} />
-            : <Picker label="Corporate" options={options.corporates} value={d.corporateId} onChange={(v) => { set('corporateId', v); set('corporateContactIds', []); }} allowEmpty={false} />
+            // Picking a counterparty fills its registered address in unless one was typed, as the legacy form did.
+            ? <Picker label="Client" options={options.clients} value={d.clientId} onChange={(v) => { set('clientId', v); set('clientContactIds', []); if (!d.corporateAddress.trim()) set('corporateAddress', addressOf.client(v)); }} allowEmpty={false} />
+            : <Picker label="Corporate" options={options.corporates} value={d.corporateId} onChange={(v) => { set('corporateId', v); set('corporateContactIds', []); if (!d.corporateAddress.trim()) set('corporateAddress', addressOf.corporate(v)); }} allowEmpty={false} />
         )}
         {d.classification === 'expert_meeting' && <div className="sm:col-span-2"><TextField label="Expert / site" value={d.description} onChange={(v) => set('description', v)} placeholder="Who or where, typed by hand" /></div>}
         {d.classification === 'client' && <MultiPicker label="Client contacts" options={options.contactsOf(d.clientId)} value={d.clientContactIds} onChange={(v) => set('clientContactIds', v)} />}
         {d.classification === 'corporate' && <MultiPicker label="Corporate contacts" options={options.corporateContactsOf(d.corporateId)} value={d.corporateContactIds} onChange={(v) => set('corporateContactIds', v)} />}
       </div>
+      {d.classification === 'client' && event.category === 'analyst-marketing' && (
+        <MultiPicker label="Analysts in this meeting" options={options.sellside.filter((s) => event.sellsideContacts.some((t) => String(t.id) === s.id))} value={d.analystIds} onChange={(v) => set('analystIds', v)} hint="from the travelling party" />
+      )}
+      {d.classification === 'client' && event.category === 'roadshows' && event.corporateId && (
+        <MultiPicker label={`${event.corporateName ?? 'Corporate'} contacts attending`} options={options.corporateContactsOf(event.corporateId)} value={d.corporateContactIds} onChange={(v) => set('corporateContactIds', v)} />
+      )}
       {d.classification === 'corporate' && (
         <div className="grid gap-5 sm:grid-cols-2">
           <Picker label="Client attending" options={options.clients} value={d.clientId} onChange={(v) => { set('clientId', v); set('clientContactIds', []); }} hint="optional" />
@@ -135,6 +152,7 @@ const meetings: Config<Meeting, MeetingDraft> = {
     description: nul(d.description), contact: nul(d.contact), bookedBy: nul(d.bookedBy), note: nul(d.note), corporateAddress: nul(d.corporateAddress),
     clientId: d.clientId ? Number(d.clientId) : null, corporateId: d.corporateId ? Number(d.corporateId) : null,
     clientContactIds: d.clientContactIds.map(Number), corporateContactIds: d.corporateContactIds.map(Number),
+    analystIds: d.analystIds.map(Number),
   }),
 };
 
@@ -209,9 +227,9 @@ const transportation: Config<Transportation, TranspoDraft> = {
   columns: [
     { key: 'date', label: 'Date', mono: true, render: (t) => <span className="mono text-[12.5px]">{fmtDay(t.date)}</span> },
     { key: 'time', label: 'Window', mono: true, value: (t) => `${t.startTime}–${t.endTime} ${t.timezone ?? ''}` },
-    { key: 'vehicleType', label: 'Vehicle', render: (t) => <span className="text-ink">{t.vehicleType}</span> },
+    { key: 'vehicleType', label: 'Vehicle', render: (t) => <span className="text-ink">{t.vehicleType || '—'}</span> },
     { key: 'location', label: 'Pick-up' },
-    { key: 'driverName', label: 'Driver', value: (t) => `${t.driverName} · ${t.driverMobile}` },
+    { key: 'driverName', label: 'Driver', value: (t) => [t.driverName, t.driverMobile].filter(Boolean).join(' · ') },
     { key: 'confirmNo', label: 'Conf. no.', mono: true },
   ],
   blank: (e) => ({ date: e.startDate, startTime: '08:00', endTime: '18:00', timezone: 'MNL', location: '', description: '', driverName: '', driverMobile: '', vehicleType: '', confirmNo: '', remarks: '', passenger: '', note: '' }),
@@ -226,10 +244,10 @@ const transportation: Config<Transportation, TranspoDraft> = {
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <TextField label="Pick-up location" value={d.location} onChange={(v) => set('location', v)} />
-        <TextField label="Vehicle" value={d.vehicleType} onChange={(v) => set('vehicleType', v)} placeholder="Toyota Alphard" />
-        <TextField label="Driver" value={d.driverName} onChange={(v) => set('driverName', v)} />
-        <TextField label="Driver mobile" value={d.driverMobile} onChange={(v) => set('driverMobile', v)} />
-        <TextField label="Confirmation no." value={d.confirmNo} onChange={(v) => set('confirmNo', v)} />
+        <TextField label="Vehicle (optional)" value={d.vehicleType} onChange={(v) => set('vehicleType', v)} placeholder="Toyota Alphard" />
+        <TextField label="Driver (optional)" value={d.driverName} onChange={(v) => set('driverName', v)} />
+        <TextField label="Driver mobile (optional)" value={d.driverMobile} onChange={(v) => set('driverMobile', v)} />
+        <TextField label="Confirmation no. (optional)" value={d.confirmNo} onChange={(v) => set('confirmNo', v)} />
         <TextField label="Description" value={d.description} onChange={(v) => set('description', v)} placeholder="Full-day car" />
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
@@ -239,7 +257,7 @@ const transportation: Config<Transportation, TranspoDraft> = {
       <TextField label="Note" value={d.note} onChange={(v) => set('note', v)} />
     </div>
   ),
-  payload: (d) => ({ date: d.date, startTime: d.startTime, endTime: d.endTime, timezone: nul(d.timezone), location: d.location, description: nul(d.description), driverName: d.driverName, driverMobile: d.driverMobile, vehicleType: d.vehicleType, confirmNo: d.confirmNo, remarks: nul(d.remarks), passenger: nul(d.passenger), note: nul(d.note) }),
+  payload: (d) => ({ date: d.date, startTime: d.startTime, endTime: d.endTime, timezone: nul(d.timezone), location: d.location, description: nul(d.description), driverName: nul(d.driverName), driverMobile: nul(d.driverMobile), vehicleType: nul(d.vehicleType), confirmNo: nul(d.confirmNo), remarks: nul(d.remarks), passenger: nul(d.passenger), note: nul(d.note) }),
 };
 
 /* ── Accommodation ─────────────────────────────────────────── */
@@ -276,7 +294,7 @@ const accommodation: Config<Accommodation, HotelDraft> = {
 
 /* ── Regis party ───────────────────────────────────────────── */
 
-type AttendeeDraft = { sellsideContactId: string | null };
+type AttendeeDraft = { sellsideContactId: string | null; position: string; officeNo: string; mobileNo: string; email: string };
 const attendees: Config<EventAttendee, AttendeeDraft> = {
   title: 'Regis', singular: 'Regis attendee',
   columns: [
@@ -284,16 +302,27 @@ const attendees: Config<EventAttendee, AttendeeDraft> = {
     { key: 'position', label: 'Position' },
     { key: 'email', label: 'Email', mono: true },
     { key: 'mobileNo', label: 'Mobile', mono: true },
+    { key: 'officeNo', label: 'Office', mono: true, hidden: true },
   ],
-  blank: () => ({ sellsideContactId: null }),
-  fromRow: (a) => ({ sellsideContactId: a.sellsideContactId }),
-  fields: (d, set, { options }) => (
-    <div className="space-y-3">
-      <Picker label="Staff member" options={options.sellside} value={d.sellsideContactId} onChange={(v) => set('sellsideContactId', v)} allowEmpty={false} />
-      <p className="text-[12px] text-graphite">Position and contact details are copied from the directory as they stand today and printed on the itinerary so the counterparty knows who to call.</p>
+  blank: () => ({ sellsideContactId: null, position: '', officeNo: '', mobileNo: '', email: '' }),
+  fromRow: (a) => ({ sellsideContactId: a.sellsideContactId, position: a.position ?? '', officeNo: a.officeNo ?? '', mobileNo: a.mobileNo ?? '', email: a.email ?? '' }),
+  fields: (d, set, { options, staffById }) => (
+    <div className="space-y-5">
+      {/* Picking the staff member copies their directory details in; each can then be overridden for this trip (a roaming number, say). */}
+      <Picker label="Staff member" options={options.sellside} value={d.sellsideContactId} allowEmpty={false} onChange={(v) => {
+        const s = staffById(v);
+        set('sellsideContactId', v); set('position', s?.position ?? ''); set('officeNo', s?.officeNo ?? ''); set('mobileNo', s?.mobileNo ?? ''); set('email', s?.email ?? '');
+      }} />
+      <div className="grid gap-5 sm:grid-cols-2">
+        <TextField label="Position" value={d.position} onChange={(v) => set('position', v)} />
+        <TextField label="Email" value={d.email} onChange={(v) => set('email', v)} />
+        <TextField label="Mobile" value={d.mobileNo} onChange={(v) => set('mobileNo', v)} />
+        <TextField label="Office no." value={d.officeNo} onChange={(v) => set('officeNo', v)} />
+      </div>
+      <p className="text-[12px] text-graphite">Copied from the directory when you pick the person; edit any line to print something different on this itinerary.</p>
     </div>
   ),
-  payload: (d) => ({ sellsideContactId: d.sellsideContactId ? Number(d.sellsideContactId) : null }),
+  payload: (d) => ({ sellsideContactId: d.sellsideContactId ? Number(d.sellsideContactId) : null, position: nul(d.position), officeNo: nul(d.officeNo), mobileNo: nul(d.mobileNo), email: nul(d.email) }),
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -303,14 +332,28 @@ export const CHILD_CONFIG: Record<ChildKey, Config<any, any>> = { meetings, inve
 
 type ItemResponse<T> = { item: T; audit?: AuditEntry };
 
-export default function EventChildTab<T extends Row, D>({ type, event, rows, onChange }: {
+export default function EventChildTab<T extends Row, D>({ type, event, rows, onChange, onRequestSave, autoOpen = false, onOpened }: {
   type: ChildKey; event: CrmsEvent; rows: T[]; onChange: (next: T[]) => void;
+  /** Set while the event has no id yet: "Add" hands off to the form, which saves the header first. */
+  onRequestSave?: () => void;
+  /** Open the blank modal as soon as the tab mounts (the form just created the event for this tab). */
+  autoOpen?: boolean;
+  onOpened?: () => void;
 }) {
   const config = CHILD_CONFIG[type] as Config<T, D>;
-  const { appendAudit } = useCrms();
+  const { appendAudit, addresses, corporates, sellsideContacts } = useCrms();
   const { can } = useAuth();
   const options = useOptions();
   const { notify } = useToast();
+  const navigate = useNavigate();
+  const ctx: Ctx = {
+    event, options,
+    addressOf: {
+      client: (id) => addresses.find((a) => a.clientId === id)?.name ?? '',
+      corporate: (id) => corporates.find((c) => c.id === id)?.address ?? '',
+    },
+    staffById: (id) => sellsideContacts.find((s) => s.id === id) ?? null,
+  };
   const [draft, setDraft] = useState<{ id: string | null; data: D } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -318,6 +361,11 @@ export default function EventChildTab<T extends Row, D>({ type, event, rows, onC
   const manage = can('crms.events.manage');
 
   const open = (row?: T) => { setError(null); setDraft(row ? { id: row.id, data: config.fromRow(row) } : { id: null, data: config.blank(event) }); };
+  const pending = !event.id;
+  useEffect(() => {
+    if (autoOpen && !pending && manage) { open(); onOpened?.(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen]);
   const set = <K extends keyof D>(k: K, v: D[K]) => setDraft((d) => (d ? { ...d, data: { ...d.data, [k]: v } } : d));
 
   async function save() {
@@ -347,15 +395,17 @@ export default function EventChildTab<T extends Row, D>({ type, event, rows, onC
       const res = await apiFetch<{ item: { id: string; reference: string }; meeting: Meeting; audit?: AuditEntry }>(`/crms/meetings/${m.id}/convert-to-interaction`, { method: 'POST', audience: 'cms' });
       appendAudit(res.audit);
       onChange(rows.map((r) => (r.id === res.meeting.id ? (res.meeting as unknown as T) : r)));
-      notify(`Interaction ${res.item.reference} logged from the meeting.`);
+      notify(`Interaction ${res.item.reference} logged from the meeting — check it over.`);
+      // Open the new record for review, as the legacy hand-off did.
+      navigate(`/crms/interactions/${res.item.id}`);
     } catch (e) { notify(errorText(e, 'The meeting could not be converted.'), 'warn'); }
   }
 
   return (
     <div className="space-y-4">
       <DataTable rows={rows} columns={config.columns} title={`${event.subject} · ${config.title}`} storageKey={`event-${type}`} initialPageSize={0} hideSearch={rows.length < 8}
-        emptyTitle={`No ${config.title.toLowerCase()} yet.`} emptyHint={`Add the first ${config.singular} to this event.`}
-        toolbar={manage && <BtnPrimary onClick={() => open()}><IconPlus size={13} /> Add {config.singular}</BtnPrimary>}
+        emptyTitle={`No ${config.title.toLowerCase()} yet.`} emptyHint={pending ? `Add the first ${config.singular} — the event header above is saved as you do.` : `Add the first ${config.singular} to this event.`}
+        toolbar={manage && <BtnPrimary onClick={() => (pending ? onRequestSave?.() : open())} disabled={pending && !onRequestSave}><IconPlus size={13} /> Add {config.singular}</BtnPrimary>}
         actions={(row) => (
           <>
             {type === 'meetings' && manage && !(row as unknown as Meeting).interactionId && (
@@ -370,7 +420,7 @@ export default function EventChildTab<T extends Row, D>({ type, event, rows, onC
         <Modal open wide={config.wide} title={`${draft.id ? 'Edit' : 'Add'} ${config.singular} · ${event.subject}`} onClose={() => setDraft(null)}
           footer={<><BtnGhost onClick={() => setDraft(null)}>Cancel</BtnGhost><BtnPrimary onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : draft.id ? 'Save changes' : `Add ${config.singular}`}</BtnPrimary></>}>
           <div className="space-y-5">
-            {config.fields(draft.data, set, { event, options })}
+            {config.fields(draft.data, set, ctx)}
             <FormError message={error} />
           </div>
         </Modal>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../../lib/api';
 import { useAuth } from '../../../cms/auth';
@@ -11,10 +11,14 @@ import { errorText, useToast } from '../../kit/toast';
 import { fmtDay, today, type AuditEntry, type OneOffClassification, type OneOffMeeting } from '../../data';
 
 /* ─────────────────────────────────────────────────────────────
-   A standalone meeting (the legacy `event` table): one client,
-   optionally one corporate, a time slot, and the attendees. It
+   A standalone meeting (the legacy `event` table): a client,
+   optionally a corporate, or — for an analyst meeting — the
+   analysts it is about; a time slot; and the attendees. It
    converts into an interaction with one click, like a roadshow
-   meeting does.
+   meeting does. Required fields follow the legacy form: the
+   corporate for a corporate meeting, the analysts for an
+   analyst meeting, the client and a description for an expert
+   meeting.
    ───────────────────────────────────────────────────────────── */
 
 const CLASS_LABEL: Record<OneOffClassification, string> = { analyst: 'Analyst meeting', corporate: 'Corporate meeting', expert_meeting: 'Expert meeting' };
@@ -22,7 +26,7 @@ const CLASS_LABEL: Record<OneOffClassification, string> = { analyst: 'Analyst me
 type Draft = {
   clientId: string | null; corporateId: string | null; startDate: string; endDate: string; timeStart: string | null; timeEnd: string | null; timezone: string;
   location: string; meetingType: string; classification: OneOffClassification; description: string; note: string; corporateAddress: string;
-  clientContactIds: string[]; corporateContactIds: string[];
+  clientContactIds: string[]; corporateContactIds: string[]; sellsideContactIds: string[];
 };
 
 function toDraft(m: OneOffMeeting | null): Draft {
@@ -31,16 +35,25 @@ function toDraft(m: OneOffMeeting | null): Draft {
     timeStart: m?.timeStart ?? '10:00', timeEnd: m?.timeEnd ?? '11:00', timezone: m?.timezone ?? 'MNL', location: m?.location ?? '', meetingType: m?.meetingType ?? '1-on-1',
     classification: m?.classification ?? 'analyst', description: m?.description ?? '', note: m?.note ?? '', corporateAddress: m?.corporateAddress ?? '',
     clientContactIds: m?.clientContacts.map((c) => String(c.id)) ?? [], corporateContactIds: m?.corporateContacts.map((c) => String(c.id)) ?? [],
+    sellsideContactIds: m?.analysts.map((a) => String(a.id)) ?? [],
   };
 }
+
+/** The desk mailboxes first, as the legacy picker listed them, then everyone else. */
+const DESK_FIRST = ['research@regis.ph', 'sales@regis.ph'];
 
 type ItemResponse = { item: OneOffMeeting; audit?: AuditEntry };
 
 export default function OneOffMeetingForm({ meetingId }: { meetingId: string | null }) {
   const [params] = useSearchParams();
   const { can } = useAuth();
-  const { appendAudit } = useCrms();
+  const { appendAudit, corporates, sellsideContacts } = useCrms();
   const options = useOptions();
+  const analystOptions = useMemo(() => [...options.sellside].sort((a, b) => {
+    const ea = sellsideContacts.find((s) => s.id === a.id)?.email.toLowerCase() ?? '';
+    const eb = sellsideContacts.find((s) => s.id === b.id)?.email.toLowerCase() ?? '';
+    return Number(DESK_FIRST.includes(eb)) - Number(DESK_FIRST.includes(ea));
+  }), [options.sellside, sellsideContacts]);
   const navigate = useNavigate();
   const { notify } = useToast();
   const manage = can('crms.events.manage');
@@ -65,16 +78,25 @@ export default function OneOffMeetingForm({ meetingId }: { meetingId: string | n
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const nul = (s: string) => (s.trim() ? s : null);
 
+  // Picking the corporate fills its registered address in, as the legacy form did; a typed address is left alone.
+  const pickCorporate = (v: string | null) => setDraft((d) => ({
+    ...d, corporateId: v, corporateContactIds: [],
+    corporateAddress: d.corporateAddress.trim() ? d.corporateAddress : (corporates.find((c) => c.id === v)?.address ?? ''),
+  }));
+
   async function save() {
-    if (!draft.clientId) { setError('Pick the client.'); return; }
-    if (!draft.location.trim()) { setError('Where is the meeting?'); return; }
+    if (draft.classification === 'corporate' && !draft.corporateId) { setError('Pick the corporate.'); return; }
+    if (draft.classification === 'analyst' && draft.sellsideContactIds.length === 0) { setError('Pick at least one analyst.'); return; }
+    if (draft.classification === 'expert_meeting' && !draft.clientId) { setError('Pick the client.'); return; }
+    if (draft.classification === 'expert_meeting' && !draft.description.trim()) { setError('Describe the expert meeting.'); return; }
     setSaving(true); setError(null);
     try {
       const body = {
-        clientId: Number(draft.clientId), corporateId: draft.corporateId ? Number(draft.corporateId) : null,
+        clientId: draft.clientId ? Number(draft.clientId) : null, corporateId: draft.corporateId ? Number(draft.corporateId) : null,
         startDate: draft.startDate, endDate: draft.endDate || null, timeStart: draft.timeStart, timeEnd: draft.timeEnd, timezone: nul(draft.timezone),
-        location: draft.location, meetingType: nul(draft.meetingType), classification: draft.classification, description: nul(draft.description), note: nul(draft.note), corporateAddress: nul(draft.corporateAddress),
+        location: nul(draft.location), meetingType: nul(draft.meetingType), classification: draft.classification, description: nul(draft.description), note: nul(draft.note), corporateAddress: nul(draft.corporateAddress),
         clientContactIds: draft.clientContactIds.map(Number), corporateContactIds: draft.corporateContactIds.map(Number),
+        sellsideContactIds: draft.classification === 'analyst' ? draft.sellsideContactIds.map(Number) : [],
       };
       const res = meeting
         ? await apiFetch<ItemResponse>(`/crms/one-off-meetings/${meeting.id}`, { method: 'PUT', audience: 'cms', body })
@@ -134,10 +156,13 @@ export default function OneOffMeetingForm({ meetingId }: { meetingId: string | n
               ))}
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
-              <Picker label="Client" options={options.clients} value={draft.clientId} onChange={(v) => { set('clientId', v); set('clientContactIds', []); }} allowEmpty={false} />
+              {draft.classification === 'analyst' && (
+                <div className="sm:col-span-2"><MultiPicker label="Analysts" options={analystOptions} value={draft.sellsideContactIds} onChange={(v) => set('sellsideContactIds', v)} placeholder="Who the meeting is with" hint="required" /></div>
+              )}
+              <Picker label={draft.classification === 'expert_meeting' ? 'Client' : 'Client (needed to log an interaction)'} options={options.clients} value={draft.clientId} onChange={(v) => { set('clientId', v); set('clientContactIds', []); }} />
               <MultiPicker label="Client contacts" options={options.contactsOf(draft.clientId)} value={draft.clientContactIds} onChange={(v) => set('clientContactIds', v)} />
               {draft.classification !== 'analyst' && <>
-                <Picker label={draft.classification === 'corporate' ? 'Corporate' : 'Corporate (optional)'} options={options.corporates} value={draft.corporateId} onChange={(v) => { set('corporateId', v); set('corporateContactIds', []); }} />
+                <Picker label={draft.classification === 'corporate' ? 'Corporate' : 'Corporate (optional)'} options={options.corporates} value={draft.corporateId} onChange={pickCorporate} />
                 <MultiPicker label="Corporate contacts" options={options.corporateContactsOf(draft.corporateId)} value={draft.corporateContactIds} onChange={(v) => set('corporateContactIds', v)} />
               </>}
             </div>
@@ -159,7 +184,7 @@ export default function OneOffMeetingForm({ meetingId }: { meetingId: string | n
           </section>
           <section className="space-y-5">
             <SectionRule code="Notes" title="Description" />
-            <TextField label="Description" value={draft.description} onChange={(v) => set('description', v)} multiline />
+            {draft.classification !== 'analyst' && <TextField label={draft.classification === 'expert_meeting' ? 'Expert / other (required)' : 'Description'} value={draft.description} onChange={(v) => set('description', v)} multiline />}
             <TextField label="Note" value={draft.note} onChange={(v) => set('note', v)} multiline />
           </section>
           <FormError message={error} />
@@ -170,9 +195,10 @@ export default function OneOffMeetingForm({ meetingId }: { meetingId: string | n
         </div>
       ) : meeting && (
         <div className="grid gap-x-8 gap-y-4 border-y rule py-5 text-[13.5px] sm:grid-cols-2">
+          {meeting.classification === 'analyst' && <p className="sm:col-span-2"><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Analysts</span><span className="text-ink">{meeting.analysts.map((a) => a.name).join(', ') || '—'}</span></p>}
           <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Client</span><span className="text-ink">{meeting.clientName ?? '—'}</span> <span className="text-graphite">{meeting.clientContacts.map((c) => c.name).join(', ')}</span></p>
-          <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Corporate</span><span className="text-ink">{meeting.corporateName ?? '—'}</span> <span className="text-graphite">{meeting.corporateContacts.map((c) => c.name).join(', ')}</span></p>
-          <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Where</span><span className="text-ink">{meeting.location}</span> <span className="text-graphite">{meeting.meetingType}</span></p>
+          {meeting.classification !== 'analyst' && <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Corporate</span><span className="text-ink">{meeting.corporateName ?? '—'}</span> <span className="text-graphite">{meeting.corporateContacts.map((c) => c.name).join(', ')}</span></p>}
+          <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Where</span><span className="text-ink">{meeting.location || '—'}</span> <span className="text-graphite">{meeting.meetingType}</span></p>
           <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Address</span><span className="text-slate">{meeting.corporateAddress ?? '—'}</span></p>
           {meeting.description && <p className="sm:col-span-2"><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Description</span><span className="whitespace-pre-line text-slate">{meeting.description}</span></p>}
           {meeting.note && <p className="sm:col-span-2"><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Note</span><span className="whitespace-pre-line text-slate">{meeting.note}</span></p>}

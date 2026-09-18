@@ -10,6 +10,7 @@ import {
 import { TEAMS, type StaffMember, type StaffTeam } from '../data';
 import ImagePicker from '../kit/ImagePicker';
 import { Field, MiniBtn, Modal, Panel, TinyBtn, move } from '../kit/parts';
+import { Select } from '../kit/pickers';
 import { Segmented } from './access/parts';
 import { BioEditor, RoleList, SectorEditor } from './people/ProfileLists';
 import AboutCopyEditor from './people/AboutCopyEditor';
@@ -459,19 +460,13 @@ export default function PeopleModule() {
                           <RoleList roles={draft.roles} onChange={(v) => set('roles', v)} />
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                          <span className="mono text-[10px] uppercase tracking-[0.18em] text-graphite">Team</span>
-                          <select
-                            value={draft.team}
-                            onChange={(e) => set('team', e.target.value as StaffTeam)}
-                            className="w-full appearance-none border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-                          >
-                            {TEAMS.map((t) => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                          <p className="text-[11.5px] leading-relaxed text-graphite">
-                            Moving a profile changes which tab it appears under on the About page.
-                          </p>
-                        </div>
+                        <Select
+                          label="Team"
+                          value={draft.team}
+                          onChange={(v) => { if (v) set('team', v as StaffTeam); }}
+                          options={TEAMS.map((t) => ({ id: t, label: t }))}
+                          helper="Moving a profile changes which tab it appears under on the About page."
+                        />
 
                         <div className="grid gap-5 sm:grid-cols-2">
                           <Field label="Phone" value={draft.phone} max={40} onChange={(v) => set('phone', v)} placeholder="+63 2 8894 0000" />

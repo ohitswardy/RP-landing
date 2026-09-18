@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useCms } from '../../store';
 import { BtnGhost, BtnPrimary, EASE, useConfirm } from '../../ui';
 import { Field, MiniBtn, TinyBtn, move } from '../../kit/parts';
+import { DatePicker } from '../../kit/pickers';
 import ImagePicker from '../../kit/ImagePicker';
 import RichTextField from '../../kit/RichTextField';
 import { plainToHtml } from '../../kit/textFormat';
@@ -148,16 +149,13 @@ export default function IssueComposer({
       <div className={`grid gap-10 ${showPreview ? 'lg:grid-cols-2' : ''}`}>
         {/* ── Editor rail ── */}
         <div className="min-w-0 space-y-7">
-          <div className="grid grid-cols-[150px_1fr] gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="mono text-[10px] uppercase tracking-[0.18em] text-graphite">Issue date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => changeDate(e.target.value)}
-                className="w-full border rule bg-white px-3 py-2.5 text-[13.5px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-              />
-            </div>
+          <div className="grid grid-cols-[190px_1fr] gap-4">
+            <DatePicker
+              label="Issue date"
+              clearable={false}
+              value={date || null}
+              onChange={(v) => { if (v) changeDate(v); }}
+            />
             <Field
               label="Subject line"
               value={subject}

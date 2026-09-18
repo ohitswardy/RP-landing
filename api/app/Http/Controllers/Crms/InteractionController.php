@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
  * The consumption record. Lists are paged and filtered server-side; every
  * save stores attendee snapshots and the captured form, and `disposition`
  * says whether the analyst filed it or flagged it for the Email desk.
+ * `important` is a second, independent mark: it pins the record to the
+ * dashboard and can be toggled on its own without re-sending the form.
  */
 class InteractionController extends CrmsController
 {
@@ -29,6 +31,9 @@ class InteractionController extends CrmsController
             $q->whereBetween('interaction_date', ["$year-01-01 00:00:00", "$year-12-31 23:59:59"]);
         }
         $q->between($request->query('from'), $request->query('to'));
+        if ($request->boolean('important')) {
+            $q->important();
+        }
         if ($d = $request->query('disposition')) {
             $d === 'open'
                 ? $q->where('disposition', Interaction::DISPOSITION_FLAGGED)->whereNull('actioned_at')
@@ -90,15 +95,18 @@ class InteractionController extends CrmsController
         'form.*.multiSelect' => ['nullable', 'boolean'],
         'form.*.value' => ['nullable'],
         'disposition' => ['nullable', 'in:closed,flagged'],
+        'important' => ['nullable', 'boolean'],
+        'importantNote' => ['nullable', 'string', 'max:280'],
     ];
 
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate(self::RULES);
-        $interaction = Interaction::create($this->attributes($data) + [
+        $interaction = new Interaction($this->attributes($data) + [
             'user_id' => $this->legacyUserId(),
             'created' => now(),
         ]);
+        $interaction->markImportant((bool) ($data['important'] ?? false), $data['importantNote'] ?? null)->save();
 
         return $this->item($this->wire($interaction), $this->audit('Logged interaction', $this->label($interaction)), 201);
     }
@@ -106,7 +114,9 @@ class InteractionController extends CrmsController
     public function update(Request $request, Interaction $interaction): JsonResponse
     {
         $data = $request->validate(self::RULES);
-        $interaction->fill($this->attributes($data))->save();
+        $interaction->fill($this->attributes($data))
+            ->markImportant((bool) ($data['important'] ?? false), $data['importantNote'] ?? null)
+            ->save();
 
         return $this->item($this->wire($interaction), $this->audit('Updated interaction', $this->label($interaction)));
     }
@@ -125,6 +135,25 @@ class InteractionController extends CrmsController
         $interaction->forceFill(['disposition' => Interaction::DISPOSITION_FLAGGED, 'actioned_at' => now()])->save();
 
         return $this->item($this->wire($interaction), $this->audit('Sent interaction to recipients', $this->label($interaction)));
+    }
+
+    /**
+     * Toggle the important mark on its own — from the list, the dashboard or
+     * the record page — without re-submitting the whole form. Omitting `note`
+     * keeps the note already stored.
+     */
+    public function important(Request $request, Interaction $interaction): JsonResponse
+    {
+        $data = $request->validate([
+            'important' => ['required', 'boolean'],
+            'note' => ['nullable', 'string', 'max:280'],
+        ]);
+        $interaction->markImportant($data['important'], array_key_exists('note', $data) ? $data['note'] : $interaction->important_note)->save();
+
+        return $this->item(
+            $this->wire($interaction),
+            $this->audit($data['important'] ? 'Marked interaction important' : 'Cleared important mark', $this->label($interaction)),
+        );
     }
 
     private function attributes(array $d): array

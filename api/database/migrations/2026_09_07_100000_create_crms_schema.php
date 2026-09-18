@@ -124,6 +124,27 @@ return new class extends Migration
             $t->string('name');
         }, timestamps: false);
 
+        // One-off meetings (OneOffMeeting model) — a standalone client meeting that feeds the calendar.
+        $this->table($s, 'event', function (Blueprint $t) {
+            $t->dateTime('start_date');
+            $t->dateTime('end_date')->nullable();
+            $t->string('time_start')->nullable();
+            $t->string('time_end')->nullable();
+            $t->string('timezone')->nullable();
+            $t->text('location')->nullable();
+            $t->string('meeting_type')->nullable();
+            $t->string('classification')->nullable();
+            $t->text('description')->nullable();
+            $t->text('note')->nullable();
+            $t->text('corporate_address')->nullable();
+            $t->text('client_contact')->nullable();
+            $t->text('corporate_contact')->nullable();
+            $t->unsignedInteger('client_id')->nullable()->index();
+            $t->unsignedInteger('corporate_id')->nullable()->index();
+            $t->unsignedInteger('interaction_id')->nullable();
+            $t->unsignedInteger('user_id')->nullable();
+        });
+
         $this->table($s, 'roadshow', function (Blueprint $t) {
             $t->unsignedInteger('category');
             $t->string('classification')->nullable();
@@ -224,6 +245,19 @@ return new class extends Migration
             $t->string('activity');
             $t->text('payload')->nullable();
             $t->unsignedInteger('user_id')->nullable();
+        });
+
+        // Legacy staff directory (read-only): interactions.user_id points here and
+        // the Call Report groups its Sales / Analysts sheets by `type`.
+        $this->table($s, 'user', function (Blueprint $t) {
+            $t->string('first_name')->nullable();
+            $t->string('last_name')->nullable();
+            $t->string('email')->nullable();
+            $t->string('password')->nullable();
+            $t->string('type')->nullable();
+            $t->text('roles')->nullable();
+            $t->text('reset_link')->nullable();
+            $t->string('status')->nullable();
         });
 
         /* ── Additive columns (§11.5) ────────────────────────────── */

@@ -7,7 +7,7 @@ import {
 } from '../ui';
 import {
   IconPen, IconPlus, IconSearch, IconTrash, IconCheck, IconUpload, IconEye, IconMenu, IconX,
-  IconStar, IconStarFilled, IconChart, IconArrowDown, IconCopy,
+  IconStar, IconStarFilled, IconChart, IconCopy,
 } from '../icons';
 import {
   REPORT_CATEGORIES, REPORT_COMPANIES, REPORT_RATINGS, TRENDING_METRICS, TRENDING_WINDOWS,
@@ -15,6 +15,7 @@ import {
   type Company, type Report, type ReportCategory, type ReportCompany, type ReportRating,
   type ReportType, type TrendingEntry, type TrendingMetric,
 } from '../data';
+import { Select } from '../kit/pickers';
 import { apiBlobUrl, apiFetch } from '../../lib/api';
 import { writeClipboard } from '../../lib/clipboard';
 import { SEARCH_EXAMPLES, useReportSearch } from '../../lib/reportSearch';
@@ -562,23 +563,19 @@ export default function ReportsModule() {
           </label>
 
           {/* Report-type filter — the desk's editable classifications */}
-          <label className="relative flex shrink-0">
-            <span className="sr-only">Filter by report type</span>
-            <select
-              value={typeSel}
-              onChange={(e) => setTypeSel(e.target.value)}
-              className={`mono h-full w-full appearance-none border bg-white py-2.5 pl-3.5 pr-9 text-[10.5px] uppercase tracking-[0.12em] outline-none transition-colors duration-300 ${
-                typeSel === 'all'
-                  ? 'rule text-graphite hover:border-[color:var(--color-amber-deep)] hover:text-ink'
-                  : 'border-[color:var(--color-amber-deep)] text-[color:var(--color-amber-deep)]'
-              }`}
-            >
-              <option value="all">All types</option>
-              {reportTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              <option value="none">Unclassified</option>
-            </select>
-            <IconArrowDown size={12} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-silver" />
-          </label>
+          <Select
+            variant="compact"
+            ariaLabel="Filter by report type"
+            className="w-[168px] shrink-0"
+            accent={typeSel !== 'all'}
+            value={typeSel}
+            onChange={(v) => setTypeSel(v ?? 'all')}
+            options={[
+              { id: 'all', label: 'All types' },
+              ...reportTypes.map((t) => ({ id: t.id, label: t.name })),
+              { id: 'none', label: 'Unclassified' },
+            ]}
+          />
 
           {companySelLabel && (
             <button
@@ -843,51 +840,38 @@ export default function ReportsModule() {
 
           <FieldGroup label="Coverage">
             {/* Company link — grouped by local / foreign classification */}
-            <div className="flex flex-col gap-2">
-              <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">Stock symbol / company</label>
-              <select
-                value={form.companyId}
-                onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
-                className="w-full appearance-none border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-              >
-                <option value="">No company — macro / multi-name</option>
-                {REPORT_COMPANIES.map((g) => {
-                  const group = companies.filter((c) => c.type === g.value);
-                  return group.length ? (
-                    <optgroup key={g.value} label={g.label}>
-                      {group.map((c) => <option key={c.id} value={c.id}>{companyLine(c.symbol, c.name)}</option>)}
-                    </optgroup>
-                  ) : null;
-                })}
-              </select>
-              <p className="text-[12px] leading-relaxed text-graphite">
-                Add a name, change its ticker, or reclassify it under Companies in the module header.
-              </p>
-            </div>
+            <Select
+              label="Stock symbol / company"
+              placeholder="No company — macro / multi-name"
+              clearable
+              searchable
+              value={form.companyId || null}
+              onChange={(v) => setForm((f) => ({ ...f, companyId: v ?? '' }))}
+              options={REPORT_COMPANIES.flatMap((g) =>
+                companies
+                  .filter((c) => c.type === g.value)
+                  .map((c) => ({ id: c.id, label: c.name, hint: c.symbol, group: g.label })),
+              )}
+              helper="Add a name, change its ticker, or reclassify it under Companies in the module header."
+            />
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">Report type</label>
-                <select
-                  value={form.reportTypeId}
-                  onChange={(e) => setForm((f) => ({ ...f, reportTypeId: e.target.value }))}
-                  className="w-full appearance-none border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-                >
-                  <option value="">Unclassified</option>
-                  {reportTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">Sector</label>
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value as '' | ReportCategory }))}
-                  className="w-full appearance-none border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 focus:border-[color:var(--color-amber-deep)]"
-                >
-                  <option value="">No sector — general</option>
-                  {REPORT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              <Select
+                label="Report type"
+                placeholder="Unclassified"
+                clearable
+                value={form.reportTypeId || null}
+                onChange={(v) => setForm((f) => ({ ...f, reportTypeId: v ?? '' }))}
+                options={reportTypes.map((t) => ({ id: t.id, label: t.name }))}
+              />
+              <Select
+                label="Sector"
+                placeholder="No sector — general"
+                clearable
+                value={form.category || null}
+                onChange={(v) => setForm((f) => ({ ...f, category: (v ?? '') as '' | ReportCategory }))}
+                options={REPORT_CATEGORIES.map((c) => ({ id: c, label: c }))}
+              />
             </div>
 
             <RatingPicker value={form.rating} onChange={(v) => setForm((f) => ({ ...f, rating: v }))} />
@@ -1156,14 +1140,14 @@ export default function ReportsModule() {
                                 />
                               </div>
                               <div className="flex items-center gap-2">
-                                <select
+                                <Select
+                                  variant="compact"
+                                  ariaLabel="Classification"
+                                  className="flex-1"
                                   value={companyEdit.type}
-                                  onChange={(e) => setCompanyEdit({ ...companyEdit, type: e.target.value as ReportCompany })}
-                                  aria-label="Classification"
-                                  className="mono flex-1 appearance-none border rule bg-white px-2.5 py-2 text-[10.5px] uppercase tracking-[0.12em] text-graphite outline-none transition-colors focus:border-[color:var(--color-amber-deep)]"
-                                >
-                                  {REPORT_COMPANIES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                </select>
+                                  onChange={(v) => setCompanyEdit({ ...companyEdit, type: (v ?? companyEdit.type) as ReportCompany })}
+                                  options={REPORT_COMPANIES.map((o) => ({ id: o.value, label: o.label }))}
+                                />
                                 <RowAction label="Save company" onClick={() => void saveCompanyEdit()} disabled={companyBusy}>
                                   <IconCheck />
                                 </RowAction>

@@ -21,6 +21,9 @@ class InsightController extends CrmsController
 {
     /* ── Dashboard (§7.7) ─────────────────────────────────────── */
 
+    /** How many important interactions the dashboard shelf shows. */
+    private const IMPORTANT_SHELF = 8;
+
     public function summary(Request $request): JsonResponse
     {
         $to = $request->query('to') ?: now()->format('Y-m-d');
@@ -71,16 +74,36 @@ class InsightController extends CrmsController
             usort($demand, fn ($a, $b) => $b['requests'] <=> $a['requests']);
         }
 
+        // The legacy dashboard tallies: company roadshows per corporate, reverse roadshows per client.
+        $tally = fn (EventCategory $cat, string $relation, string $key) => Event::with($relation)
+            ->where('category', $cat->value)->whereBetween('start_date', [$from.' 00:00:00', $to.' 23:59:59'])->get()
+            ->groupBy(fn (Event $e) => $e->{$relation}?->name ?? 'Unknown')
+            ->map(fn ($group, $name) => [$key => $name, 'events' => $group->count(), 'meetings' => (int) Meeting::whereIn('roadshow_id', $group->pluck('id'))->count()])
+            ->sortByDesc('events')->values()->take(10)->all();
+        $roadshowTally = $tally(EventCategory::Roadshow, 'corporate', 'corporate');
+        $reverseTally = $tally(EventCategory::ReverseRoadshow, 'client', 'client');
+
+        // Important interactions are a pinned shelf, not a range statistic: the
+        // latest few regardless of the dates picked, so nothing marked goes unseen.
+        $important = Interaction::with(['client', 'type'])->important()
+            ->orderByDesc('interaction_date')->orderByDesc('id')->limit(self::IMPORTANT_SHELF)->get();
+
         return response()->json([
             'range' => ['from' => $from, 'to' => $to],
             'totals' => [
                 'interactions' => $interactions->count(),
                 'minutes' => (int) $interactions->sum(fn ($i) => $i->minutes()),
                 'clients' => $interactions->pluck('client_id')->unique()->count(),
+                'important' => Interaction::important()->count(),
                 'openFlags' => Interaction::where('disposition', Interaction::DISPOSITION_FLAGGED)->whereNull('actioned_at')->count(),
                 'upcomingEvents' => Event::where('start_date', '>=', now()->startOfDay())->count()
                     + OneOffMeeting::where('start_date', '>=', now()->startOfDay())->count(),
+                'events' => Event::whereBetween('start_date', [$from.' 00:00:00', $to.' 23:59:59'])->count()
+                    + OneOffMeeting::whereBetween('start_date', [$from.' 00:00:00', $to.' 23:59:59'])->count(),
             ],
+            'roadshowTally' => $roadshowTally,
+            'reverseTally' => $reverseTally,
+            'important' => $important->map->toWire()->values(),
             'byMonth' => array_values($byMonth),
             'byClient' => array_slice($byClient, 0, 10),
             'topStocks' => array_slice(array_map(fn ($k, $v) => ['stock' => $k, 'mentions' => $v], array_keys($stocks), $stocks), 0, 10),

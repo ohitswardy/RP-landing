@@ -3,10 +3,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../cms/auth';
 import { BtnPrimary, Chip, ModuleHeader, RowAction, SelectField, useConfirm } from '../../cms/ui';
-import { IconArrowRight, IconCheck, IconPlus, IconTrash } from '../../cms/icons';
+import { IconArrowRight, IconCheck, IconPlus, IconStar, IconStarFilled, IconTrash } from '../../cms/icons';
 import { useCrms } from '../store';
 import DataTable, { type Column } from '../kit/DataTable';
 import { Pager, Picker, Tabs } from '../kit/fields';
+import { ImportantStar, setImportant } from '../kit/important';
 import { useOptions } from '../kit/options';
 import { errorText, useToast } from '../kit/toast';
 import InteractionForm from './interactions/InteractionForm';
@@ -36,6 +37,7 @@ export default function InteractionsModule() {
   const clientId = params.get('clientId');
   const typeId = params.get('typeId');
   const flag = (params.get('disposition') as Flag) ?? 'all';
+  const importantOnly = params.get('important') === '1';
   const q = params.get('q') ?? '';
   const page = Number(params.get('page') ?? 1);
 
@@ -58,12 +60,13 @@ export default function InteractionsModule() {
     if (clientId) p.set('clientId', clientId);
     if (typeId) p.set('typeId', typeId);
     if (flag !== 'all') p.set('disposition', flag);
+    if (importantOnly) p.set('important', '1');
     if (q.trim()) p.set('q', q.trim());
     return apiFetch<Paged<Interaction> & { minutes: number }>(`/crms/interactions?${p}`, { audience: 'cms' })
       .then(setData)
       .catch((e) => notify(errorText(e, 'Interactions could not be loaded.'), 'warn'))
       .finally(() => setLoading(false));
-  }, [year, clientId, typeId, flag, q, page, notify]);
+  }, [year, clientId, typeId, flag, importantOnly, q, page, notify]);
 
   useEffect(() => { if (!id) void load(); }, [id, load]);
 
@@ -86,6 +89,20 @@ export default function InteractionsModule() {
     } catch (e) { notify(errorText(e, 'Could not delete the interaction.'), 'warn'); }
   }
 
+  // The star toggles in place; under the "Important only" filter a cleared row leaves the list.
+  async function toggleImportant(i: Interaction, next: boolean) {
+    try {
+      const res = await setImportant(i.id, next);
+      appendAudit(res.audit);
+      setData((d) => d && {
+        ...d,
+        items: importantOnly && !next ? d.items.filter((r) => r.id !== i.id) : d.items.map((r) => (r.id === i.id ? res.item : r)),
+        total: importantOnly && !next ? d.total - 1 : d.total,
+      });
+      notify(next ? `Interaction ${i.reference} pinned to the dashboard.` : `Interaction ${i.reference} unpinned.`);
+    } catch (e) { notify(errorText(e, 'Could not update the important mark.'), 'warn'); }
+  }
+
   if (id) {
     if (id !== 'new' && recordError) return <p className="text-[13px]" style={{ color: 'var(--color-warn)' }}>{recordError}</p>;
     if (id !== 'new' && !record) return null;
@@ -93,6 +110,9 @@ export default function InteractionsModule() {
   }
 
   const columns: Column<Interaction>[] = [
+    { key: 'important', label: 'Star', sortable: false, value: (i) => (i.important ? 'important' : ''), className: 'w-[48px] !pr-2', render: (i) => (
+      <ImportantStar on={i.important} onToggle={manage ? (next) => toggleImportant(i, next) : undefined} />
+    ) },
     { key: 'reference', label: 'Ref', mono: true, render: (i) => <Link to={`/crms/interactions/${i.id}`} className="mono text-[12px] tracking-[0.06em] text-ink hover:text-[color:var(--color-amber-deep)]">{i.reference}</Link>, className: 'w-[110px]' },
     { key: 'date', label: 'Date', mono: true, value: (i) => i.date, render: (i) => <span className="mono text-[12.5px]">{fmtDay(i.date)}</span> },
     { key: 'clientName', label: 'Client', render: (i) => <span className="text-ink">{i.clientName}</span> },
@@ -109,9 +129,23 @@ export default function InteractionsModule() {
       <ModuleHeader code="01 · Interactions" title="Interactions" blurb="Every client touchpoint, logged as evidence of research consumption. Filter by year, client and type; open a row to see the full record and its captured form."
         actions={manage && <BtnPrimary onClick={() => navigate('/crms/interactions/new')}><IconPlus size={14} /> Log interaction</BtnPrimary>} />
 
-      <Tabs label="Flag state" value={flag} onChange={(v) => setParam('disposition', v === 'all' ? null : v)} tabs={[
-        { id: 'all', label: 'All' }, { id: 'open', label: 'Open flags' }, { id: 'flagged', label: 'Sent to recipients' }, { id: 'closed', label: 'Filed' },
-      ]} />
+      <div className="flex items-stretch gap-4">
+        <div className="min-w-0 flex-1">
+          <Tabs label="Flag state" value={flag} onChange={(v) => setParam('disposition', v === 'all' ? null : v)} tabs={[
+            { id: 'all', label: 'All' }, { id: 'open', label: 'Open flags' }, { id: 'flagged', label: 'Sent to recipients' }, { id: 'closed', label: 'Filed' },
+          ]} />
+        </div>
+        <button
+          type="button"
+          aria-pressed={importantOnly}
+          onClick={() => setParam('important', importantOnly ? null : '1')}
+          className="mono inline-flex shrink-0 items-center gap-2 border-b rule px-1 text-[10.5px] uppercase tracking-[0.16em] transition-colors hover:text-ink"
+          style={{ color: importantOnly ? 'var(--color-amber-deep)' : 'var(--color-graphite)' }}
+        >
+          {importantOnly ? <IconStarFilled size={12} /> : <IconStar size={12} />}
+          <span className="hidden sm:inline">Important only</span>
+        </button>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-[140px_1fr_1fr_1fr] md:items-end">
         <SelectField label="Year" value={year || 'All years'} onChange={(v) => setParam('year', v === 'All years' ? null : v)} options={['All years', ...meta.years.map(String)]} />
@@ -131,7 +165,7 @@ export default function InteractionsModule() {
       )}
 
       <DataTable rows={data?.items ?? []} columns={columns} loading={loading && !data} title="Interactions" storageKey="interactions" hideSearch initialPageSize={0}
-        emptyTitle="No interactions match." emptyHint="Widen the filters, or log the first interaction."
+        emptyTitle={importantOnly ? 'Nothing marked important.' : 'No interactions match.'} emptyHint={importantOnly ? 'The star on any row, or the Importance panel on a record, pins it here and on the dashboard.' : 'Widen the filters, or log the first interaction.'}
         onRowClick={(i) => navigate(`/crms/interactions/${i.id}`)}
         actions={(i) => (
           <>

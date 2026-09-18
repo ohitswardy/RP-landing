@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '../../../lib/api';
 import { useAuth } from '../../../cms/auth';
 import { BtnGhost, BtnPrimary, Chip, DateField, SelectField, TextField } from '../../../cms/ui';
@@ -8,15 +8,21 @@ import { useCrms } from '../../store';
 import { FormError, MultiPicker, Picker, SectionRule, Tabs } from '../../kit/fields';
 import { useOptions } from '../../kit/options';
 import { errorText, useToast } from '../../kit/toast';
-import EventChildTab, { CHILD_TABS, type ChildKey } from './EventChildTab';
+import EventChildTab, { CHILD_CONFIG, CHILD_TABS, type ChildKey } from './EventChildTab';
 import ItineraryModal from './Itinerary';
+import { contactOptionsFrom } from './itineraryActions';
 import { EVENT_TYPES, fmtRange, today, type AuditEntry, type CrmsEvent, type RoadshowCategory, type EventChildren, type EventDetail } from '../../data';
 
 /* ─────────────────────────────────────────────────────────────
-   One shell for all four event types. The category decides the
-   subject field (corporate / client / analyst) and the rest —
-   dates, coordinator, party — is shared. Child tabs appear once
-   the event exists.
+   One shell for the three roadshow-family event types. The header
+   carries exactly the boxes the legacy form had — the subject
+   (Corporate / Client + Client Contact / Analyst), Date Start and
+   Date End, and the Primary Coordinator's name, Tel #, Mobile #
+   and Email; a Company Roadshow adds its Classification. The Regis
+   party is the Regis tab, as it was, not a header field. The child
+   tabs show from the start: on a new event, the first "Add …" saves
+   the header itself and opens that modal, so creating an event and
+   filling its schedule is one flow rather than two.
    ───────────────────────────────────────────────────────────── */
 
 type Draft = {
@@ -26,7 +32,7 @@ type Draft = {
 
 function toDraft(e: CrmsEvent | null, coordinator: { name: string; email: string } | null): Draft {
   return {
-    classification: e?.classification ?? 'Non-Deal Roadshow', startDate: e?.startDate ?? today(), endDate: e?.endDate ?? e?.startDate ?? today(),
+    classification: e?.classification ?? '', startDate: e?.startDate ?? today(), endDate: e?.endDate ?? e?.startDate ?? today(),
     coordinator: e?.coordinator ?? coordinator?.name ?? '', telNo: e?.telNo ?? '', mobileNo: e?.mobileNo ?? '', email: e?.email ?? coordinator?.email ?? '',
     corporateId: e?.corporateId ?? null, clientId: e?.clientId ?? null,
     clientContactIds: e?.clientContacts.map((c) => String(c.id)) ?? [], sellsideContactIds: e?.sellsideContacts.map((s) => String(s.id)) ?? [],
@@ -37,6 +43,7 @@ const EMPTY_CHILDREN: EventChildren = { meetings: [], investors: [], flights: []
 
 export default function EventForm({ category, eventId }: { category: RoadshowCategory; eventId: string | null }) {
   const [params] = useSearchParams();
+  const location = useLocation();
   const { session, can } = useAuth();
   const { appendAudit } = useCrms();
   const options = useOptions();
@@ -51,7 +58,9 @@ export default function EventForm({ category, eventId }: { category: RoadshowCat
   const [children, setChildren] = useState<EventChildren>(EMPTY_CHILDREN);
   const [draft, setDraft] = useState<Draft>(() => toDraft(null, session ? { name: session.name, email: session.email } : null));
   const [editing, setEditing] = useState(eventId === null);
-  const [tab, setTab] = useState<ChildKey>('meetings');
+  // A freshly created event arrives with the child tab whose "Add" triggered the save, so its modal opens straight away.
+  const openChild = (location.state as { openChild?: ChildKey } | null)?.openChild ?? null;
+  const [tab, setTab] = useState<ChildKey>(openChild ?? 'meetings');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itinerary, setItinerary] = useState(false);
@@ -67,8 +76,16 @@ export default function EventForm({ category, eventId }: { category: RoadshowCat
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
-  async function save() {
-    if (draft.endDate && draft.endDate < draft.startDate) { setError('The event ends before it starts.'); return; }
+  /** Validates and saves the header; resolves with the saved event, or null when something was missing. */
+  async function saveHeader(): Promise<CrmsEvent | null> {
+    // The legacy required set: the subject, both dates, and the classification on a Company Roadshow.
+    if (category === 'roadshows' && !draft.corporateId) { setError('Corporate is required.'); return null; }
+    if (category === 'reverse-roadshows' && !draft.clientId) { setError('Client is required.'); return null; }
+    if (category === 'analyst-marketing' && draft.sellsideContactIds.length === 0) { setError('Analyst is required.'); return null; }
+    if (!draft.startDate) { setError('Date Start is required.'); return null; }
+    if (!draft.endDate) { setError('Date End is required.'); return null; }
+    if (category === 'roadshows' && !draft.classification) { setError('Classification is required.'); return null; }
+    if (draft.endDate < draft.startDate) { setError('The event ends before it starts.'); return null; }
     setSaving(true); setError(null);
     try {
       const body = {
@@ -83,18 +100,39 @@ export default function EventForm({ category, eventId }: { category: RoadshowCat
       appendAudit(res.audit);
       setEvent(res.item);
       setEditing(false);
-      notify(event ? 'Event saved.' : `${meta.label} created — add its meetings and logistics below.`);
-      if (!event) navigate(`/crms/events/${category}/${res.item.id}${fromCalendar ? '?form=calendar' : ''}`, { replace: true });
-    } catch (e) { setError(errorText(e, 'The event could not be saved.')); } finally { setSaving(false); }
+      return res.item;
+    } catch (e) { setError(errorText(e, 'The event could not be saved.')); return null; } finally { setSaving(false); }
   }
 
-  // Contacts who could receive a personal schedule: everyone on a meeting or the investor list.
-  const contactOptions = useMemo(() => {
-    const seen = new Map<string, { id: string; label: string; hint?: string | null }>();
-    for (const m of children.meetings) for (const c of m.clientContacts) seen.set(String(c.id), { id: String(c.id), label: c.name, hint: c.client_name ?? m.clientName });
-    for (const i of children.investors) for (const c of i.clientContacts) seen.set(String(c.id), { id: String(c.id), label: c.name, hint: i.clientName });
-    return Array.from(seen.values());
-  }, [children]);
+  const urlFor = (e: CrmsEvent) => `/crms/events/${category}/${e.id}${fromCalendar ? '?form=calendar' : ''}`;
+
+  async function save() {
+    const wasNew = !event;
+    const saved = await saveHeader();
+    if (!saved) return;
+    notify(wasNew ? `${meta.label} created — add its meetings and logistics below.` : 'Event saved.');
+    if (wasNew) navigate(urlFor(saved), { replace: true });
+  }
+
+  // "Add …" on a not-yet-saved event: save the header, then reopen on the record with that tab's modal up.
+  async function saveThenAdd(type: ChildKey) {
+    const saved = await saveHeader();
+    if (!saved) return;
+    notify(`${meta.label} created — now add its first ${CHILD_CONFIG[type].singular}.`);
+    navigate(urlFor(saved), { replace: true, state: { openChild: type } });
+  }
+
+  // A stand-in for the tabs before the header exists: what the blank child drafts read (dates, counterparties).
+  const previewEvent = useMemo((): CrmsEvent => ({
+    id: '', category, categoryLabel: meta.label, classification: draft.classification || null, subject: `New ${meta.label.toLowerCase()}`,
+    startDate: draft.startDate, endDate: draft.endDate || null, coordinator: draft.coordinator || null, telNo: null, mobileNo: null, email: null,
+    corporateId: draft.corporateId, corporateName: options.corporates.find((c) => c.id === draft.corporateId)?.label ?? null,
+    clientId: draft.clientId, clientName: options.clients.find((c) => c.id === draft.clientId)?.label ?? null,
+    clientContacts: [], sellsideContacts: draft.sellsideContactIds.map((id) => ({ id: Number(id), name: options.sellside.find((s) => s.id === id)?.label ?? '' })),
+    meetingCount: 0, updatedAt: null,
+  }), [category, meta.label, draft, options]);
+
+  const contactOptions = useMemo(() => contactOptionsFrom(children), [children]);
 
   if (eventId && !event && !error) return null;
 
@@ -124,38 +162,27 @@ export default function EventForm({ category, eventId }: { category: RoadshowCat
         <div className="grid gap-10 lg:grid-cols-12">
           <div className="space-y-8 lg:col-span-8">
             <section className="space-y-5">
-              <SectionRule code="Subject" title={meta.subject} />
-              <div className="grid gap-5 sm:grid-cols-2">
-                {category === 'roadshows' && <>
-                  <Picker label="Corporate presenting" options={options.corporates} value={draft.corporateId} onChange={(v) => set('corporateId', v)} allowEmpty={false} />
-                  <SelectField label="Classification" value={draft.classification} onChange={(v) => set('classification', v)} options={['Non-Deal Roadshow', 'Deal Roadshow']} />
-                </>}
-                {category === 'reverse-roadshows' && <>
-                  <Picker label="Visiting client" options={options.clients} value={draft.clientId} onChange={(v) => { set('clientId', v); set('clientContactIds', []); }} allowEmpty={false} />
-                  <MultiPicker label="Client contacts travelling" options={options.contactsOf(draft.clientId)} value={draft.clientContactIds} onChange={(v) => set('clientContactIds', v)} />
-                </>}
-                {category === 'analyst-marketing' && (
-                  <div className="sm:col-span-2"><MultiPicker label="Travelling analyst(s)" options={options.sellside} value={draft.sellsideContactIds} onChange={(v) => set('sellsideContactIds', v)} /></div>
-                )}
-                {category !== 'analyst-marketing' && (
-                  <MultiPicker label="Regis analysts / sales" options={options.sellside} value={draft.sellsideContactIds} onChange={(v) => set('sellsideContactIds', v)} />
-                )}
+              <SectionRule code={meta.code} title={`${meta.label} information`} />
+              {/* Row one, as the legacy form laid it out: subject · Date Start · Date End (· Classification). */}
+              <div className={`grid gap-5 sm:grid-cols-2 ${category === 'roadshows' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+                {category === 'roadshows' && <Picker label="Corporate" options={options.corporates} value={draft.corporateId} onChange={(v) => set('corporateId', v)} placeholder="Select" hint="required" allowEmpty={false} />}
+                {category === 'reverse-roadshows' && <Picker label="Client" options={options.clients} value={draft.clientId} onChange={(v) => { set('clientId', v); set('clientContactIds', []); }} placeholder="Select" hint="required" allowEmpty={false} />}
+                {category === 'analyst-marketing' && <MultiPicker label="Analyst" options={options.sellside} value={draft.sellsideContactIds} onChange={(v) => set('sellsideContactIds', v)} placeholder="Select" hint="required" />}
+                <DateField label="Date Start" value={draft.startDate} onChange={(v) => setDraft((d) => ({ ...d, startDate: v, endDate: d.endDate < v ? v : d.endDate }))} />
+                <DateField label="Date End" value={draft.endDate} onChange={(v) => set('endDate', v)} />
+                {category === 'roadshows' && <SelectField label="Classification" value={draft.classification} onChange={(v) => set('classification', v)} options={['', 'Deal Roadshow', 'Non-Deal Roadshow']} />}
               </div>
-            </section>
-            <section className="space-y-5">
-              <SectionRule code="When" title="Dates" />
-              <div className="grid gap-5 sm:grid-cols-2">
-                <DateField label="Start" value={draft.startDate} onChange={(v) => setDraft((d) => ({ ...d, startDate: v, endDate: d.endDate < v ? v : d.endDate }))} />
-                <DateField label="End" value={draft.endDate} onChange={(v) => set('endDate', v)} />
-              </div>
+              {category === 'reverse-roadshows' && (
+                <MultiPicker label="Client Contact" options={options.contactsOf(draft.clientId)} value={draft.clientContactIds} onChange={(v) => set('clientContactIds', v)} placeholder="Select" />
+              )}
             </section>
             <section className="space-y-5">
               <SectionRule code="Coordinator" title="Printed in every page footer" />
-              <div className="grid gap-5 sm:grid-cols-2">
-                <TextField label="Primary coordinator" value={draft.coordinator} onChange={(v) => set('coordinator', v)} />
-                <TextField label="Email" value={draft.email} onChange={(v) => set('email', v)} />
-                <TextField label="Mobile" value={draft.mobileNo} onChange={(v) => set('mobileNo', v)} />
-                <TextField label="Telephone" value={draft.telNo} onChange={(v) => set('telNo', v)} />
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <TextField label="Primary Coordinator" value={draft.coordinator} onChange={(v) => set('coordinator', v)} />
+                <TextField label="Primary Coordinator Tel #" value={draft.telNo} onChange={(v) => set('telNo', v)} />
+                <TextField label="Primary Coordinator Mobile #" value={draft.mobileNo} onChange={(v) => set('mobileNo', v)} />
+                <TextField label="Primary Coordinator Email" value={draft.email} onChange={(v) => set('email', v)} />
               </div>
             </section>
             <FormError message={error} />
@@ -166,19 +193,26 @@ export default function EventForm({ category, eventId }: { category: RoadshowCat
           </div>
           <aside className="lg:col-span-4">
             <div className="border rule border-dashed px-5 py-6 text-[13px] leading-relaxed text-graphite">
-              {event ? 'Meetings, investors, flights, ground transportation, accommodation and the Regis party are edited in the tabs once you finish here.' : 'Save the event first; its meetings and logistics are added in tabs afterwards.'}
+              {event ? 'Meetings, investors, flights, ground transportation, accommodation and the Regis party are edited in the tabs once you finish here.' : 'Meetings, investors, flights, ground transportation, accommodation and the Regis party go in the tabs below — the first one you add saves this header for you.'}
             </div>
           </aside>
+          {!event && (
+            <div className="space-y-4 lg:col-span-12">
+              <Tabs label="Event detail" value={tab} onChange={(v) => setTab(v as ChildKey)} tabs={CHILD_TABS.map((t) => ({ ...t, count: 0 }))} />
+              <EventChildTab key={tab} type={tab} event={previewEvent} rows={[]} onChange={() => undefined} onRequestSave={saving ? undefined : () => void saveThenAdd(tab)} />
+            </div>
+          )}
         </div>
       ) : event && (
         <>
           <div className="grid gap-x-8 gap-y-3 border-y rule py-4 text-[13px] sm:grid-cols-3">
-            <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Coordinator</span><span className="text-ink">{event.coordinator ?? '—'}</span> <span className="text-graphite">{[event.mobileNo, event.email].filter(Boolean).join(' · ')}</span></p>
-            <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Regis</span><span className="text-slate">{event.sellsideContacts.map((s) => s.name).join(', ') || '—'}</span></p>
+            <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Coordinator</span><span className="text-ink">{event.coordinator ?? '—'}</span> <span className="text-graphite">{[event.telNo, event.mobileNo, event.email].filter(Boolean).join(' · ')}</span></p>
+            {/* The Regis party: the travelling analysts on Analyst Marketing, otherwise whoever is on the Regis tab. */}
+            <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Regis</span><span className="text-slate">{(category === 'analyst-marketing' ? event.sellsideContacts.map((s) => s.name) : children.attendees.map((a) => a.name ?? '')).filter(Boolean).join(', ') || '—'}</span></p>
             <p><span className="mono block text-[9.5px] uppercase tracking-[0.16em] text-graphite">Client contacts</span><span className="text-slate">{event.clientContacts.map((c) => c.name).join(', ') || '—'}</span></p>
           </div>
           <Tabs label="Event detail" value={tab} onChange={(v) => setTab(v as ChildKey)} tabs={CHILD_TABS.map((t) => ({ ...t, count: children[t.id].length }))} />
-          <EventChildTab key={tab} type={tab} event={event} rows={children[tab] as never[]} onChange={(next) => setChildren((c) => ({ ...c, [tab]: next }))} />
+          <EventChildTab key={tab} type={tab} event={event} rows={children[tab] as never[]} onChange={(next) => setChildren((c) => ({ ...c, [tab]: next }))} autoOpen={openChild === tab} onOpened={() => navigate(location.pathname + location.search, { replace: true, state: null })} />
         </>
       )}
 

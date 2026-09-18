@@ -4,6 +4,7 @@ import { useAuth } from '../cms/auth';
 import { useCrms } from './store';
 import { Chip } from '../cms/ui';
 import RailBrandCanvas from '../cms/RailBrandCanvas';
+import RailBrandLogo from '../cms/RailBrandLogo';
 import { usePublishedHeight } from '../cms/kit/stickyOffset';
 import { useAppTheme } from '@/lib/theme';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -96,9 +97,7 @@ function RailFoot({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () =>
 
   return (
     <div className="shrink-0 border-t" style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }}>
-      <div className="flex items-center justify-center border-b py-4" style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 8%, transparent)' }}>
-        <img src="/Regis Logo.PNG" alt="Regis Partners" className="brand-mark object-contain transition-all duration-300" style={{ width: expanded ? 44 : 28, height: expanded ? 44 : 28 }} />
-      </div>
+      <RailBrandLogo />
       <div className="flex items-center gap-3.5 pb-2 pl-[26px] pr-5 pt-3">
         <span className="mono grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border text-[9.5px] tracking-[0.04em] text-ink" style={{ background: 'var(--color-bone)', borderColor: 'color-mix(in oklab, var(--color-ink) 15%, transparent)' }}>
           {initials || '—'}
@@ -152,7 +151,9 @@ export default function CRMSLayout() {
   const { audit, status, error, reload } = useCrms();
   const { theme, toggle: toggleTheme } = useAppTheme();
 
-  const togglePin = () => setPinned((v) => { const next = !v; try { localStorage.setItem(PIN_KEY, next ? '1' : '0'); } catch { /* ignore */ } return next; });
+  // Hovering never sets `open` while pinned, so unpinning hands the rail back
+  // already open — otherwise it would slam shut under the cursor.
+  const togglePin = () => setPinned((v) => { const next = !v; try { localStorage.setItem(PIN_KEY, next ? '1' : '0'); } catch { /* ignore */ } if (!next) setOpen(true); return next; });
 
   const shellRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);

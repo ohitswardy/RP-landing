@@ -4,8 +4,10 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../cms/auth';
 import { Chip, DateField, EASE, ModuleHeader, SkeletonRows, Stat } from '../../cms/ui';
+import { IconArrowRight } from '../../cms/icons';
 import { useCrms } from '../store';
-import { fmtMinutes, timeAgo, type DashboardSummary } from '../data';
+import { fmtDay, fmtMinutes, timeAgo, type DashboardSummary } from '../data';
+import { ImportantStar } from '../kit/important';
 import { errorText } from '../kit/toast';
 import { AreaChart } from '@/components/charts/area-chart';
 import { Area } from '@/components/charts/area';
@@ -17,8 +19,12 @@ import { ChartTooltip } from '@/components/charts/tooltip';
    Dashboard (§7.7). Interaction load by month as a Bklit area
    chart carrying logged minutes over time, the clients taking
    the most contact time, the stocks most discussed, and
-   reverse-roadshow demand fanned out to the clients who asked.
-   All server-aggregated, read-only.
+   reverse-roadshow demand fanned out to the clients who asked,
+   and the legacy tallies: company roadshows per corporate and
+   reverse roadshows per client.
+   Plus the important shelf: the latest interactions the desk
+   starred, regardless of the range. All server-aggregated,
+   read-only.
    ───────────────────────────────────────────────────────────── */
 
 function firstOfMonthsAgo(n: number): string {
@@ -54,6 +60,27 @@ export default function Dashboard() {
     [data],
   );
   const maxClient = useMemo(() => Math.max(1, ...(data?.byClient.map((c) => c.minutes) ?? [1])), [data]);
+  const maxTally = useMemo(() => Math.max(1, ...(data?.roadshowTally.map((t) => t.events) ?? [1]), ...(data?.reverseTally.map((t) => t.events) ?? [1])), [data]);
+
+  /* One tally list: a name, a bar scaled to the busiest row, and the count of events and meetings. */
+  const tally = (rows: { name: string; events: number; meetings: number }[], empty: string) => (
+    !data ? <SkeletonRows rows={4} /> : rows.length === 0 ? (
+      <p className="border rule border-dashed px-6 py-8 text-[13px] text-graphite">{empty}</p>
+    ) : (
+      <ul className="divide-y rule border-y rule">
+        {rows.map((r, i) => (
+          <li key={r.name} className="grid grid-cols-12 items-center gap-3 py-3">
+            <span className="mono num col-span-1 text-[10.5px] text-silver">{String(i + 1).padStart(2, '0')}</span>
+            <span className="col-span-5 truncate text-[13.5px] text-ink">{r.name}</span>
+            <div className="col-span-3 h-1.5 bg-bone">
+              <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round((r.events / maxTally) * 100)}%` }} transition={{ duration: 0.6, ease: EASE, delay: i * 0.04 }} className="h-full" style={{ background: 'var(--color-bronze)' }} />
+            </div>
+            <span className="mono num col-span-3 text-right text-[11.5px] text-slate">{r.events} event{r.events === 1 ? '' : 's'} · {r.meetings} mtg</span>
+          </li>
+        ))}
+      </ul>
+    )
+  );
   const firstName = session?.name.split(' ')[0] ?? 'there';
 
   return (
@@ -73,10 +100,14 @@ export default function Dashboard() {
       {error && <p className="border-l-2 pl-3 text-[12.5px]" style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}>{error}</p>}
 
       {/* Totals */}
-      <section className="grid grid-cols-2 gap-8 border-b rule pb-10 md:grid-cols-5">
+      <section className="grid grid-cols-2 gap-8 border-b rule pb-10 md:grid-cols-3 xl:grid-cols-6">
         <Stat value={data ? data.totals.interactions.toLocaleString('en-PH') : '—'} label="Interactions" />
         <Stat value={data ? fmtMinutes(data.totals.minutes) : '—'} label="Contact time" />
         <Stat value={data ? String(data.totals.clients) : '—'} label="Clients reached" />
+        <Link to="/crms/interactions?important=1" className="group">
+          <Stat value={data ? String(data.totals.important) : '—'} label="Important" />
+          <span className="mono mt-1 block text-[9.5px] uppercase tracking-[0.16em] text-[color:var(--color-amber-deep)] opacity-0 transition-opacity group-hover:opacity-100">See all →</span>
+        </Link>
         <Link to="/crms/interactions?disposition=open" className="group">
           <Stat value={data ? String(data.totals.openFlags) : '—'} label="Open flags" />
           <span className="mono mt-1 block text-[9.5px] uppercase tracking-[0.16em] text-[color:var(--color-amber-deep)] opacity-0 transition-opacity group-hover:opacity-100">Send to recipients →</span>
@@ -88,8 +119,9 @@ export default function Dashboard() {
       </section>
 
       <div className="grid gap-12 lg:grid-cols-12">
+        <div className="space-y-12 lg:col-span-7">
         {/* Interaction load by month */}
-        <section className="lg:col-span-7">
+        <section>
           <header className="mb-6 flex items-end justify-between">
             <div>
               <div className="eyebrow mb-2">Interaction load</div>
@@ -129,6 +161,56 @@ export default function Dashboard() {
             </div>
           )}
         </section>
+
+        {/* Important shelf */}
+        <section>
+          <header className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <div className="eyebrow mb-2">Important</div>
+              <p className="text-[13px] text-graphite">Interactions the desk starred. Latest first, any date.</p>
+            </div>
+            {data && data.totals.important > 0 && (
+              <Link to="/crms/interactions?important=1" className="mono shrink-0 text-[10px] uppercase tracking-[0.16em] text-graphite hover:text-ink">
+                All {data.totals.important} →
+              </Link>
+            )}
+          </header>
+          {!data ? <SkeletonRows rows={3} /> : data.important.length === 0 ? (
+            <p className="border rule border-dashed px-6 py-8 text-[13px] text-graphite">Nothing marked important yet — the star on any interaction, or the Importance panel on its record, pins it here.</p>
+          ) : (
+            <ul className="divide-y rule border-y rule">
+              {data.important.map((i, idx) => (
+                <motion.li
+                  key={i.id}
+                  initial={reduce ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, ease: EASE, delay: idx * 0.04 }}
+                >
+                  <Link to={`/crms/interactions/${i.id}`} className="group grid grid-cols-[auto_1fr_auto] items-start gap-x-4 py-3.5 transition-colors hover:bg-bone/70">
+                    <span className="pt-0.5 pl-1"><ImportantStar on size={14} /></span>
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                        <span className="truncate text-[13.5px] text-ink group-hover:text-[color:var(--color-amber-deep)]">{i.clientName ?? 'Unknown client'}</span>
+                        <span className="mono text-[10.5px] tracking-[0.06em] text-silver">{i.reference}</span>
+                      </span>
+                      <span className="mono mt-1 block truncate text-[10px] uppercase tracking-[0.14em] text-graphite">
+                        {fmtDay(i.date)}{i.typeName ? ` · ${i.typeName}` : ''}{i.meetingType ? ` · ${i.meetingType}` : ''}
+                      </span>
+                      {i.importantNote && <span className="mt-1.5 block text-[12.5px] leading-snug text-slate">{i.importantNote}</span>}
+                    </span>
+                    <span className="flex flex-col items-end gap-1.5 pr-1">
+                      <span className="mono num text-[12px] text-slate">{fmtMinutes(i.minutes)}</span>
+                      {i.disposition === 'flagged' && !i.actionedAt
+                        ? <Chip tone="amber" pulse>Flag open</Chip>
+                        : <span className="text-silver opacity-0 transition-opacity group-hover:opacity-100"><IconArrowRight size={13} /></span>}
+                    </span>
+                  </Link>
+                </motion.li>
+              ))}
+            </ul>
+          )}
+        </section>
+        </div>
 
         {/* Top clients */}
         <section className="lg:col-span-5">
@@ -202,6 +284,27 @@ export default function Dashboard() {
               ))}
             </ul>
           )}
+        </section>
+      </div>
+
+      {/* Roadshow tallies — the two bar charts the legacy dashboard carried */}
+      <div className="grid gap-12 border-t rule pt-10 lg:grid-cols-2">
+        <section>
+          <header className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <div className="eyebrow mb-2">Company roadshow tally</div>
+              <p className="text-[13px] text-graphite">Corporates that presented in range, by number of roadshows.</p>
+            </div>
+            <Chip tone="muted">{data ? `${data.totals.events} events` : '…'}</Chip>
+          </header>
+          {tally((data?.roadshowTally ?? []).map((t) => ({ name: t.corporate, events: t.events, meetings: t.meetings })), 'No company roadshows in range.')}
+        </section>
+        <section>
+          <header className="mb-6">
+            <div className="eyebrow mb-2">Reverse roadshow tally</div>
+            <p className="text-[13px] text-graphite">Clients who came to visit, by number of trips.</p>
+          </header>
+          {tally((data?.reverseTally ?? []).map((t) => ({ name: t.client, events: t.events, meetings: t.meetings })), 'No reverse roadshows in range.')}
         </section>
       </div>
 

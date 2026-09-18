@@ -42,6 +42,30 @@ class OneOffMeeting extends CrmsModel
         return $this->belongsTo(Interaction::class, 'interaction_id');
     }
 
+    /**
+     * The analysts an `analyst` meeting is about. The legacy app stored the
+     * picked sellside contacts as a JSON list in `description`; any other
+     * classification keeps `description` as free text.
+     */
+    public function analysts(): array
+    {
+        if ($this->classification !== 'analyst') {
+            return [];
+        }
+        $decoded = json_decode((string) $this->description, true);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        return array_values(array_filter($decoded, fn ($a) => is_array($a) && isset($a['name'])));
+    }
+
+    /** Description as text — null for analyst meetings, whose column holds the analyst list. */
+    public function descriptionText(): ?string
+    {
+        return $this->classification === 'analyst' ? null : $this->description;
+    }
+
     /** Who the meeting is with, for lists and the calendar. */
     public function subject(): string
     {
@@ -51,6 +75,7 @@ class OneOffMeeting extends CrmsModel
         return match ($this->classification) {
             'corporate' => trim(($client ?? 'Client').' × '.($corp ?? 'Corporate')),
             'expert_meeting' => ($client ?? 'Client').' · expert meeting',
+            'analyst' => implode(', ', array_map(fn ($a) => $a['name'], $this->analysts())) ?: ($client ?? 'Analyst meeting'),
             default => $client ?? $corp ?? 'Meeting',
         };
     }
@@ -70,7 +95,8 @@ class OneOffMeeting extends CrmsModel
             'location' => $this->location,
             'meetingType' => $this->meeting_type,
             'classification' => $this->classification,
-            'description' => $this->description,
+            'description' => $this->descriptionText(),
+            'analysts' => $this->analysts(),
             'note' => $this->note,
             'corporateAddress' => $this->corporate_address,
             'clientId' => self::idOrNull($this->client_id),

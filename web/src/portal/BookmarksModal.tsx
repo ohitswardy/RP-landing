@@ -37,9 +37,14 @@ export default function BookmarksModal({ open, onClose, onView }: Props) {
   const search = useReportSearch(saved, query);
   const shown = useMemo(() => search.rank(saved.filter(search.match)), [saved, search]);
 
+  // onClose arrives as a fresh arrow each render; keep it in a ref so the focus/scroll-lock
+  // effect only runs when `open` flips, not on every keystroke in the search box.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
     panelRef.current?.focus();
@@ -47,7 +52,7 @@ export default function BookmarksModal({ open, onClose, onView }: Props) {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   // Reopening starts clean rather than resuming a half-typed filter.
   useEffect(() => {

@@ -186,6 +186,11 @@ export function Modal({
   children: ReactNode; footer?: ReactNode; wide?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  /* Callers pass a fresh arrow for onClose on every render. Reading it through a ref keeps
+     the effect below tied to `open` alone; otherwise each keystroke inside the dialog re-ran
+     it, re-focused the panel and pulled the caret out of the field being typed in. */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   /* Escape closes, Tab stays inside, and the page behind stops scrolling. */
   useEffect(() => {
@@ -202,7 +207,7 @@ export function Modal({
     ).filter((el) => el.offsetParent !== null);
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key === 'Escape') { onCloseRef.current(); return; }
       if (e.key !== 'Tab') return;
       const items = focusables();
       if (items.length === 0) return;
@@ -223,7 +228,7 @@ export function Modal({
       body.style.overflow = prevOverflow;
       returnTo?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return (
     <AnimatePresence>

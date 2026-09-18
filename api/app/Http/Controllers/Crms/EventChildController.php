@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crms;
 
+use App\Enums\Crms\EventCategory;
 use App\Models\Crms\CrmsModel;
 use App\Models\Crms\Event;
 use App\Models\Crms\Meeting;
@@ -24,7 +25,7 @@ class EventChildController extends CrmsController
         if ($error = $this->classificationError($type, $data)) {
             return response()->json(['message' => $error], 422);
         }
-        $row = $model::create($this->attributes($type, $data) + ['roadshow_id' => $event->id]);
+        $row = $model::create($this->attributes($type, $data, $event) + ['roadshow_id' => $event->id]);
 
         return $this->item($this->wire($row), $this->audit("Added $type entry", $event->subject()), 201);
     }
@@ -36,7 +37,7 @@ class EventChildController extends CrmsController
         if ($error = $this->classificationError($type, $data)) {
             return response()->json(['message' => $error], 422);
         }
-        $row->fill($this->attributes($type, $data))->save();
+        $row->fill($this->attributes($type, $data, $event))->save();
 
         return $this->item($this->wire($row), $this->audit("Updated $type entry", $event->subject()));
     }
@@ -78,6 +79,7 @@ class EventChildController extends CrmsController
                 'corporateId' => ['nullable', 'integer'],
                 'clientContactIds' => $ids(100)[0], 'clientContactIds.*' => $ids(100)[1],
                 'corporateContactIds' => $ids(50)[0], 'corporateContactIds.*' => $ids(50)[1],
+                'analystIds' => ['nullable', 'array', 'max:50'], 'analystIds.*' => ['integer'],
             ],
             'investors' => [
                 'clientId' => ['required', 'integer'],
@@ -104,10 +106,10 @@ class EventChildController extends CrmsController
                 'timezone' => ['nullable', 'string', 'max:20'],
                 'location' => ['required', 'string', 'max:255'],
                 'description' => ['nullable', 'string', 'max:2000'],
-                'driverName' => ['required', 'string', 'max:255'],
-                'driverMobile' => ['required', 'string', 'max:255'],
-                'vehicleType' => ['required', 'string', 'max:255'],
-                'confirmNo' => ['required', 'string', 'max:255'],
+                'driverName' => ['nullable', 'string', 'max:255'],
+                'driverMobile' => ['nullable', 'string', 'max:255'],
+                'vehicleType' => ['nullable', 'string', 'max:255'],
+                'confirmNo' => ['nullable', 'string', 'max:255'],
                 'remarks' => ['nullable', 'string', 'max:2000'],
                 'passenger' => ['nullable', 'string', 'max:5000'],
                 'note' => ['nullable', 'string', 'max:5000'],
@@ -124,6 +126,10 @@ class EventChildController extends CrmsController
             ],
             'attendees' => [
                 'sellsideContactId' => ['required', 'integer'],
+                'position' => ['nullable', 'string', 'max:255'],
+                'officeNo' => ['nullable', 'string', 'max:255'],
+                'mobileNo' => ['nullable', 'string', 'max:255'],
+                'email' => ['nullable', 'email', 'max:255'],
             ],
             default => abort(404),
         };
@@ -143,7 +149,7 @@ class EventChildController extends CrmsController
         };
     }
 
-    private function attributes(string $type, array $d): array
+    private function attributes(string $type, array $d, Event $event): array
     {
         return match ($type) {
             'meetings' => [
@@ -162,7 +168,10 @@ class EventChildController extends CrmsController
                 'client_id' => $d['classification'] === 'client' ? $d['clientId'] : ($d['clientId'] ?? null),
                 'corporate_id' => $d['classification'] === 'corporate' ? $d['corporateId'] : ($d['corporateId'] ?? null),
                 'client_contact' => $this->clientContactSnapshots($d['clientContactIds']),
-                'corporate_contact' => $this->corporateContactSnapshots($d['corporateContactIds']),
+                // On Analyst Marketing the meeting's own analysts (a subset of the travelling party) sit in corporate_contact, as legacy did.
+                'corporate_contact' => $event->category() === EventCategory::AnalystMarketing && isset($d['analystIds'])
+                    ? $this->sellsideSnapshots($d['analystIds'])
+                    : $this->corporateContactSnapshots($d['corporateContactIds']),
             ],
             'investors' => [
                 'client_id' => $d['clientId'],
@@ -189,10 +198,11 @@ class EventChildController extends CrmsController
                 'timezone' => $d['timezone'] ?? null,
                 'location' => $d['location'],
                 'description' => $d['description'] ?? null,
-                'driver_name' => $d['driverName'],
-                'driver_mobile' => $d['driverMobile'],
-                'vehicle_type' => $d['vehicleType'],
-                'confirm_no' => $d['confirmNo'],
+                // NOT NULL in the legacy table; the old app stored blanks, so do we.
+                'driver_name' => $d['driverName'] ?? '',
+                'driver_mobile' => $d['driverMobile'] ?? '',
+                'vehicle_type' => $d['vehicleType'] ?? '',
+                'confirm_no' => $d['confirmNo'] ?? '',
                 'remarks' => $d['remarks'] ?? null,
                 'passenger' => $d['passenger'] ?? null,
                 'note' => $d['note'] ?? null,
@@ -207,21 +217,26 @@ class EventChildController extends CrmsController
                 'accommodator' => $d['accommodator'] ?? null,
                 'note' => $d['note'] ?? null,
             ],
-            'attendees' => $this->attendeeAttributes((int) $d['sellsideContactId']),
+            'attendees' => $this->attendeeAttributes($d),
         };
     }
 
-    /** The REGIS party row snapshots the staff member's contact details. */
-    private function attendeeAttributes(int $id): array
+    /**
+     * The REGIS party row snapshots the staff member's contact details from
+     * the directory; anything typed on the row overrides the snapshot, so a
+     * trip can print a roaming number without editing the directory.
+     */
+    private function attendeeAttributes(array $d): array
     {
-        $s = SellsideContact::findOrFail($id);
+        $s = SellsideContact::findOrFail((int) $d['sellsideContactId']);
+        $pick = fn (string $key, mixed $fallback) => isset($d[$key]) && trim((string) $d[$key]) !== '' ? trim((string) $d[$key]) : $fallback;
 
         return [
             'sellside_contact_id' => $s->id,
-            'position' => $s->position,
-            'office_no' => $s->office_no,
-            'mobile_no' => $s->mobile_no,
-            'email' => $s->email,
+            'position' => $pick('position', $s->position),
+            'office_no' => $pick('officeNo', $s->office_no),
+            'mobile_no' => $pick('mobileNo', $s->mobile_no),
+            'email' => $pick('email', $s->email),
         ];
     }
 

@@ -335,3 +335,28 @@ export const IconStarFilled = ({ size = 16, className }: IconProps) => (
     <path d="M12 3.9l2.45 4.96 5.48.8-3.97 3.86.94 5.46L12 16.4l-4.9 2.58.94-5.46-3.97-3.86 5.48-.8z" />
   </svg>
 );
+
+export const IconChevronDown = ({ size = 14, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+);
+
+export const IconChevronLeft = ({ size = 14, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M15 6l-6 6 6 6" />
+  </svg>
+);
+
+export const IconChevronRight = ({ size = 14, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);
+
+export const IconClock = ({ size = 16, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </svg>
+);

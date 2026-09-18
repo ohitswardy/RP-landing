@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * attendee columns are snapshots taken at save time and are never rewritten
  * (Database.md §4). `disposition` records how the analyst closed the entry:
  * closed (filed) or flagged (handed to the Email desk for sales to act on).
+ * `important` pins the record to the CRMS dashboard, with a one-line note on
+ * why it matters and the moment it was first marked.
  */
 class Interaction extends CrmsModel
 {
@@ -24,6 +26,8 @@ class Interaction extends CrmsModel
     protected $casts = [
         'interaction_date' => 'datetime',
         'actioned_at' => 'datetime',
+        'important' => 'boolean',
+        'important_at' => 'datetime',
         'time_start' => LegacyTime::class,
         'time_end' => LegacyTime::class,
         'form' => LegacyJson::class,
@@ -39,6 +43,25 @@ class Interaction extends CrmsModel
     public function type(): BelongsTo
     {
         return $this->belongsTo(InteractionType::class, 'interactions_type_id');
+    }
+
+    public function scopeImportant(Builder $q): Builder
+    {
+        return $q->where('important', true);
+    }
+
+    /**
+     * Set or clear the important mark. The note lives only while marked;
+     * important_at is the first time it was marked and survives re-saves.
+     */
+    public function markImportant(bool $important, ?string $note = null): static
+    {
+        $note = $note === null ? null : trim($note);
+        $this->important = $important;
+        $this->important_note = $important && $note !== '' ? $note : null;
+        $this->important_at = $important ? ($this->important_at ?? now()) : null;
+
+        return $this;
     }
 
     public function scopeBetween(Builder $q, ?string $from, ?string $to): Builder
@@ -186,6 +209,9 @@ class Interaction extends CrmsModel
             'authorId' => self::idOrNull($this->user_id),
             'disposition' => $this->disposition ?: self::DISPOSITION_CLOSED,
             'actionedAt' => $this->actioned_at?->toIso8601String(),
+            'important' => (bool) $this->important,
+            'importantNote' => $this->important_note,
+            'importantAt' => $this->important_at?->toIso8601String(),
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
         ];

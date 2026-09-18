@@ -4,6 +4,7 @@ import { useAuth } from './auth';
 import { useCms } from './store';
 import { Chip } from './ui';
 import RailBrandCanvas from './RailBrandCanvas';
+import RailBrandLogo from './RailBrandLogo';
 import { usePublishedHeight } from './kit/stickyOffset';
 import { useAppTheme } from '@/lib/theme';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -123,15 +124,7 @@ function RailLogo({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () =>
       className="shrink-0 border-t"
       style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }}
     >
-      {/* Logo */}
-      <div className="flex items-center justify-center border-b py-4" style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 8%, transparent)' }}>
-        <img
-          src="/Regis Logo.PNG"
-          alt="Regis Partners"
-          className="brand-mark object-contain transition-all duration-300"
-          style={{ width: expanded ? 44 : 28, height: expanded ? 44 : 28 }}
-        />
-      </div>
+      <RailBrandLogo />
 
       {/* User info */}
       <div className="flex items-center gap-3.5 pb-2 pl-[26px] pr-5 pt-3">
@@ -227,6 +220,10 @@ export default function CMSLayout() {
     setPinned((v) => {
       const next = !v;
       try { localStorage.setItem(PIN_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+      // Hovering never sets `open` while pinned, so unpinning would otherwise
+      // slam the rail shut under the cursor. Hand it back already open and let
+      // the pointer leaving collapse it.
+      if (!next) setOpen(true);
       return next;
     });
   };

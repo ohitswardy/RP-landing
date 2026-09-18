@@ -3,14 +3,16 @@ import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-
 import { apiFetch } from '../../lib/api';
 import { useAuth } from '../../cms/auth';
 import { BtnPrimary, ModuleHeader, RowAction, SelectField, useConfirm } from '../../cms/ui';
-import { IconArrowRight, IconCheck, IconPlus, IconTrash } from '../../cms/icons';
+import { IconArrowRight, IconCheck, IconDownload, IconMail, IconPeople, IconPlus, IconTrash } from '../../cms/icons';
 import { useCrms } from '../store';
 import DataTable, { type Column } from '../kit/DataTable';
 import { Tabs } from '../kit/fields';
 import { errorText, useToast } from '../kit/toast';
 import EventForm from './events/EventForm';
 import OneOffMeetingForm from './events/OneOffMeetingForm';
-import { EVENT_TYPES, fmtDay, fmtRange, type AuditEntry, type CrmsEvent, type EventCategory, type OneOffMeeting, type RoadshowCategory } from '../data';
+import ItineraryModal from './events/Itinerary';
+import { contactOptionsFrom, downloadItinerary, emailItinerary } from './events/itineraryActions';
+import { EVENT_TYPES, fmtDay, fmtRange, type AuditEntry, type CrmsEvent, type EventCategory, type EventDetail, type OneOffMeeting, type RoadshowCategory } from '../data';
 
 /* ─────────────────────────────────────────────────────────────
    Events. One list per type (tabs) with a year filter. Company
@@ -37,6 +39,8 @@ export default function EventsModule() {
   const [rows, setRows] = useState<CrmsEvent[]>([]);
   const [meetings, setMeetings] = useState<OneOffMeeting[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [itinerary, setItinerary] = useState<{ event: CrmsEvent; contacts: { id: string; label: string; hint?: string | null }[] } | null>(null);
 
   useEffect(() => {
     if (!category || id) return;
@@ -75,11 +79,37 @@ export default function EventsModule() {
     } catch (err) { notify(errorText(err, 'Could not delete the meeting.'), 'warn'); }
   }
 
+  // The legacy row icons: download the itinerary PDF, email it to yourself, or pick one contact for a personal schedule.
+  async function download(e: CrmsEvent) {
+    setBusy(e.id);
+    try { notify(`Downloading ${await downloadItinerary(e)}`); }
+    catch (err) { notify(errorText(err, 'The PDF could not be downloaded.'), 'warn'); }
+    finally { setBusy(null); }
+  }
+  async function email(e: CrmsEvent) {
+    setBusy(e.id);
+    try {
+      const res = await emailItinerary(e);
+      appendAudit(res.audit);
+      notify(`Itinerary PDF sent to ${res.to}.`);
+    } catch (err) { notify(errorText(err, 'The itinerary could not be emailed.'), 'warn'); }
+    finally { setBusy(null); }
+  }
+  async function byContact(e: CrmsEvent) {
+    setBusy(e.id);
+    try {
+      const d = await apiFetch<EventDetail>(`/crms/events/${e.id}`, { audience: 'cms' });
+      setItinerary({ event: d.item, contacts: contactOptionsFrom(d.children) });
+    } catch (err) { notify(errorText(err, 'That event could not be opened.'), 'warn'); }
+    finally { setBusy(null); }
+  }
+
   const eventColumns: Column<CrmsEvent>[] = [
     { key: 'startDate', label: 'Dates', mono: true, value: (e) => e.startDate, render: (e) => <span className="mono text-[12.5px]">{fmtRange(e.startDate, e.endDate)}</span> },
     { key: 'subject', label: info.subject, render: (e) => <span className="text-ink">{e.subject}</span> },
     ...(category === 'roadshows' ? [{ key: 'classification', label: 'Classification' } as Column<CrmsEvent>] : []),
-    { key: 'sellside', label: 'Regis', value: (e) => e.sellsideContacts.map((s) => s.name).join(', '), hidden: category === 'analyst-marketing' },
+    // The header only names the Regis party on Analyst Marketing (where they are the subject); elsewhere it lives on the Regis tab.
+    { key: 'sellside', label: 'Regis', value: (e) => e.sellsideContacts.map((s) => s.name).join(', '), hidden: true },
     { key: 'coordinator', label: 'Coordinator', hidden: true },
     { key: 'meetingCount', label: 'Meetings', mono: true, align: 'right' },
     { key: 'updatedAt', label: 'Updated', mono: true, hidden: true, value: (e) => e.updatedAt ?? '', render: (e) => <span className="mono text-[12px]">{e.updatedAt ? fmtDay(e.updatedAt.slice(0, 10)) : '—'}</span> },
@@ -88,8 +118,9 @@ export default function EventsModule() {
   const meetingColumns: Column<OneOffMeeting>[] = [
     { key: 'startDate', label: 'Date', mono: true, value: (m) => m.startDate, render: (m) => <span className="mono text-[12.5px]">{fmtDay(m.startDate)}</span> },
     { key: 'time', label: 'Time', mono: true, value: (m) => `${m.timeStart ?? ''}–${m.timeEnd ?? ''} ${m.timezone ?? ''}` },
-    { key: 'clientName', label: 'Client', render: (m) => <span className="text-ink">{m.clientName ?? '—'}</span> },
-    { key: 'corporateName', label: 'Corporate' },
+    { key: 'subject', label: 'With', render: (m) => <span className="text-ink">{m.subject}</span> },
+    { key: 'clientName', label: 'Client', value: (m) => m.clientName ?? '' },
+    { key: 'corporateName', label: 'Corporate', hidden: true },
     { key: 'classification', label: 'Kind', value: (m) => ({ analyst: 'Analyst', corporate: 'Corporate', expert_meeting: 'Expert' }[m.classification ?? 'analyst']) },
     { key: 'location', label: 'Location' },
     { key: 'meetingType', label: 'Format', hidden: true },
@@ -123,10 +154,15 @@ export default function EventsModule() {
           actions={(e) => (
             <>
               <RowAction label="Open" onClick={() => navigate(`/crms/events/${category}/${e.id}`)}><IconArrowRight size={14} /></RowAction>
+              <RowAction label="Download itinerary PDF" disabled={busy === e.id} onClick={() => void download(e)}><IconDownload size={14} /></RowAction>
+              <RowAction label="Email itinerary PDF to me" disabled={busy === e.id} onClick={() => void email(e)}><IconMail size={14} /></RowAction>
+              <RowAction label="Itinerary for one contact" disabled={busy === e.id} onClick={() => void byContact(e)}><IconPeople size={14} /></RowAction>
               {manage && <RowAction label={armed === e.id ? 'Confirm delete' : 'Delete'} danger onClick={() => confirm(e.id, () => { void removeEvent(e); })}>{armed === e.id ? <IconCheck /> : <IconTrash />}</RowAction>}
             </>
           )} />
       )}
+
+      {itinerary && <ItineraryModal event={itinerary.event} contactOptions={itinerary.contacts} onClose={() => setItinerary(null)} />}
     </div>
   );
 }

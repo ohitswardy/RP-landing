@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { apiBlobUrl, apiFetch } from '../../lib/api';
 import { BtnGhost, BtnPrimary, Chip, EmptyState, ModuleHeader, SkeletonRows, Stat, EASE } from '../ui';
 import { IconArrowDown, IconArrowUp, IconDownload, IconSearch, IconShield, IconX } from '../icons';
+import { DatePicker, Select } from '../kit/pickers';
 import { CLIENT_EVENTS, timeAgo, type ClientActivity, type ClientActivityEvent } from '../data';
 
 /* ─────────────────────────────────────────────────────────────
@@ -364,41 +365,43 @@ export default function ClientLogsModule() {
           </label>
 
           <div className="flex flex-wrap items-center gap-3 lg:ml-auto">
-            <label className="flex items-center gap-2">
-              <span className="sr-only">Filter by client</span>
-              <select
-                value={filters.clientId}
-                onChange={(e) => patchFilters({ clientId: e.target.value })}
-                className="appearance-none border rule bg-white px-3 py-2.5 text-[13px] text-ink outline-none transition-colors focus:border-[color:var(--color-amber-deep)]"
-              >
-                <option value="">All clients</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.firm ? ` — ${c.firm}` : ''}</option>
-                ))}
-              </select>
-            </label>
+            <Select
+              ariaLabel="Filter by client"
+              className="w-[240px]"
+              size="sm"
+              clearable
+              searchable
+              placeholder="All clients"
+              value={filters.clientId || null}
+              onChange={(v) => patchFilters({ clientId: v ?? '' })}
+              options={clients.map((c) => ({ id: c.id, label: c.name, hint: c.firm ?? null }))}
+            />
 
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <span className="mono text-[9.5px] uppercase tracking-[0.16em] text-graphite">From</span>
-                <input
-                  type="date"
-                  value={filters.from}
-                  max={filters.to || undefined}
-                  onChange={(e) => patchFilters({ from: e.target.value })}
-                  className="mono border rule bg-white px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-[color:var(--color-amber-deep)]"
+                <DatePicker
+                  ariaLabel="From date"
+                  className="w-[164px]"
+                  size="sm"
+                  placeholder="Any"
+                  value={filters.from || null}
+                  max={filters.to || null}
+                  onChange={(v) => patchFilters({ from: v ?? '' })}
                 />
-              </label>
-              <label className="flex items-center gap-2">
+              </div>
+              <div className="flex items-center gap-2">
                 <span className="mono text-[9.5px] uppercase tracking-[0.16em] text-graphite">To</span>
-                <input
-                  type="date"
-                  value={filters.to}
-                  min={filters.from || undefined}
-                  onChange={(e) => patchFilters({ to: e.target.value })}
-                  className="mono border rule bg-white px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-[color:var(--color-amber-deep)]"
+                <DatePicker
+                  ariaLabel="To date"
+                  className="w-[164px]"
+                  size="sm"
+                  placeholder="Any"
+                  value={filters.to || null}
+                  min={filters.from || null}
+                  onChange={(v) => patchFilters({ to: v ?? '' })}
                 />
-              </label>
+              </div>
             </div>
 
             {hasFilters && (

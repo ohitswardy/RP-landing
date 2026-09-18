@@ -166,6 +166,10 @@ export type Interaction = {
   authorId: string | null;
   disposition: Disposition;
   actionedAt: string | null;
+  /** Pinned to the CRMS dashboard, with a one-line reason and when it was first marked. */
+  important: boolean;
+  importantNote: string | null;
+  importantAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -186,6 +190,8 @@ export type InteractionPayload = {
   sellsideContactIds: string[];
   form: FormValue[];
   disposition: Disposition;
+  important: boolean;
+  importantNote: string;
 };
 
 export type Paged<T> = { items: T[]; total: number; page: number; pages: number };
@@ -277,6 +283,8 @@ export type OneOffMeeting = {
   corporateName: string | null;
   clientContacts: ContactSnapshot[];
   corporateContacts: CorporateContactSnapshot[];
+  /** The analysts an `analyst` meeting is about (legacy kept them as JSON in `description`). */
+  analysts: SellsideSnapshot[];
   interactionId: string | null;
   updatedAt: string | null;
 };
@@ -326,6 +334,8 @@ export type ItineraryItem = {
   detail: string;
   people: string[];
   note: string | null;
+  /** The printed layout: one where / when / what / who row per leg (two for a same-day flight). */
+  columns: { where: string | null; when: string[]; label: string | null; what: string[]; who: string[] }[];
 };
 
 export type Itinerary = {
@@ -380,11 +390,16 @@ export type PortalLink = {
 
 export type DashboardSummary = {
   range: { from: string; to: string };
-  totals: { interactions: number; minutes: number; clients: number; openFlags: number; upcomingEvents: number };
+  totals: { interactions: number; minutes: number; clients: number; important: number; openFlags: number; upcomingEvents: number; events: number };
+  /** The latest important interactions, regardless of the range — a pinned shelf. */
+  important: Interaction[];
   byMonth: { month: string; minutes: number; count: number }[];
   byClient: { client: string; clientId: string; minutes: number; count: number }[];
   topStocks: { stock: string; mentions: number }[];
   reverseDemand: { corporate: string; ticker: string | null; requests: number; clients: string[] }[];
+  /** The legacy dashboard tallies: company roadshows per corporate, reverse roadshows per client. */
+  roadshowTally: { corporate: string; events: number; meetings: number }[];
+  reverseTally: { client: string; events: number; meetings: number }[];
 };
 
 /* ── Helpers ───────────────────────────────────────────────── */

@@ -32,6 +32,8 @@ Route::prefix('crms')->middleware(['auth:sanctum', 'staff', 'permission:crms.acc
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/{event}', [EventController::class, 'show']);
     Route::get('/events/{event}/itinerary', [EventController::class, 'itinerary']);
+    Route::get('/events/{event}/itinerary.pdf', [EventController::class, 'itineraryPdf']);
+    Route::post('/events/{event}/itinerary/email', [EventController::class, 'emailItinerary'])->middleware('throttle:20,1');
     Route::get('/one-off-meetings', [OneOffMeetingController::class, 'index']);
     Route::get('/one-off-meetings/{meeting}', [OneOffMeetingController::class, 'show']);
     Route::get('/calendar', [InsightController::class, 'calendar']);
@@ -74,6 +76,7 @@ Route::prefix('crms')->middleware(['auth:sanctum', 'staff', 'permission:crms.acc
         Route::put('/interactions/{interaction}', [InteractionController::class, 'update']);
         Route::delete('/interactions/{interaction}', [InteractionController::class, 'destroy']);
         Route::post('/interactions/{interaction}/actioned', [InteractionController::class, 'actioned']);
+        Route::post('/interactions/{interaction}/important', [InteractionController::class, 'important']);
     });
 
     Route::middleware('permission:crms.events.manage')->group(function () {

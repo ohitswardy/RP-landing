@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EASE, EmptyState, SkeletonRows } from '../../cms/ui';
 import { IconArrowDown, IconArrowUp, IconDownload, IconSearch, IconX } from '../../cms/icons';
+import { Select } from '../../cms/kit/pickers';
 
 /* ─────────────────────────────────────────────────────────────
    The one list component every CRMS screen uses — the React
@@ -160,9 +161,14 @@ export default function DataTable<T extends { id: string }>({
               )}
             </AnimatePresence>
           </div>
-          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Rows per page" className="mono appearance-none border rule bg-white px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-slate outline-none">
-            {PAGE_SIZES.map((n) => <option key={n} value={n}>{n === 0 ? 'Show all' : `${n} rows`}</option>)}
-          </select>
+          <Select
+            variant="compact"
+            ariaLabel="Rows per page"
+            className="w-[128px]"
+            value={String(pageSize)}
+            onChange={(v) => { if (v !== null) setPageSize(Number(v)); }}
+            options={PAGE_SIZES.map((n) => ({ id: String(n), label: n === 0 ? 'Show all' : `${n} rows` }))}
+          />
           <ToolBtn onClick={exportCsv} disabled={filtered.length === 0}><IconDownload size={12} /> CSV</ToolBtn>
           <ToolBtn onClick={print} disabled={filtered.length === 0}>Print</ToolBtn>
         </div>

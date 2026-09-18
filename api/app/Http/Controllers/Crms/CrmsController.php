@@ -67,6 +67,19 @@ abstract class CrmsController extends Controller
         return $out;
     }
 
+    /** Minutes between two "HH:mm" times, for the contact-time column on a converted meeting. */
+    protected static function minutesBetween(?string $start, ?string $end): ?string
+    {
+        if (! $start || ! $end) {
+            return null;
+        }
+        [$sh, $sm] = array_pad(explode(':', $start), 2, 0);
+        [$eh, $em] = array_pad(explode(':', $end), 2, 0);
+        $minutes = ((int) $eh * 60 + (int) $em) - ((int) $sh * 60 + (int) $sm);
+
+        return $minutes > 0 ? (string) $minutes : null;
+    }
+
     /**
      * interactions.user_id still points at the legacy `user` table, which is
      * read-only history. Resolve the signed-in staff member to their legacy

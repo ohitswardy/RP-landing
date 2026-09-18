@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { apiFetch } from '../../../lib/api';
-import { BtnGhost, BtnPrimary, Chip, DateField, SelectField, TextField } from '../../../cms/ui';
-import { IconArrowRight, IconCheck } from '../../../cms/icons';
+import { BtnGhost, BtnPrimary, Chip, DateField, EASE, SelectField, TextField } from '../../../cms/ui';
+import { IconArrowRight, IconCheck, IconStar, IconStarFilled } from '../../../cms/icons';
 import { useCrms } from '../../store';
 import { FormError, MultiPicker, NumberField, Picker, SectionRule, TimeField } from '../../kit/fields';
 import { useOptions } from '../../kit/options';
@@ -15,8 +16,12 @@ import { fmtMinutes, today, type AuditEntry, type FormValue, type Interaction, t
    default) and narrows the type list and attendees. Every save
    is stored; the two buttons differ only in what happens after:
    close, or flag it and hand it to the CMS Email desk composer
-   pre-filled (§7.1). Nothing here sends mail.
+   pre-filled (§7.1). Nothing here sends mail. Independently of
+   that, the record can be marked important — it is then pinned
+   to the CRMS dashboard with a one-line reason.
    ───────────────────────────────────────────────────────────── */
+
+const NOTE_MAX = 280;
 
 type Draft = Omit<InteractionPayload, 'disposition'>;
 
@@ -36,7 +41,73 @@ function toDraft(i: Interaction | null, presets: { clientId?: string | null; con
     clientContactIds: i?.clientContacts.map((c) => String(c.id)) ?? (presets.contactId ? [presets.contactId] : []),
     sellsideContactIds: i?.sellsideContacts.map((s) => String(s.id)) ?? [],
     form: i?.form ?? [],
+    important: i?.important ?? false,
+    importantNote: i?.importantNote ?? '',
   };
+}
+
+/* The Importance panel: a switch-styled row with the star, and the
+   reason line that unfolds when it is on. Pure draft state — it is
+   saved with the rest of the form. */
+function ImportancePanel({ on, note, markedAt, onToggle, onNote }: {
+  on: boolean; note: string; markedAt: string | null; onToggle: () => void; onNote: (v: string) => void;
+}) {
+  const reduce = useReducedMotion();
+  const Star = on ? IconStarFilled : IconStar;
+  return (
+    <div className="border rule bg-paper transition-colors duration-300" style={on ? { borderLeft: '2px solid var(--color-amber-deep)' } : undefined}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        onClick={onToggle}
+        className="group flex w-full items-start gap-4 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--color-amber)]"
+      >
+        <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-[color,border-color,transform,background-color] duration-300 group-hover:scale-105"
+          style={on
+            ? { color: 'var(--color-paper)', background: 'var(--color-amber-deep)', borderColor: 'var(--color-amber-deep)' }
+            : { color: 'var(--color-graphite)', borderColor: 'color-mix(in oklab, var(--color-ink) 18%, transparent)' }}>
+          <Star size={14} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center justify-between gap-3">
+            <span className="mono text-[9.5px] uppercase tracking-[0.18em] text-graphite">Importance</span>
+            <span className="mono text-[9.5px] uppercase tracking-[0.16em]" style={{ color: on ? 'var(--color-amber-deep)' : 'var(--color-silver)' }}>{on ? 'On' : 'Off'}</span>
+          </span>
+          <span className="mt-1.5 block text-[14px] font-medium text-ink">{on ? 'Marked important' : 'Mark as important'}</span>
+          <span className="mt-1 block text-[12.5px] leading-relaxed text-slate">Pinned to the CRMS dashboard so the desk sees it first, and filterable on the list.</span>
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {on && (
+          <motion.div
+            key="note"
+            initial={reduce ? false : { height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={reduce ? undefined : { height: 0, opacity: 0 }}
+            transition={{ duration: 0.35, ease: EASE }}
+            className="overflow-hidden"
+          >
+            <div className="border-t rule px-5 pb-5 pt-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <label htmlFor="important-note" className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">Why it matters</label>
+                <span className="mono num text-[10px] tracking-[0.06em]" style={{ color: note.length >= NOTE_MAX ? 'var(--color-warn)' : 'var(--color-silver)' }}>{note.length}/{NOTE_MAX}</span>
+              </div>
+              <input
+                id="important-note"
+                value={note}
+                maxLength={NOTE_MAX}
+                onChange={(e) => onNote(e.target.value)}
+                placeholder="One line — mandate review, escalation, a name to remember"
+                className="mt-2 w-full border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
+              />
+              <p className="mt-2 text-[12px] text-graphite">{markedAt ? `Marked ${new Date(markedAt).toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' })}.` : 'Shown beside the record on the dashboard.'}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 function minutesBetween(a: string | null, b: string | null): number | null {
@@ -99,6 +170,7 @@ export default function InteractionForm({ interaction, presets, onSaved }: {
         clientId: Number(body.clientId), typeId: body.typeId ? Number(body.typeId) : null,
         clientContactIds: body.clientContactIds.map(Number), sellsideContactIds: body.sellsideContactIds.map(Number),
         description: body.description || null, internalNotes: body.internalNotes || null, actionPoint: body.actionPoint || null, recipients: body.recipients || null,
+        importantNote: body.important ? body.importantNote.trim() || null : null,
       };
       const res = interaction
         ? await apiFetch<ItemResponse>(`/crms/interactions/${interaction.id}`, { method: 'PUT', audience: 'cms', body: wire })
@@ -141,6 +213,11 @@ export default function InteractionForm({ interaction, presets, onSaved }: {
           <p className="mt-2 flex flex-wrap items-center gap-3 text-[12.5px] text-graphite">
             {interaction ? `Logged ${interaction.createdAt ? new Date(interaction.createdAt).toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}` : 'Every interaction is saved — it is the record the firm is paid on.'}
             {interaction?.disposition === 'flagged' && (interaction.actionedAt ? <Chip tone="live">Sent to recipients</Chip> : <Chip tone="amber" pulse>Flag open</Chip>)}
+            {draft.important && (
+              <span className="mono inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em]" style={{ color: 'var(--color-amber-deep)' }}>
+                <IconStarFilled size={11} /> Important{interaction && !interaction.important ? ' · unsaved' : ''}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-baseline gap-2">
@@ -190,6 +267,13 @@ export default function InteractionForm({ interaction, presets, onSaved }: {
         </div>
 
         <aside className="space-y-6 lg:col-span-4">
+          <ImportancePanel
+            on={draft.important}
+            note={draft.importantNote}
+            markedAt={interaction?.important ? interaction.importantAt : null}
+            onToggle={() => set('important', !draft.important)}
+            onNote={(v) => set('importantNote', v)}
+          />
           <div className="border rule bg-paper p-5">
             <p className="mono text-[9.5px] uppercase tracking-[0.18em] text-graphite">Save</p>
             <p className="mt-2 text-[13px] leading-relaxed text-slate">The interaction is recorded either way. Flag it when sales should move on it now — the Email desk composer opens with the summary, and the send goes through the same Graph pipeline and delivery log as every CMS email.</p>

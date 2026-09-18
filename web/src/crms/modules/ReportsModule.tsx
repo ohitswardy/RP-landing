@@ -20,8 +20,8 @@ import { TEMPLATE_CODES, type ReportTemplate, type ReportTemplateCode } from '..
 type ReportType = 'generic' | 'internal' | 'client';
 
 const TYPES: { id: ReportType; label: string; blurb: string }[] = [
-  { id: 'generic', label: 'Generic', blurb: 'Every interaction in range, one sheet, every column.' },
-  { id: 'internal', label: 'Internal', blurb: 'Analysts and Sales sheets split by the Regis attendees\' desk, plus the full set.' },
+  { id: 'generic', label: 'Generic', blurb: 'The flat T1C / Salesforce extract — one sheet, headers on row 1, ready to upload as-is.' },
+  { id: 'internal', label: 'Internal', blurb: 'The call report: Bespoke and Official events detail, Summary rankings, a firm × month pivot, and Sales / Analysts sheets by who logged each row.' },
   { id: 'client', label: 'By client', blurb: 'One client, in the layout their compliance team expects.' },
 ];
 

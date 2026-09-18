@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Crms\ReportGenerator;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -24,7 +25,10 @@ class CrmsAccessTest extends TestCase
     {
         parent::setUp();
         // The crms connection is sqlite in memory under phpunit; lay the schema down there too.
-        $this->artisan('migrate', ['--database' => 'crms', '--path' => 'database/migrations/2026_09_07_100000_create_crms_schema.php']);
+        $this->artisan('migrate', ['--database' => 'crms', '--path' => [
+            'database/migrations/2026_09_07_100000_create_crms_schema.php',
+            'database/migrations/2026_09_18_100000_add_important_to_crms_interactions.php',
+        ]]);
         $this->seed(RbacSeeder::class);
     }
 
@@ -91,10 +95,14 @@ class CrmsAccessTest extends TestCase
         $admin = $this->staff('Administrator');
         $client = Client::create(['name' => 'Schroders']);
 
-        $research = [['id' => 1, 'name' => 'Analyst A', 'type' => 'Analyst']];
-        $sales = [['id' => 2, 'name' => 'Sales B', 'type' => 'Sales']];
-        foreach ([['2026-08-05', $research], ['2026-08-20', $sales], ['2026-07-30', $research], ['2026-09-01', $sales]] as [$date, $desk]) {
-            Interaction::create(['client_id' => $client->id, 'interaction_date' => "$date 00:00:00", 'duration' => '30', 'sellside_contact' => $desk, 'form' => [], 'client_contact' => []]);
+        // Authors are legacy `user` rows; the analyst is typed "Research", the
+        // value the legacy report failed to match and so dropped.
+        DB::connection('crms')->table('user')->insert([
+            ['id' => 1, 'first_name' => 'Analyst', 'last_name' => 'A', 'type' => 'Research'],
+            ['id' => 2, 'first_name' => 'Sales', 'last_name' => 'B', 'type' => 'Sales'],
+        ]);
+        foreach ([['2026-08-05', 1], ['2026-08-20', 2], ['2026-07-30', 1], ['2026-09-01', 2]] as [$date, $author]) {
+            Interaction::create(['client_id' => $client->id, 'user_id' => $author, 'interaction_date' => "$date 00:00:00", 'duration' => '30', 'sellside_contact' => [], 'form' => [], 'client_contact' => []]);
         }
 
         $inRange = Interaction::where('client_id', $client->id)->between('2026-08-01', '2026-08-31')->count();
@@ -105,9 +113,11 @@ class CrmsAccessTest extends TestCase
         $this->assertCount($inRange, $client_report['sheets']['Consumption']['rows']);
 
         $internal = $generator->build('internal', '2026-08-01', '2026-08-31');
-        $this->assertCount(1, $internal['sheets']['Analysts']['rows'], 'analyst sheet must not come back empty');
-        $this->assertCount(1, $internal['sheets']['Sales']['rows']);
-        $this->assertCount(2, $internal['sheets']['All interactions']['rows']);
+        $this->assertSame(['Bespoke', 'Official events', 'Summary', 'Monthly by firm', 'Sales', 'Analysts'], array_keys($internal['sheets']));
+        $this->assertCount(2, $internal['sheets']['Bespoke']['rows']);
+        $people = fn (array $sheet) => array_values(array_filter(array_map(fn ($row) => $row[0]['v'] ?? null, $sheet['grid']), fn ($v) => in_array($v, ['Analyst A', 'Sales B'], true)));
+        $this->assertSame(['Analyst A'], $people($internal['sheets']['Analysts']), 'analyst sheet must not come back empty');
+        $this->assertSame(['Sales B'], $people($internal['sheets']['Sales']));
 
         $this->actingAs($admin)->postJson('/api/crms/reports/generate', ['type' => 'client', 'clientId' => $client->id, 'from' => '2026-08-01', 'to' => '2026-08-31'])
             ->assertOk()->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
