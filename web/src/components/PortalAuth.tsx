@@ -44,18 +44,28 @@ export type PortalConfig = {
   /** Bottom-right coordinate stamp. */
   stamp: string;
   glyph: GlyphPlacement;
+  /** The self-service reset page for this door. */
+  forgotHref?: string;
 };
 
 export default function PortalAuth({
   config,
   onSubmit,
+  notice,
 }: {
   config: PortalConfig;
-  /** Verify credentials; resolve to an error message, or null on success. */
-  onSubmit?: (identity: string, password: string) => Promise<string | null>;
+  /** Why the visitor is back at the door (session expired, signed out elsewhere). */
+  notice?: string | null;
+  /**
+   * Verify credentials; resolve to an error message, or null on success.
+   * `remember` is the "Remember for 30 days" checkbox: the caller passes it
+   * to the login endpoint and persists the token accordingly.
+   */
+  onSubmit?: (identity: string, password: string, remember: boolean) => Promise<string | null>;
 }) {
   const [email, setEmail] = useState('');
   const [pwd, setPwd] = useState('');
+  const [remember, setRemember] = useState(false);
   const [focus, setFocus] = useState<string | null>(null);
   const [showPwd, setShowPwd] = useState(false);
   const [modal, setModal] = useState<ModalType>(null);
@@ -70,7 +80,7 @@ export default function PortalAuth({
     setError(null);
     setBusy(true);
     try {
-      const err = await onSubmit(email, pwd);
+      const err = await onSubmit(email, pwd, remember);
       if (err) setError(err);
     } finally {
       setBusy(false);
@@ -182,6 +192,16 @@ export default function PortalAuth({
               <span>{config.code}</span>
             </div>
 
+            {notice && (
+              <p
+                role="status"
+                className="mb-8 border-l-2 pl-3.5 text-[12.5px] leading-relaxed text-black/60"
+                style={{ borderColor: 'var(--color-amber)' }}
+              >
+                {notice}
+              </p>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-9">
               <Field
                 id="email"
@@ -216,7 +236,13 @@ export default function PortalAuth({
               <div className="flex items-center justify-between text-[13px] text-black/55">
                 <label className="inline-flex cursor-pointer select-none items-center gap-2.5">
                   <span className="relative grid h-4 w-4 place-items-center rounded-[4px] border border-black/25 transition-colors duration-300 has-[input:checked]:border-[#0d0d0d] has-[input:checked]:bg-[#0d0d0d]">
-                    <input type="checkbox" className="peer absolute inset-0 cursor-pointer opacity-0" />
+                    <input
+                      type="checkbox"
+                      name="remember"
+                      checked={remember}
+                      onChange={(e) => setRemember(e.target.checked)}
+                      className="peer absolute inset-0 cursor-pointer opacity-0"
+                    />
                     <svg
                       viewBox="0 0 12 12"
                       className="h-2.5 w-2.5 opacity-0 transition-opacity duration-200 peer-checked:opacity-100"
@@ -231,7 +257,7 @@ export default function PortalAuth({
                   </span>
                   Remember for 30 days
                 </label>
-                <Link to="/contact" className="underline-offset-4 transition-colors hover:text-black">
+                <Link to={config.forgotHref ?? '/forgot-password'} className="underline-offset-4 transition-colors hover:text-black">
                   Forgot password
                 </Link>
               </div>

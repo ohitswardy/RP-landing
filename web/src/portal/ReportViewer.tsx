@@ -1,48 +1,62 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { fmtBytes, fmtDate, type Report } from '../cms/data';
-import { stampedReportBlob } from './download';
+import { ReportFileError, reportFileMessage, stampedReportBlob } from './download';
 import { trackActivity } from './track';
 import { IconX, IconDownload, IconExternal } from '../cms/icons';
 import RatingTag from './RatingTag';
 
 const EASE = [0.25, 1, 0.5, 1] as const;
 
+type UrlState =
+  | { status: 'idle' | 'loading'; url: null; error: null; retryable: false }
+  | { status: 'ready'; url: string; error: null; retryable: false }
+  | { status: 'error'; url: null; error: string; retryable: boolean };
+
 /** Resolve a report to a browser-usable URL. The copy the viewer renders is
     the stamped copy, so "New tab" and the PDF reader's own save button hand
-    over exactly what the Download button would. */
+    over exactly what the Download button would. An unstamped copy is never
+    shown: a failed stamp is an error state with a retry. */
 function useReportUrl(report: Report | null) {
-  const [state, setState] = useState<{ url: string | null; status: 'idle' | 'loading' | 'ready' | 'missing' }>({
-    url: null, status: 'idle',
-  });
+  const [state, setState] = useState<UrlState>({ status: 'idle', url: null, error: null, retryable: false });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!report) { setState({ url: null, status: 'idle' }); return; }
+    if (!report) { setState({ status: 'idle', url: null, error: null, retryable: false }); return; }
     let objectUrl: string | null = null;
     let alive = true;
 
-    setState({ url: null, status: 'loading' });
-    void stampedReportBlob(report).then((blob) => {
-      if (!alive) return;
-      if (!blob) {
-        setState({ url: null, status: 'missing' });
-        return;
-      }
-      objectUrl = URL.createObjectURL(blob);
-      setState({ url: objectUrl, status: 'ready' });
-    });
+    setState({ status: 'loading', url: null, error: null, retryable: false });
+    stampedReportBlob(report)
+      .then((blob) => {
+        if (!alive) return;
+        objectUrl = URL.createObjectURL(blob);
+        setState({ status: 'ready', url: objectUrl, error: null, retryable: false });
+      })
+      .catch((e: unknown) => {
+        if (!alive) return;
+        // A dead session is on its way to the door; nothing to show here.
+        if (e instanceof ReportFileError && e.kind === 'session') return;
+        setState({
+          status: 'error',
+          url: null,
+          error: reportFileMessage(e),
+          retryable: !(e instanceof ReportFileError && e.kind === 'missing'),
+        });
+      });
 
     return () => {
       alive = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [report]);
+  }, [report, attempt]);
 
-  return state;
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  return { ...state, retry };
 }
 
 export default function ReportViewer({ report, onClose }: { report: Report | null; onClose: () => void }) {
-  const { url, status } = useReportUrl(report);
+  const { url, status, error, retryable, retry } = useReportUrl(report);
 
   useEffect(() => {
     if (!report) return;
@@ -149,18 +163,40 @@ export default function ReportViewer({ report, onClose }: { report: Report | nul
             <div className="relative flex-1 bg-bone">
               {status === 'ready' && url ? (
                 <iframe title={report.title} src={`${url}#view=FitH`} className="h-full w-full" />
-              ) : status === 'loading' ? (
-                <div className="grid h-full place-items-center">
-                  <span className="mono text-[11px] uppercase tracking-[0.2em] text-graphite">Watermarking your copy…</span>
-                </div>
-              ) : (
+              ) : status === 'error' ? (
                 <div className="grid h-full place-items-center px-6">
-                  <div className="max-w-[38ch] text-center">
-                    <p className="text-[15px] font-medium text-ink">This PDF could not be retrieved.</p>
-                    <p className="mt-2 text-[13px] leading-relaxed text-graphite">
-                      The document may still be publishing. Refresh the portal, or ask your Regis coverage if it keeps failing.
+                  <div className="flex max-w-[40ch] flex-col items-center text-center">
+                    <span aria-hidden className="mb-5 block h-[2px] w-6" style={{ background: 'var(--color-warn)' }} />
+                    <p className="text-[15px] font-medium text-ink">
+                      {retryable ? 'Your copy could not be prepared.' : 'This report has no file yet.'}
+                    </p>
+                    <p role="alert" className="mt-2 text-[13px] leading-relaxed text-graphite">{error}</p>
+                    <div className="mt-6 flex items-center gap-2.5">
+                      {retryable && (
+                        <button
+                          type="button"
+                          onClick={retry}
+                          className="inline-flex h-9 items-center gap-2 bg-navy px-4 text-[12.5px] text-paper transition-colors duration-300 hover:bg-[color:var(--color-amber-deep)] active:translate-y-px"
+                        >
+                          Retry
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className="inline-flex h-9 items-center border rule px-4 text-[12.5px] text-slate transition-colors hover:border-[color:var(--color-amber-deep)] hover:text-ink"
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <p className="mono mt-6 text-[10px] uppercase tracking-[0.18em] text-silver">
+                      Copies leave only with a watermark
                     </p>
                   </div>
+                </div>
+              ) : (
+                <div className="grid h-full place-items-center">
+                  <span className="mono text-[11px] uppercase tracking-[0.2em] text-graphite">Watermarking your copy…</span>
                 </div>
               )}
             </div>

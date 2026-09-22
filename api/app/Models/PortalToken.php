@@ -44,12 +44,14 @@ class PortalToken extends Model
         return $this->used_at !== null || $this->expires_at->isPast();
     }
 
-    /** The address the client opens to finish the flow. */
+    /** The address the account holder opens to finish the flow. Staff reset
+        links land on the CMS door, client links on the portal. */
     public function url(): string
     {
         $base = rtrim((string) config('app.frontend_url'), '/');
         $path = $this->purpose === self::REGISTRATION ? 'register' : 'reset';
+        $area = $this->user?->isStaff() ? 'cms' : 'portal';
 
-        return "{$base}/portal/{$path}/{$this->token}";
+        return "{$base}/{$area}/{$path}/{$this->token}";
     }
 }

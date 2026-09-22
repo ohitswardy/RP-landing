@@ -46,7 +46,7 @@ class PortalClientController extends Controller
         $client = User::create([
             'name' => $data['name'],
             'email' => mb_strtolower($data['email']),
-            'username' => $data['username'] ?: $this->deriveUsername($data['email']),
+            'username' => ($data['username'] ?? null) ?: $this->deriveUsername($data['email']),
             // Placeholder until the client sets their own on the registration page.
             'password' => $direct ? $data['password'] : Str::random(40),
             'kind' => User::KIND_CLIENT,

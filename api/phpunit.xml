@@ -29,6 +29,12 @@
         <env name="CRMS_DB_DRIVER" value="sqlite"/>
         <env name="CRMS_DB_DATABASE" value=":memory:"/>
         <env name="MAIL_MAILER" value="array"/>
+        <!-- The local .env carries live Microsoft Graph credentials; tests must never see them. -->
+        <env name="MS_GRAPH_TENANT_ID" value=""/>
+        <env name="MS_GRAPH_CLIENT_ID" value=""/>
+        <env name="MS_GRAPH_CLIENT_SECRET" value=""/>
+        <env name="MS_GRAPH_SENDER" value=""/>
+        <env name="MS_GRAPH_SENDER_DOMAIN" value="regis.ph"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>

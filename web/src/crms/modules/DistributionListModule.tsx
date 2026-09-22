@@ -13,7 +13,8 @@ import type { SectorGroup, SectorScope } from '../data';
    Research distribution list (§7.8): the editable Domestic /
    Foreign hierarchy of sectors and the tickers under each. A
    client contact subscribes to groups on their own record; the
-   CMS Email desk does the sending.
+   CMS Email desk does the sending — its report matcher reads
+   these tags for every contact linked to a portal account.
    ───────────────────────────────────────────────────────────── */
 
 type Draft = { id: string | null; name: string; scope: SectorScope; position: number | null; corporateIds: string[] };
@@ -57,12 +58,12 @@ export default function DistributionListModule() {
 
   return (
     <div className="space-y-10">
-      <ModuleHeader code="08 · Distribution list" title="Research distribution list" blurb="The sector hierarchy each client contact is tagged into, held separately for domestic and foreign audiences, down to the tickers in each sector. Sending stays with the CMS Email desk."
+      <ModuleHeader code="08 · Distribution list" title="Research distribution list" blurb="The sector hierarchy each client contact is tagged into, held separately for domestic and foreign audiences, down to the tickers in each sector. Sending stays with the CMS Email desk, whose report matcher reads these tags for contacts linked to a portal account."
         actions={manage && <BtnPrimary onClick={() => open()}><IconPlus size={14} /> New sector</BtnPrimary>} />
 
       {unwired > 0 && (
         <p className="border-l-2 pl-4 text-[13px] leading-relaxed text-slate" style={{ borderColor: 'var(--color-amber)' }}>
-          <span className="text-ink">{unwired} contact{unwired === 1 ? '' : 's'}</span> carry sector selections but have no linked portal account, so their selections are not yet wired to a send. Link them from their contact record.
+          <span className="text-ink">{unwired} contact{unwired === 1 ? '' : 's'}</span> carry sector selections but have no linked portal account, so the Email desk matcher cannot reach them. Link them from their contact record.
         </p>
       )}
 
@@ -71,7 +72,7 @@ export default function DistributionListModule() {
           const groups = sectorGroups.filter((g) => g.scope === scope).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
           return (
             <section key={scope} className="space-y-4">
-              <SectionRule code={scope === 'domestic' ? 'Local audience' : 'Foreign audience'} title={scope === 'domestic' ? 'Domestic' : 'Foreign'} actions={manage && <BtnGhost onClick={() => open(undefined, scope)}><IconPlus size={12} /> Add</BtnGhost>} />
+              <SectionRule code={scope === 'domestic' ? 'Research-Domestics · local clients' : 'Research-Foreign · foreign clients'} title={scope === 'domestic' ? 'Domestic' : 'Foreign'} actions={manage && <BtnGhost onClick={() => open(undefined, scope)}><IconPlus size={12} /> Add</BtnGhost>} />
               {groups.length === 0 ? <p className="text-[13px] text-graphite">No sectors defined for this audience.</p> : (
                 <ul className="divide-y rule border-b rule">
                   {groups.map((g) => (
@@ -80,7 +81,7 @@ export default function DistributionListModule() {
                       <div className="col-span-9 min-w-0">
                         <p className="text-[14px] text-ink">{g.name} <span className="mono ml-2 text-[10px] uppercase tracking-[0.14em] text-silver">{g.subscriberCount} subscriber{g.subscriberCount === 1 ? '' : 's'}</span></p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          {g.corporateIds.length === 0 && <span className="text-[12px] text-silver">No tickers yet</span>}
+                          {g.corporateIds.length === 0 && <span className="text-[12px] text-silver">Sector-wide — no tickers, so the Email desk matcher cannot reach this group on its own</span>}
                           {g.corporateIds.map((id) => {
                             const c = corporateById.get(id);
                             return <span key={id} className="mono border rule bg-paper px-1.5 py-0.5 text-[11px] tracking-[0.04em] text-slate" title={c?.name}>{c?.ticker ?? c?.name ?? `#${id}`}</span>;

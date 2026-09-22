@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\AccountGate;
 use App\Support\SuperAdmin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,8 @@ class AuthController extends Controller
         $data = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string', 'min:8'],
+            // "Remember me": the token lives 30 days instead of dying with the tab.
+            'remember' => ['sometimes', 'boolean'],
         ]);
 
         $user = User::with('role.permissions')
@@ -27,15 +30,16 @@ class AuthController extends Controller
             return response()->json(['message' => 'Credentials not recognized. Check the address and password issued to you.'], 422);
         }
 
-        if ($user->suspended) {
-            return response()->json(['message' => 'This account is suspended. Contact systems administration.'], 403);
+        if ($message = AccountGate::staffBlock($user)) {
+            return response()->json(['message' => $message], 403);
         }
 
         $user->forceFill(['last_active_at' => now()])->saveQuietly();
-        $token = $user->createToken('cms', ['cms'])->plainTextToken;
+        $session = $user->issueSessionToken('cms', ['cms'], (bool) ($data['remember'] ?? false));
 
         return response()->json([
-            'token' => $token,
+            'token' => $session['token'],
+            'expiresAt' => $session['expiresAt'],
             'user' => $this->staffWire($user),
         ]);
     }
@@ -46,37 +50,26 @@ class AuthController extends Controller
             // Clients sign in with the Regis-issued user id or their email.
             'identity' => ['required', 'string', 'max:190'],
             'password' => ['required', 'string', 'min:8'],
+            'remember' => ['sometimes', 'boolean'],
         ]);
 
-        $identity = mb_strtolower(trim($data['identity']));
-        $user = User::where('kind', User::KIND_CLIENT)
-            ->where(fn ($q) => $q->where('email', $identity)->orWhere('username', $identity))
-            ->first();
+        $user = self::findClient($data['identity']);
 
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             return response()->json(['message' => 'Credentials not recognized. Use the user id and password issued with your mandate.'], 422);
         }
 
-        if ($message = $this->onboardingBlock($user)) {
+        if ($message = AccountGate::clientBlock($user)) {
             return response()->json(['message' => $message], 403);
         }
 
-        if ($user->suspended) {
-            return response()->json(['message' => 'Portal access for this mandate is suspended. Contact your Regis coverage.'], 403);
-        }
-
         $user->forceFill(['last_active_at' => now()])->saveQuietly();
-        $token = $user->createToken('portal', ['portal'])->plainTextToken;
+        $session = $user->issueSessionToken('portal', ['portal'], (bool) ($data['remember'] ?? false));
 
         return response()->json([
-            'token' => $token,
-            'client' => [
-                'id' => (string) $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'username' => $user->username,
-                'firm' => $user->firm ?? 'Institutional client',
-            ],
+            'token' => $session['token'],
+            'expiresAt' => $session['expiresAt'],
+            'client' => $user->toClientSessionWire(),
         ]);
     }
 
@@ -87,34 +80,45 @@ class AuthController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * The signed-in account, in the same shape its login returned, so a
+     * shell can refresh the session (permissions, role, profile) on boot.
+     */
     public function me(Request $request): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
 
         if ($user->isStaff()) {
+            if ($message = AccountGate::staffBlock($user)) {
+                return response()->json(['message' => $message], 403);
+            }
             $user->load('role.permissions');
 
-            return response()->json(['user' => $this->staffWire($user)]);
+            return response()->json(['kind' => User::KIND_STAFF, 'user' => $this->staffWire($user)]);
         }
 
-        return response()->json(['client' => [
-            'id' => (string) $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'firm' => $user->firm ?? 'Institutional client',
-        ]]);
+        if ($message = AccountGate::clientBlock($user)) {
+            return response()->json(['message' => $message], 403);
+        }
+
+        return response()->json(['kind' => User::KIND_CLIENT, 'client' => $user->toClientSessionWire()]);
     }
 
-    /** Why an otherwise valid client cannot sign in yet, or null when they can. */
-    private function onboardingBlock(User $user): ?string
+    /**
+     * A portal client by Regis-issued user id or email. Both halves match
+     * case-insensitively so an id typed as "rp-demo-0001" still lands.
+     */
+    public static function findClient(string $identity): ?User
     {
-        return match ($user->status) {
-            User::STATUS_INVITED => 'Your registration is not complete. Open the link in your welcome email to create your password.',
-            User::STATUS_PENDING => 'Your registration is with us for review. You will receive an email once it is approved.',
-            User::STATUS_DECLINED => 'This application was not approved. Contact your Regis coverage for help.',
-            default => null,
-        };
+        $identity = mb_strtolower(trim($identity));
+        if ($identity === '') {
+            return null;
+        }
+
+        return User::where('kind', User::KIND_CLIENT)
+            ->where(fn ($q) => $q->where('email', $identity)->orWhereRaw('LOWER(username) = ?', [$identity]))
+            ->first();
     }
 
     private function staffWire(User $user): array

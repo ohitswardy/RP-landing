@@ -209,23 +209,52 @@ function stampPage(
   drawAt(page, frame, ink, { ...foot, text: text.page, u: frame.w - FOOT_INSET - pageW, v: FOOT_BASELINE });
 }
 
+/** The stamp could not be written. The portal never hands over unstamped
+    bytes, so callers surface this with a retry rather than falling back. */
+export class WatermarkError extends Error {
+  /** `load` — the bytes are not a PDF we can open (malformed, encrypted);
+      `engine` — pdf-lib itself failed to load or write. */
+  reason: 'load' | 'engine';
+  constructor(reason: 'load' | 'engine', cause?: unknown) {
+    super(reason === 'load'
+      ? 'This PDF could not be watermarked. The stored file may be damaged or password-protected.'
+      : 'The watermarking engine could not run. Check your connection and try again.');
+    this.name = 'WatermarkError';
+    this.reason = reason;
+    if (cause !== undefined) (this as { cause?: unknown }).cause = cause;
+  }
+}
+
 /**
  * Stamp a stored PDF with this download's provenance.
  *
- * Returns `null` — never throws — when the bytes cannot be re-written
- * (a malformed or password-protected file). Callers fall back to the
- * stored file rather than leaving the client with nothing.
+ * Throws a `WatermarkError` when the bytes cannot be re-written (a malformed
+ * or password-protected file) or when pdf-lib cannot be loaded. It never
+ * resolves to the unstamped source: a copy without provenance is not a copy
+ * the portal hands over.
  */
 export async function stampPdf(
   source: ArrayBuffer,
   subject: StampSubject,
   actor: DownloadActor,
-): Promise<Blob | null> {
+): Promise<Blob> {
+  let lib: typeof import('pdf-lib');
   try {
-    const { PDFDocument, StandardFonts, rgb, degrees } = await import('pdf-lib');
-    const ink: Ink = { rgb, degrees };
+    lib = await import('pdf-lib');
+  } catch (e) {
+    throw new WatermarkError('engine', e);
+  }
+  const { PDFDocument, StandardFonts, rgb, degrees } = lib;
+  const ink: Ink = { rgb, degrees };
 
-    const doc = await PDFDocument.load(source, { ignoreEncryption: true, updateMetadata: false });
+  let doc: import('pdf-lib').PDFDocument;
+  try {
+    doc = await PDFDocument.load(source, { ignoreEncryption: true, updateMetadata: false });
+  } catch (e) {
+    throw new WatermarkError('load', e);
+  }
+
+  try {
     const fonts = {
       bold: await doc.embedFont(StandardFonts.HelveticaBold),
       body: await doc.embedFont(StandardFonts.Helvetica),
@@ -239,6 +268,7 @@ export async function stampPdf(
     const title = safe(subject.title);
 
     const pages = doc.getPages();
+    if (pages.length === 0) throw new WatermarkError('load');
     pages.forEach((page, i) => {
       stampPage(page, ink, fonts, { provenance, trail, title, page: `Page ${i + 1} of ${pages.length}` });
     });
@@ -252,7 +282,8 @@ export async function stampPdf(
     // TS models Uint8Array over ArrayBufferLike; Blob only accepts a view
     // onto a plain ArrayBuffer, which this always is at runtime.
     return new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
-  } catch {
-    return null;
+  } catch (e) {
+    if (e instanceof WatermarkError) throw e;
+    throw new WatermarkError('load', e);
   }
 }

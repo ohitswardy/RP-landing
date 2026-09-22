@@ -45,6 +45,11 @@ class ContactController extends Controller
             'offices.channels.*.value' => ['required', 'string', 'max:160'],
             'offices.emailLabel' => ['present', 'nullable', 'string', 'max:40'],
             'offices.email' => ['required', 'string', 'email', 'max:160'],
+
+            // Social links are optional so documents saved before the field existed still validate.
+            'social' => ['sometimes', 'nullable', 'array', 'max:8'],
+            'social.*.label' => ['required', 'string', 'max:40'],
+            'social.*.href' => ['required', 'string', 'max:500', 'regex:#^(https?://|mailto:|tel:)#i'],
         ]);
 
         // Rebuild the document key by key rather than storing the request
@@ -80,6 +85,10 @@ class ContactController extends Controller
                 'emailLabel' => (string) ($data['offices']['emailLabel'] ?? ''),
                 'email' => $data['offices']['email'],
             ],
+            'social' => array_map(
+                fn ($s) => ['label' => $s['label'], 'href' => $s['href']],
+                array_values($data['social'] ?? []),
+            ),
         ];
 
         $page = ContactPage::current();

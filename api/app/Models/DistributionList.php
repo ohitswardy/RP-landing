@@ -31,6 +31,7 @@ class DistributionList extends Model
             'description' => $this->description,
             'contacts' => $contacts,
             'count' => count($contacts),
+            'ownerId' => $this->created_by === null ? null : (string) $this->created_by,
             'createdByName' => $this->creator?->name,
             'createdAt' => $this->created_at?->toIso8601String() ?? now()->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String() ?? now()->toIso8601String(),

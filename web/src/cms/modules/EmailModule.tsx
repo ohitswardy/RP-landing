@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCms } from '../store';
 import { apiFetch } from '../../lib/api';
+import { isNoWorkerRefusal, NoWorkerModal, queueLine } from './email/queue';
 import {
   BtnGhost, BtnPrimary, Chip, EmptyState, ModuleHeader, RowAction, SkeletonRows, Stat, useConfirm, EASE,
 } from '../ui';
@@ -10,9 +11,9 @@ import { Modal } from '../kit/parts';
 import { Segmented } from './access/parts';
 import { IconCheck, IconCopy, IconEye, IconMail, IconPen, IconPlus, IconSearch, IconTrash, IconUndo } from '../icons';
 import {
-  BLAST_KIND, BLAST_STATUS, blastInFlight, blastLocked, fmtDate, timeAgo,
+  BLAST_KIND, BLAST_STATUS, EMPTY_QUEUE_HEALTH, blastInFlight, blastLocked, fmtDate, timeAgo,
   type AudienceClient, type AudienceSubscriber, type AuditEntry, type BlastMonth, type BlastStatus, type BlastVariant,
-  type DispatchInfo, type DistributionList, type EmailBlast, type EmailDelivery,
+  type DispatchInfo, type DistributionList, type EmailBlast, type EmailDelivery, type QueueHealth, type ResearchGroup,
 } from '../data';
 import BlastComposer from './email/BlastComposer';
 import ListsPanel from './email/ListsPanel';
@@ -24,8 +25,9 @@ import { previewInputFor, useRenderedPreview } from './email/usePreview';
    It leaves one of two ways: "Send now" queues a server-side send
    through Microsoft Graph from the staff member's own mailbox,
    batched and logged per batch; the Outlook hand-off copies the
-   email out by hand and marks the record sent. Saved distribution
-   lists live on the second tab.
+   email out by hand and marks the record sent. The second tab holds
+   the CRMS research hierarchy (read-only) and the staff member's own
+   saved lists.
    ───────────────────────────────────────────────────────────── */
 
 type Filter = 'all' | 'draft' | 'ready' | 'inflight' | 'sent' | 'failed';
@@ -39,12 +41,14 @@ const FILTERS: Array<{ key: Filter; label: string; match: (s: BlastStatus) => bo
 ];
 
 type Tab = 'blasts' | 'lists';
-type Audience = { clients: AudienceClient[]; subscribers: AudienceSubscriber[]; lists: DistributionList[]; dispatch: DispatchInfo };
+type Audience = { clients: AudienceClient[]; subscribers: AudienceSubscriber[]; lists: DistributionList[]; research: ResearchGroup[]; dispatch: DispatchInfo };
 type Ledger = { items: EmailBlast[]; months: BlastMonth[] };
 type ItemResponse = { item: EmailBlast; audit?: AuditEntry };
 
-const NO_DISPATCH: DispatchInfo = { graphReady: false, sender: null, senderAllowed: false, senderShared: false, senderDomain: '', batchSize: 500, attachmentMaxBytes: 0 };
+const NO_DISPATCH: DispatchInfo = { graphReady: false, sender: null, senderAllowed: false, senderShared: false, senderDomain: '', batchSize: 500, attachmentMaxBytes: 0, queue: EMPTY_QUEUE_HEALTH };
 const POLL_MS = 4000;
+/** How often the readiness strip re-reads the worker heartbeat while the desk is open. */
+const HEARTBEAT_MS = 30000;
 
 function monthLabel(key: string): string {
   const [y, m] = key.split('-').map(Number);
@@ -72,7 +76,7 @@ export default function EmailModule() {
   const [tab, setTab] = useState<Tab>('blasts');
   const [blasts, setBlasts] = useState<EmailBlast[]>([]);
   const [months, setMonths] = useState<BlastMonth[]>([]);
-  const [audience, setAudience] = useState<Audience>({ clients: [], subscribers: [], lists: [], dispatch: NO_DISPATCH });
+  const [audience, setAudience] = useState<Audience>({ clients: [], subscribers: [], lists: [], research: [], dispatch: NO_DISPATCH });
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -84,6 +88,8 @@ export default function EmailModule() {
   // Clear the hand-off from the URL once it has seeded the composer.
   useEffect(() => { if (params.get('compose')) setParams({}, { replace: true }); }, [params, setParams]);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  /** A send the API refused because no worker is running; the desk asks before queueing anyway. */
+  const [noWorker, setNoWorker] = useState<{ blast: EmailBlast; message: string } | null>(null);
   const [armed, confirm] = useConfirm(4000);
   const alive = useRef(true);
 
@@ -124,6 +130,21 @@ export default function EmailModule() {
     void load();
     return () => { alive.current = false; };
   }, [load]);
+
+  /* The worker heartbeat drifts on its own; keep the strip honest while the desk is open. */
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const tick = async () => {
+      try {
+        const res = await apiFetch<{ dispatch: DispatchInfo }>('/cms/email-blasts/readiness', { audience: 'cms' });
+        if (alive.current) setAudience((a) => ({ ...a, dispatch: { ...a.dispatch, ...res.dispatch, queue: res.dispatch.queue ?? a.dispatch.queue } }));
+      } catch {
+        /* the next tick tries again */
+      }
+    };
+    const t = window.setInterval(() => { void tick(); }, HEARTBEAT_MS);
+    return () => window.clearInterval(t);
+  }, [status]);
 
   const inFlight = useMemo(() => blasts.some(blastInFlight), [blasts]);
   useEffect(() => {
@@ -172,13 +193,17 @@ export default function EmailModule() {
   }
 
   /** Queue a Graph send (or retry a failed one) straight from the ledger. */
-  async function sendNow(b: EmailBlast) {
+  async function sendNow(b: EmailBlast, confirmNoWorker = false) {
     setLoadError(null);
     try {
-      const res = await apiFetch<ItemResponse>(`/cms/email-blasts/${b.id}/send`, { method: 'POST', audience: 'cms' });
+      const res = await apiFetch<ItemResponse>(`/cms/email-blasts/${b.id}/send`, {
+        method: 'POST', audience: 'cms', body: confirmNoWorker ? { confirmNoWorker: true } : undefined,
+      });
       appendAudit(res.audit);
       upsert(res.item);
+      setNoWorker(null);
     } catch (e) {
+      if (isNoWorkerRefusal(e)) { setNoWorker({ blast: b, message: e.message }); return; }
       setLoadError(e instanceof Error ? e.message : 'The blast could not be queued.');
     }
   }
@@ -196,6 +221,7 @@ export default function EmailModule() {
         clients={audience.clients}
         subscribers={audience.subscribers}
         lists={audience.lists}
+        research={audience.research}
         dispatch={dispatch}
         onSaved={upsert}
         onClose={() => setComposer(null)}
@@ -224,7 +250,7 @@ export default function EmailModule() {
       <Segmented
         options={[
           { value: 'blasts' as Tab, label: 'Blasts', count: blasts.length },
-          { value: 'lists' as Tab, label: 'Distribution lists', count: audience.lists.length },
+          { value: 'lists' as Tab, label: 'Distribution lists', count: audience.lists.length + audience.research.length },
         ]}
         value={tab}
         onChange={setTab}
@@ -234,6 +260,7 @@ export default function EmailModule() {
         status === 'loading' ? <SkeletonRows rows={4} /> : (
           <ListsPanel
             lists={audience.lists}
+            research={audience.research}
             clients={audience.clients}
             subscribers={audience.subscribers}
             onChange={(lists) => setAudience((a) => ({ ...a, lists }))}
@@ -242,6 +269,14 @@ export default function EmailModule() {
       ) : (
         <>
           {status === 'ready' && <DispatchStrip dispatch={dispatch} inFlight={inFlight} />}
+
+          <NoWorkerModal
+            open={noWorker !== null}
+            message={noWorker?.message ?? ''}
+            queue={dispatch.queue}
+            onClose={() => setNoWorker(null)}
+            onConfirm={() => { if (noWorker) void sendNow(noWorker.blast, true); }}
+          />
 
           {status === 'ready' && blasts.length > 0 && (
             <div className="grid grid-cols-2 gap-6 border-b rule pb-8 md:grid-cols-4">
@@ -422,31 +457,58 @@ function DispatchStrip({ dispatch, inFlight }: { dispatch: DispatchInfo; inFligh
   const live = dispatch.graphReady && Boolean(dispatch.sender) && dispatch.senderAllowed;
   const tone = live ? 'live' : dispatch.graphReady ? 'amber' : 'muted';
   const label = live ? 'Microsoft 365 · connected' : dispatch.graphReady ? 'Microsoft 365 · sender needed' : 'Outlook hand-off only';
+  const q = dispatch.queue ?? EMPTY_QUEUE_HEALTH;
+  const workerDown = live && !q.alive;
 
   return (
-    <div className="flex flex-col gap-2 border rule bg-white px-4 py-3 md:flex-row md:items-center md:justify-between">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-        <Chip tone={tone} pulse={live && inFlight}>{label}</Chip>
-        <span className="text-[12.5px] leading-relaxed text-graphite">
-          {!dispatch.graphReady ? (
-            <>Set <span className="mono">MS_GRAPH_TENANT_ID</span>, <span className="mono">MS_GRAPH_CLIENT_ID</span>, and <span className="mono">MS_GRAPH_CLIENT_SECRET</span> in the API environment to send from the server.</>
-          ) : !dispatch.sender ? (
-            <>No mailbox to send from — set <span className="mono">MS_GRAPH_SENDER</span> in the API environment, or add an Outlook account to your profile under <Link to="/cms/access" className="underline">Users &amp; access</Link>.</>
-          ) : !dispatch.senderAllowed ? (
-            <><span className="mono">{dispatch.sender}</span> is outside the {dispatch.senderDomain} tenant, so it cannot send from the server.</>
-          ) : (
-            <>
-              Sending as <span className="mono">{dispatch.sender}</span>
-              {dispatch.senderShared ? ' · shared desk mailbox' : ' · your mailbox'} · BCC batches of {dispatch.batchSize}.
-              Queued blasts need <span className="mono">php artisan queue:work</span> running.
-            </>
-          )}
-        </span>
+    <div className="border rule bg-white">
+      <div className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <Chip tone={tone} pulse={live && inFlight}>{label}</Chip>
+          <span className="text-[12.5px] leading-relaxed text-graphite">
+            {!dispatch.graphReady ? (
+              <>Set <span className="mono">MS_GRAPH_TENANT_ID</span>, <span className="mono">MS_GRAPH_CLIENT_ID</span>, and <span className="mono">MS_GRAPH_CLIENT_SECRET</span> in the API environment to send from the server.</>
+            ) : !dispatch.sender ? (
+              <>No mailbox to send from — set <span className="mono">MS_GRAPH_SENDER</span> in the API environment, or add an Outlook account to your profile under <Link to="/cms/access" className="underline">Users &amp; access</Link>.</>
+            ) : !dispatch.senderAllowed ? (
+              <><span className="mono">{dispatch.sender}</span> is outside the {dispatch.senderDomain} tenant, so it cannot send from the server.</>
+            ) : (
+              <>
+                Sending as <span className="mono">{dispatch.sender}</span>
+                {dispatch.senderShared ? ' · shared desk mailbox' : ' · your mailbox'} · BCC batches of {dispatch.batchSize}.
+              </>
+            )}
+          </span>
+        </div>
+        {live && (
+          <span className="mono shrink-0 text-[10px] uppercase tracking-[0.14em] text-silver">
+            To test: new ad-hoc blast → type your own address → Send now
+          </span>
+        )}
       </div>
+
+      {/* Queue heartbeat: a blast queued with no worker never leaves */}
       {live && (
-        <span className="mono shrink-0 text-[10px] uppercase tracking-[0.14em] text-silver">
-          To test: new ad-hoc blast → type your own address → Send now
-        </span>
+        <div
+          className="flex flex-col gap-1.5 border-t px-4 py-2.5 md:flex-row md:items-center md:justify-between"
+          style={workerDown
+            ? { borderColor: 'var(--color-warn)', background: 'color-mix(in oklab, var(--color-warn) 8%, transparent)' }
+            : { borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }}
+        >
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Chip tone={q.alive ? 'live' : 'warn'} pulse={q.alive && inFlight}>{q.alive ? 'Queue worker · alive' : 'Queue worker · down'}</Chip>
+            <span className="mono num text-[10.5px] tracking-[0.06em] text-graphite">{queueLine(q)}</span>
+          </div>
+          {workerDown ? (
+            <span className="text-[12px] font-medium leading-snug" style={{ color: 'var(--color-warn)' }}>
+              Nothing sends until <span className="mono">php artisan queue:work</span> is running. Blasts queued now will sit at “Queued”.
+            </span>
+          ) : (
+            <span className="mono text-[9.5px] uppercase tracking-[0.14em] text-silver">
+              Heartbeat re-read every {HEARTBEAT_MS / 1000} s
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

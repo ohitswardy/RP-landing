@@ -9,6 +9,7 @@ use App\Models\Crms\ReportTemplate;
 use App\Models\Crms\SectorGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -197,7 +198,12 @@ class ConfigController extends CrmsController
     {
         return [
             'clientId' => ['required', 'integer', Rule::unique('crms.report_templates', 'client_id')->ignore($t?->id)],
-            'code' => ['required', Rule::in(ReportTemplate::CODES)],
+            'code' => ['required', Rule::in(ReportTemplate::CODES), function (string $attribute, mixed $value, \Closure $fail) use ($t) {
+                // One Jefferies upload: the binding lives on one client row (the "Jefferies" client), never two.
+                if ($value === 'jefferies' && ReportTemplate::where('code', 'jefferies')->when($t, fn ($q) => $q->whereKeyNot($t->id))->exists()) {
+                    $fail('Only one client can hold the Jefferies upload binding.');
+                }
+            }],
             'active' => ['sometimes', 'boolean'],
         ];
     }
@@ -205,6 +211,9 @@ class ConfigController extends CrmsController
     public function storeTemplate(Request $request): JsonResponse
     {
         $d = $request->validate($this->templateRules(null));
+        if ($d['code'] === 'custom') {
+            return response()->json(['message' => 'An imported template is created from the Form builder, where its workbook is uploaded.'], 422);
+        }
         $t = ReportTemplate::create(['client_id' => $d['clientId'], 'code' => $d['code'], 'is_active' => $d['active'] ?? true]);
 
         return $this->item($t->load('client')->toWire(), $this->audit('Bound report template', $t->code), 201);
@@ -213,6 +222,14 @@ class ConfigController extends CrmsController
     public function updateTemplate(Request $request, ReportTemplate $template): JsonResponse
     {
         $d = $request->validate($this->templateRules($template));
+        if ($d['code'] === 'custom' && ! $template->hasLayout()) {
+            return response()->json(['message' => 'Import a workbook from the Form builder to use an imported template.'], 422);
+        }
+        // Moving off the imported template lets its workbook go.
+        if ($template->hasLayout() && $d['code'] !== 'custom') {
+            $this->dropLayoutFile($template);
+            $template->fill(['layout' => null, 'layout_file' => null, 'layout_name' => null, 'layout_imported_at' => null]);
+        }
         $template->fill(['client_id' => $d['clientId'], 'code' => $d['code'], 'is_active' => $d['active'] ?? $template->is_active])->save();
 
         return $this->item($template->load('client')->toWire(), $this->audit('Updated report template', $template->code));
@@ -221,8 +238,17 @@ class ConfigController extends CrmsController
     public function destroyTemplate(ReportTemplate $template): JsonResponse
     {
         $code = $template->code;
+        $label = $template->hasLayout() ? "$code · ".$template->layout_name : $code;
+        $this->dropLayoutFile($template);
         $template->delete();
 
-        return $this->deleted($this->audit('Removed report template', $code));
+        return $this->deleted($this->audit('Removed report template', $label));
+    }
+
+    private function dropLayoutFile(ReportTemplate $template): void
+    {
+        if ($template->layout_file && Storage::disk('local')->exists($template->layout_file)) {
+            Storage::disk('local')->delete($template->layout_file);
+        }
     }
 }

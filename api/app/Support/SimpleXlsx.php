@@ -38,7 +38,26 @@ class SimpleXlsx
         'subhead' => 13,
         'subheadNum' => 14,
         'numBold' => 15,
+        'date' => 16,      // mm/dd/yyyy (US, as Jefferies asks)
+        'time' => 17,      // h:mm
+        'isoDate' => 18,   // yyyy-mm-dd
+        'clock' => 19,     // hh:mm:ss
+        'bold' => 20,
     ];
+
+    /** Days since 1899-12-30 for a Y-m-d string, the serial Excel stores a date as. */
+    public static function dateSerial(string $ymd): int
+    {
+        return (int) floor((strtotime($ymd.' UTC') - strtotime('1899-12-30 UTC')) / 86400);
+    }
+
+    /** Fraction of a day for "H:i" or "H:i:s", the serial Excel stores a time as. */
+    public static function timeSerial(string $hms): float
+    {
+        $parts = array_map('intval', explode(':', $hms) + [0, 0, 0]);
+
+        return round(($parts[0] * 3600 + $parts[1] * 60 + $parts[2]) / 86400, 10);
+    }
 
     private const NAVY = 'FF14213D';
 
@@ -220,6 +239,20 @@ class SimpleXlsx
             }
             $xml .= '</mergeCells>';
         }
+        /* Dropdowns and numeric bounds, as ['type' => 'list'|'whole', 'sqref' => ..., 'formula1' => ..., 'formula2' => ..., 'error' => ...].
+           A list formula is either an inline "a,b,c" (quoted) or a range, which may sit on another sheet. */
+        if (! empty($sheet['validations'])) {
+            $xml .= '<dataValidations count="'.count($sheet['validations']).'">';
+            foreach ($sheet['validations'] as $dv) {
+                $xml .= '<dataValidation type="'.$dv['type'].'" allowBlank="1" showInputMessage="1" showErrorMessage="1"'
+                    .(isset($dv['error']) ? ' errorTitle="Invalid value" error="'.self::esc($dv['error']).'"' : '')
+                    .' sqref="'.$dv['sqref'].'">'
+                    .'<formula1>'.self::esc((string) $dv['formula1']).'</formula1>'
+                    .(isset($dv['formula2']) ? '<formula2>'.self::esc((string) $dv['formula2']).'</formula2>' : '')
+                    .'</dataValidation>';
+            }
+            $xml .= '</dataValidations>';
+        }
         $xml .= '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>'
             .'<pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>';
 
@@ -302,11 +335,18 @@ class SimpleXlsx
             $xf(4, 0, 3),                                                   // 13 subhead
             $xf(4, 0, 3, 0, 'horizontal="right"'),                          // 14 subheadNum
             $xf(5, 0, 0, 164),                                              // 15 numBold (row totals)
+            $xf(0, 0, 0, 166),                                              // 16 date mm/dd/yyyy
+            $xf(0, 0, 0, 167),                                              // 17 time h:mm
+            $xf(0, 0, 0, 168),                                              // 18 isoDate yyyy-mm-dd
+            $xf(0, 0, 0, 169),                                              // 19 clock hh:mm:ss
+            $xf(5),                                                         // 20 bold
         ];
 
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             .'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            .'<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="0.0%"/></numFmts>'
+            .'<numFmts count="6"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="0.0%"/>'
+            .'<numFmt numFmtId="166" formatCode="mm/dd/yyyy"/><numFmt numFmtId="167" formatCode="h:mm"/>'
+            .'<numFmt numFmtId="168" formatCode="yyyy\-mm\-dd"/><numFmt numFmtId="169" formatCode="hh:mm:ss"/></numFmts>'
             .'<fonts count="'.count($fonts).'">'.implode('', $fonts).'</fonts>'
             .'<fills count="'.count($fills).'">'.implode('', $fills).'</fills>'
             .'<borders count="'.count($borders).'">'.implode('', $borders).'</borders>'

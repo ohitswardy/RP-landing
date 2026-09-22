@@ -1,11 +1,12 @@
-import { useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import Reveal from '../components/Reveal';
 import TeamTabs, { type TeamTab } from '../components/TeamTabs';
 import { type Person } from '../components/PersonCard';
 import { useAboutContent, type AboutCopy } from '../lib/aboutContent';
 import { TEAM_ORDER, type StaffProfile, type StaffTeam } from '../lib/peopleContent';
+import { slugify } from '../lib/insightsContent';
 
 function CompanyOverview({ overview }: { overview: AboutCopy['overview'] }) {
   return (
@@ -402,7 +403,24 @@ function toPerson(p: StaffProfile): Person {
 
 function LeadershipSection({ heading, people }: { heading: string; people: StaffProfile[] | null }) {
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') ?? undefined;
+  const { hash } = useLocation();
+
+  // /about#{person-slug} (site search, CMS anchors): open that person's team
+  // tab, then scroll to the card once the roster has actually rendered.
+  const anchored = useMemo(() => {
+    const key = hash.startsWith('#') ? hash.slice(1) : '';
+    return key && people ? people.find((p) => slugify(p.name) === key) : undefined;
+  }, [hash, people]);
+  const initialTab = anchored ? TEAM_IDS[anchored.team] : (searchParams.get('tab') ?? undefined);
+
+  useEffect(() => {
+    if (!anchored) return;
+    const id = slugify(anchored.name);
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [anchored]);
 
   // Only teams with someone published get a tab.
   const teamTabs: TeamTab[] = useMemo(() => {

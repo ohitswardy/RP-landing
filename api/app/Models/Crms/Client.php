@@ -20,6 +20,14 @@ class Client extends CrmsModel
         return $id ? (int) $id : null;
     }
 
+    /** The co-brand's own client row ("Jefferies", id 297 in production), which holds the Jefferies upload binding. */
+    public static function jefferiesId(): ?int
+    {
+        $id = static::where('name', 'like', '%jefferies%')->orderBy('id')->value('id');
+
+        return $id ? (int) $id : null;
+    }
+
     public function addresses(): HasMany
     {
         return $this->hasMany(ClientAddress::class, 'client_id');

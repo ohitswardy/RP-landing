@@ -10,14 +10,34 @@ export type Article = {
   id: string;
   tag: string;
   title: string;
+  /** URL handle on the public site: /insights/{slug}. Derived from the title when left blank. */
+  slug: string;
   author: string;
   date: string;        // ISO
   status: ArticleStatus;
   reads: number;
   excerpt: string;
+  /** The note itself, as HTML. Empty for legacy summaries that never carried a body. */
+  body: string;
   /** The one note promoted to the lead block on /insights. */
   featured: boolean;
 };
+
+/** What the API accepts as a slug: lowercase words joined by single hyphens. */
+export const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** The slug the API would derive from a title, so the editor can suggest it live. */
+export function slugify(text: string): string {
+  return text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 200)
+    .replace(/-+$/g, '');
+}
 
 /* ── Insights page copy ────────────────────────────── */
 
@@ -98,6 +118,13 @@ export const EMPTY_ABOUT: AboutCopy = {
 /** One row in the office ledger's contact column — TEL, FAX, and so on. */
 export type ContactChannel = { label: string; value: string };
 
+/** One social link in the site footer and on /contact. */
+export type ContactSocialLink = { label: string; href: string };
+
+/** The link prefixes the API accepts for a social link. */
+export const SOCIAL_HREF_RE = /^(https?:\/\/|mailto:|tel:)/i;
+export const MAX_SOCIAL_LINKS = 8;
+
 /** Every text block on /contact. The enquiry form's plumbing stays in code. */
 export type ContactCopy = {
   hero: { eyebrow: string; title: string; image: string };
@@ -127,6 +154,8 @@ export type ContactCopy = {
     emailLabel: string;
     email: string;
   };
+  /** Footer / contact-page social links, in display order. Empty until the desk adds some. */
+  social: ContactSocialLink[];
 };
 
 export const EMPTY_CONTACT: ContactCopy = {
@@ -139,6 +168,7 @@ export const EMPTY_CONTACT: ContactCopy = {
     eyebrow: '', heading: '', addressLabel: '', address: [],
     contactLabel: '', channels: [], emailLabel: '', email: '',
   },
+  social: [],
 };
 
 /** One numbered row in the "what the practice delivers" ledger. */
@@ -283,8 +313,27 @@ export type Subscriber = {
   email: string;
   firm: string;
   joined: string;      // ISO
-  source: 'Insights page' | 'Footer' | 'Conference' | 'Referral';
+  /** Where the sign-up came from: "Insights page", "Footer", "Conference", "Referral", or whatever the import carried. */
+  source: string;
   verified: boolean;
+  /** When the double opt-in landed; null while still pending. */
+  verifiedAt: string | null;
+  /** When the address opted out through its unsubscribe link; null while still on the list. */
+  unsubscribedAt: string | null;
+};
+
+/** The three states a subscriber row can be in, for the Recipients filter. */
+export type SubscriberState = 'verified' | 'unverified' | 'unsubscribed';
+
+export function subscriberState(s: Pick<Subscriber, 'verified' | 'unsubscribedAt'>): SubscriberState {
+  if (s.unsubscribedAt) return 'unsubscribed';
+  return s.verified ? 'verified' : 'unverified';
+}
+
+export const SUBSCRIBER_STATE: Record<SubscriberState, { label: string; tone: 'live' | 'amber' | 'muted' | 'warn' }> = {
+  verified: { label: 'Verified', tone: 'live' },
+  unverified: { label: 'Pending', tone: 'amber' },
+  unsubscribed: { label: 'Opted out', tone: 'warn' },
 };
 
 export type PageBlock = {
@@ -298,13 +347,67 @@ export type PageBlock = {
   editor: string;
 };
 
+export type MediaKind = 'photo' | 'graphic' | 'portrait';
+
 export type MediaAsset = {
   id: string;
   path: string;
   label: string;
-  kind: 'photo' | 'graphic' | 'portrait';
+  kind: MediaKind;
   usedBy: string;
 };
+
+export const MEDIA_KINDS: Array<{ value: MediaKind; label: string }> = [
+  { value: 'photo', label: 'Photo' },
+  { value: 'portrait', label: 'Portrait' },
+  { value: 'graphic', label: 'Graphic' },
+];
+
+/* ── Careers ───────────────────────────────────────────────── */
+
+export type CareerType = 'Full-time' | 'Contract' | 'Internship';
+export type CareerStatus = 'open' | 'closed';
+
+/** One posting on the public /careers page. */
+export type Career = {
+  id: string;
+  title: string;
+  dept: string;
+  type: CareerType;
+  location: string;
+  /** The one-paragraph card summary. */
+  summary: string;
+  /** The full posting, as HTML. */
+  body: string;
+  posted: string;      // ISO (yyyy-mm-dd), stamped by the API on creation
+  status: CareerStatus;
+  applicants: number;
+};
+
+export const CAREER_TYPES: CareerType[] = ['Full-time', 'Contract', 'Internship'];
+
+export const CAREER_STATUS: Record<CareerStatus, { label: string; tone: 'live' | 'muted' }> = {
+  open: { label: 'Open', tone: 'live' },
+  closed: { label: 'Closed', tone: 'muted' },
+};
+
+/* ── Market ribbon ─────────────────────────────────────────── */
+
+/** One ticker on the public market ribbon. Pinned symbols lead, then list order. */
+export type WatchSymbol = {
+  id: string;
+  sym: string;
+  name: string;
+  pinned: boolean;
+};
+
+/** The order the public ribbon prints: pinned first, then as listed. */
+export function ribbonOrder<T extends Pick<WatchSymbol, 'pinned'>>(list: T[]): T[] {
+  return [...list.filter((w) => w.pinned), ...list.filter((w) => !w.pinned)];
+}
+
+/** PSE tickers are 1-6 letters or digits. */
+export const WATCH_SYM_RE = /^[A-Z0-9]{1,6}$/;
 
 export type ReportCategory =
   | 'Banks' | 'Conglomerates' | 'Consumer' | 'Hotels / Leisure / Gaming'
@@ -584,16 +687,46 @@ export type EmailDelivery = {
   sentAt: string | null;
 };
 
-/** A saved audience the composer and the newsletter blast panel pick from. */
+/**
+ * A saved audience the composer and the newsletter blast panel pick from.
+ * Lists are personal: the API only serves the signed-in staff member's own
+ * (plus any left ownerless when an account was deleted).
+ */
 export type DistributionList = {
   id: string;
   name: string;
   description: string | null;
   contacts: EmailRecipient[];
   count: number;
+  /** The staff account that keeps this list; null when that account is gone. */
+  ownerId: string | null;
   createdByName: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/**
+ * One sector of the CRMS research distribution hierarchy (Research-Domestics /
+ * Research-Foreign), as /cms/email-blasts/audience serves it: its tickers and
+ * the contacts a blast can actually reach — those linked to an approved portal
+ * account. Edited in the CRMS, read-only here.
+ */
+export type ResearchGroup = {
+  id: string;
+  scope: 'domestic' | 'foreign';
+  name: string;
+  position: number;
+  tickers: string[];
+  /** Every contact tagged into the sector in the CRMS. */
+  contactCount: number;
+  /** Tagged contacts with no approved portal account behind them — the desk cannot reach these. */
+  unlinkedCount: number;
+  recipients: EmailRecipient[];
+};
+
+export const RESEARCH_SCOPE: Record<ResearchGroup['scope'], { code: string; label: string }> = {
+  domestic: { code: 'Research-Domestics', label: 'Domestic' },
+  foreign: { code: 'Research-Foreign', label: 'Foreign' },
 };
 
 /** Sent volume for one calendar month (yyyy-mm). */
@@ -610,6 +743,30 @@ export type DispatchInfo = {
   senderDomain: string;
   batchSize: number;
   attachmentMaxBytes: number;
+  /** Whether `queue:work` is actually running: a blast queued without it never leaves. */
+  queue: QueueHealth;
+};
+
+/** The queue worker's heartbeat, as /cms/email-blasts/readiness and /audience report it. */
+export type QueueHealth = {
+  driver: string;
+  alive: boolean;
+  lastSeenAt: string | null; // ISO
+  /** Jobs waiting on the database queue; null on any other driver. */
+  pending: number | null;
+  /** Blasts stuck at `queued` past the staleness threshold. */
+  stale: number;
+};
+
+export const EMPTY_QUEUE_HEALTH: QueueHealth = { driver: '', alive: false, lastSeenAt: null, pending: null, stale: 0 };
+
+/** How a matched client earned its place on a report blast. */
+export type MatchVia = 'prefs' | 'sectorGroup' | 'both';
+
+export const MATCH_VIA: Record<MatchVia, { label: string; hint: string }> = {
+  prefs: { label: 'Prefs', hint: 'Matched on the portal account\u2019s sector or analyst preferences' },
+  sectorGroup: { label: 'Sector group', hint: 'Matched through a CRMS sector-group membership' },
+  both: { label: 'Both', hint: 'Matched on preferences and through a CRMS sector group' },
 };
 
 export const BLAST_KIND: Record<BlastKind, string> = {
@@ -627,6 +784,8 @@ export type AudienceClient = {
   clientType: 'Local' | 'Foreign' | null;
   sectorPrefs: string[];
   preferredAnalysts: string[];
+  /** Only on rows from /cms/email-blasts/match: why this client matched. */
+  via?: MatchVia;
 };
 
 export type AudienceSubscriber = {

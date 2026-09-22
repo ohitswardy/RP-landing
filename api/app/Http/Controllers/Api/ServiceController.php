@@ -9,6 +9,7 @@ use App\Support\Audit;
 use App\Support\MediaLibrary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ServiceController extends Controller
 {
@@ -61,6 +62,80 @@ class ServiceController extends Controller
         );
 
         return response()->json(['item' => $service->toWire(), 'audit' => $audit->toWire()]);
+    }
+
+    /**
+     * A new practice page. Mirrors update's schema; the slug derives from
+     * the title unless one is given, and is made unique either way. New
+     * lines land last and unpublished so the desk can fill them in first.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'slug' => ['sometimes', 'nullable', 'string', 'max:80', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
+            'eyebrow' => ['sometimes', 'nullable', 'string', 'max:60'],
+            'dek' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'introHeading' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'img' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'heroImages' => ['sometimes', 'array', 'max:8'],
+            'heroImages.*' => ['string', 'max:500'],
+            'pillars' => ['sometimes', 'array', 'max:12'],
+            'pillars.*.title' => ['required', 'string', 'max:120'],
+            'pillars.*.body' => ['required', 'string', 'max:600'],
+            'proof' => ['sometimes', 'array', 'max:4'],
+            'proof.*.value' => ['required', 'string', 'max:40'],
+            'proof.*.label' => ['required', 'string', 'max:60'],
+            'live' => ['sometimes', 'boolean'],
+        ], ['slug.regex' => 'Slugs are lowercase words joined by hyphens.']);
+
+        $service = ServiceLine::create([
+            'slug' => $this->uniqueSlug($data['slug'] ?? null, $data['title']),
+            'title' => $data['title'],
+            'eyebrow' => (string) ($data['eyebrow'] ?? 'Service'),
+            'dek' => (string) ($data['dek'] ?? ''),
+            'intro_heading' => (string) ($data['introHeading'] ?? 'What the practice delivers.'),
+            'img' => (string) ($data['img'] ?? ''),
+            'hero_images' => array_values($data['heroImages'] ?? []),
+            'pillars' => array_map(fn ($p) => ['title' => $p['title'], 'body' => $p['body']], $data['pillars'] ?? []),
+            'proof' => array_map(fn ($p) => ['value' => $p['value'], 'label' => $p['label']], $data['proof'] ?? []),
+            'live' => (bool) ($data['live'] ?? false),
+            'position' => ServiceLine::exists() ? (int) ServiceLine::max('position') + 1 : 0,
+        ]);
+
+        $audit = Audit::log('Added service line', $service->title);
+
+        return response()->json(['item' => $service->toWire(), 'audit' => $audit->toWire()], 201);
+    }
+
+    /** Remove a practice page; refused when it would empty the public /services page. */
+    public function destroy(ServiceLine $service): JsonResponse
+    {
+        $liveAfter = ServiceLine::where('live', true)->where('id', '!=', $service->id)->count();
+        if ($liveAfter === 0) {
+            return response()->json([
+                'message' => 'This is the last live service line. Publish another one before deleting it.',
+            ], 409);
+        }
+
+        $title = $service->title;
+        $service->delete();
+        $audit = Audit::log('Deleted service line', $title);
+
+        return response()->json(['audit' => $audit->toWire()]);
+    }
+
+    /** A slug no other service line holds; collisions get a numeric suffix. */
+    private function uniqueSlug(?string $wanted, string $title): string
+    {
+        $base = Str::slug(trim((string) $wanted) !== '' ? (string) $wanted : $title) ?: 'service';
+        $slug = $base;
+        $n = 2;
+        while (ServiceLine::where('slug', $slug)->exists()) {
+            $slug = $base.'-'.$n++;
+        }
+
+        return $slug;
     }
 
     /** Card order on /services, given as the full list of ids top to bottom. */

@@ -18,6 +18,13 @@ type ReportsValue = {
   reload: () => void;
 };
 
+/** The catalog ships in one payload (client-side search depends on it).
+    Past this many reports the lists render in windows so the DOM stays
+    small; below it, everything renders at once as before. */
+export const CATALOG_WINDOW_THRESHOLD = 400;
+/** Rows revealed per "Show more". */
+export const CATALOG_WINDOW_PAGE = 60;
+
 const ReportsContext = createContext<ReportsValue | null>(null);
 
 export function PortalReportsProvider({ children }: { children: ReactNode }) {

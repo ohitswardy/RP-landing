@@ -108,7 +108,7 @@ class InteractionController extends CrmsController
         ]);
         $interaction->markImportant((bool) ($data['important'] ?? false), $data['importantNote'] ?? null)->save();
 
-        return $this->item($this->wire($interaction), $this->audit('Logged interaction', $this->label($interaction)), 201);
+        return $this->item($this->wire($interaction), $this->audit('Logged interaction', $this->label($interaction)), 201, $this->authorMeta());
     }
 
     public function update(Request $request, Interaction $interaction): JsonResponse

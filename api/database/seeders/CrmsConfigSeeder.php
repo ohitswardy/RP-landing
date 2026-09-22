@@ -7,8 +7,8 @@ use App\Models\Crms\ClientContact;
 use App\Models\Crms\Corporate;
 use App\Models\Crms\CorporateContact;
 use App\Models\Crms\ReportTemplate;
-use App\Models\Crms\SectorGroup;
 use App\Services\Crms\PortalAccountResolver;
+use App\Support\ResearchDistribution;
 use Illuminate\Database\Seeder;
 
 /**
@@ -29,44 +29,36 @@ class CrmsConfigSeeder extends Seeder
         $this->linkPortalAccounts();
     }
 
-    /** Database.md §6 — the six clients with their own Excel layout. */
+    /**
+     * Database.md §6 — the clients with their own Excel layout: Schroders and
+     * JPM take the Commcise upload template, the "Jefferies" client row holds
+     * the bulk-upload workbook (Reports → Jefferies monthly), and the legacy
+     * layouts stay bound to 10, 23, 59, 139. A workbook the desk imported
+     * over any of these (`custom`) is never overwritten by a re-seed.
+     */
     private function reportTemplates(): void
     {
-        foreach ([10 => 'corpaxe', 23 => 'corpaxe', 59 => 'gmo', 72 => 'jpmorgan', 126 => 'schroders', 139 => 'trowe'] as $clientId => $code) {
-            if (Client::whereKey($clientId)->exists()) {
-                ReportTemplate::updateOrCreate(['client_id' => $clientId], ['code' => $code, 'is_active' => true]);
+        $bindings = [10 => 'corpaxe', 23 => 'corpaxe', 59 => 'gmo', 72 => 'commcise', 126 => 'commcise', 139 => 'trowe'];
+        if ($jefferies = Client::jefferiesId()) {
+            $bindings[$jefferies] = 'jefferies';
+        }
+        foreach ($bindings as $clientId => $code) {
+            if (! Client::whereKey($clientId)->exists() || ReportTemplate::where('client_id', $clientId)->first()?->hasLayout()) {
+                continue;
             }
+            ReportTemplate::updateOrCreate(['client_id' => $clientId], ['code' => $code, 'is_active' => true]);
         }
     }
 
-    /** The Domestic / Foreign sector → ticker hierarchy from the client's requirements. */
+    /**
+     * The Research-Domestics / Research-Foreign sector → ticker hierarchy,
+     * held in App\Support\ResearchDistribution and resolved against the real
+     * corporates. Only empty sectors are tagged here; `php artisan
+     * crms:distribution-list --force` is the way to overwrite drifted ones.
+     */
     private function sectorGroups(): void
     {
-        $sectors = [
-            'Banks' => ['BPI', 'BDO', 'MBT', 'SECB'],
-            'Property' => ['ALI', 'SMPH', 'FLI', 'MEG', 'RLC', 'VLL'],
-            'Power & Utilities' => ['ACEN', 'AP', 'FGEN', 'MWC', 'MER', 'SCC'],
-            'Telecommunications' => ['CNVRG', 'GLO', 'TEL'],
-            'Consumer' => ['CNPF', 'EMI', 'JFC', 'MONDE', 'PGOLD', 'RRHI', 'FB', 'SEVN', 'PIZZA', 'URC', 'WLCON'],
-            'Gaming & Leisure' => ['BLOOM'],
-            'Mining' => ['NIKL'],
-            'Conglomerates' => ['AGI', 'AC', 'DMC', 'GTCAP', 'LTG', 'SM'],
-            'Transportation' => ['CEB', 'ICT'],
-        ];
-        $byTicker = Corporate::whereNotNull('ticker')->get()->keyBy(fn (Corporate $c) => strtoupper(trim((string) $c->ticker)));
-
-        foreach (['domestic', 'foreign'] as $scope) {
-            $position = 0;
-            foreach ($sectors as $name => $tickers) {
-                $group = SectorGroup::firstOrCreate(['name' => $name, 'scope' => $scope], ['position' => $position]);
-                $ids = collect($tickers)->map(fn ($t) => $byTicker->get($t)?->id)->filter()->values()->all();
-                // Only fill an empty group: an Administrator's later edits are theirs to keep.
-                if ($group->corporates()->count() === 0 && $ids !== []) {
-                    $group->corporates()->sync($ids);
-                }
-                $position++;
-            }
-        }
+        ResearchDistribution::apply();
     }
 
     /**

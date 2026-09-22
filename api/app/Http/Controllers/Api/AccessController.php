@@ -128,6 +128,20 @@ class AccessController extends Controller
         }
         $user->save();
 
+        if ($passwordChanged) {
+            // A changed password ends every live session, the same as the
+            // client-side reset paths. An admin changing their own keeps the
+            // session making this call so they are not signed out mid-edit.
+            if ($user->id === $actor->id) {
+                $actor->revokeOtherTokens();
+            } else {
+                $user->tokens()->delete();
+            }
+        }
+        if ($suspendChanged && $user->suspended) {
+            $user->tokens()->delete();
+        }
+
         $action = $suspendChanged
             ? ($user->suspended ? 'Suspended account' : 'Restored account')
             : ($roleChanged ? 'Changed account role' : ($passwordChanged ? 'Reset password' : 'Updated account'));

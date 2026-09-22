@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useCms } from '../../store';
 import { Switch } from '../../ui';
 import { IconArrowDown, IconArrowRight, IconArrowUp, IconExternal, IconPen, IconPlus, IconTrash, IconX } from '../../icons';
-import type { ContactChannel, ContactCopy } from '../../data';
+import { MAX_SOCIAL_LINKS, SOCIAL_HREF_RE, type ContactChannel, type ContactCopy, type ContactSocialLink } from '../../data';
 import ImagePicker from '../../kit/ImagePicker';
 import { Field, MiniBtn, Panel, TinyBtn, move } from '../../kit/parts';
 import SaveBar from '../../kit/SaveBar';
@@ -15,9 +15,14 @@ import SaveBar from '../../kit/SaveBar';
    ───────────────────────────────────────────────────────────── */
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const clone = (c: ContactCopy): ContactCopy => JSON.parse(JSON.stringify(c)) as ContactCopy;
+/** A deep copy that also fills fields a document saved before they existed. */
+const clone = (c: ContactCopy): ContactCopy => {
+  const next = JSON.parse(JSON.stringify(c)) as ContactCopy;
+  next.social = Array.isArray(next.social) ? next.social : [];
+  return next;
+};
 
-const LIMITS = { interests: 8, address: 8, channels: 6 } as const;
+const LIMITS = { interests: 8, address: 8, channels: 6, social: MAX_SOCIAL_LINKS } as const;
 
 /** Trim every string; drop rows that are entirely empty. */
 function tidy(c: ContactCopy): ContactCopy {
@@ -55,6 +60,9 @@ function tidy(c: ContactCopy): ContactCopy {
       emailLabel: t(c.offices.emailLabel),
       email: t(c.offices.email),
     },
+    social: (c.social ?? [])
+      .map((r) => ({ label: t(r.label), href: t(r.href) }))
+      .filter((r) => r.label || r.href),
   };
 }
 
@@ -70,6 +78,14 @@ function validateCopy(c: ContactCopy): string | null {
   if (c.offices.channels.some((r) => !r.label || !r.value)) return 'Every contact row needs both a label and a number.';
   if (!c.offices.email) return 'The office ledger needs an email address.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.offices.email)) return `“${c.offices.email}” is not a valid email address.`;
+  if (c.social.length > MAX_SOCIAL_LINKS) return `At most ${MAX_SOCIAL_LINKS} social links.`;
+  for (const r of c.social) {
+    if (!r.label) return 'Every social link needs a label.';
+    if (r.label.length > 40) return `“${r.label}” is over 40 characters.`;
+    if (!r.href) return `The “${r.label}” link needs an address.`;
+    if (r.href.length > 500) return `The “${r.label}” address is over 500 characters.`;
+    if (!SOCIAL_HREF_RE.test(r.href)) return `The “${r.label}” address must start with https://, http://, mailto:, or tel:.`;
+  }
   return null;
 }
 
@@ -97,10 +113,10 @@ export default function ContactCopyEditor({ onDirty }: { onDirty: (dirty: boolea
   useEffect(() => {
     const prev = baseline.current;
     baseline.current = contactPage;
-    setDraft((d) => (same(d, prev) ? clone(contactPage) : d));
+    setDraft((d) => (same(d, clone(prev)) ? clone(contactPage) : d));
   }, [contactPage]);
 
-  const dirty = !same(draft, contactPage);
+  const dirty = !same(draft, clone(contactPage));
 
   useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
   useEffect(() => () => { onDirty(false); }, [onDirty]);
@@ -322,6 +338,16 @@ export default function ContactCopyEditor({ onDirty }: { onDirty: (dirty: boolea
             </LedgerColumn>
           </div>
         </div>
+      </Panel>
+
+      {/* ── Social links ───────────────────────────────────── */}
+      <Panel
+        code="/contact · social"
+        title="Social links"
+        hint="Printed in the site footer and on the Contact page, in this order. Each address must start with https://, http://, mailto:, or tel:."
+        actions={<LiveLink hash="" />}
+      >
+        <SocialList rows={draft.social} onChange={(v) => patch((c) => { c.social = v; })} />
       </Panel>
 
       <ImagePicker
@@ -647,6 +673,80 @@ function LineList({
         </div>
       ))}
       <AddRow label={addLabel} count={rows.length} max={max} onAdd={() => onChange([...rows, ''])} />
+    </div>
+  );
+}
+
+/* ── Social links ──────────────────────────────────────────── */
+
+const SOCIAL_SUGGESTIONS = ['LinkedIn', 'Facebook', 'X', 'Instagram', 'YouTube', 'Email'];
+
+function socialProblem(r: ContactSocialLink): string | null {
+  const href = r.href.trim();
+  if (!href) return null;
+  if (!SOCIAL_HREF_RE.test(href)) return 'Must start with https://, http://, mailto:, or tel:';
+  if (href.length > 500) return 'Over 500 characters';
+  return null;
+}
+
+function SocialList({ rows, onChange }: { rows: ContactSocialLink[]; onChange: (v: ContactSocialLink[]) => void }) {
+  const set = (i: number, p: Partial<ContactSocialLink>) => onChange(rows.map((r, x) => (x === i ? { ...r, ...p } : r)));
+  const used = new Set(rows.map((r) => r.label.trim().toLowerCase()));
+  const suggestions = SOCIAL_SUGGESTIONS.filter((s) => !used.has(s.toLowerCase()));
+
+  return (
+    <div className="flex flex-col gap-3">
+      {rows.length === 0 && (
+        <p className="border rule border-dashed px-4 py-5 text-[12px] text-graphite">
+          No social links yet — the footer prints none until one is added here.
+        </p>
+      )}
+      {rows.map((row, i) => {
+        const problem = socialProblem(row);
+        return (
+          <div key={i} className="flex flex-col gap-2 border-b rule pb-3 last:border-b-0 last:pb-0">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                value={row.label}
+                maxLength={40}
+                onChange={(e) => set(i, { label: e.target.value })}
+                placeholder="LinkedIn"
+                aria-label={`Link ${i + 1} label`}
+                className={`${INPUT} sm:w-[160px] sm:shrink-0`}
+              />
+              <input
+                value={row.href}
+                onChange={(e) => set(i, { href: e.target.value })}
+                placeholder="https://www.linkedin.com/company/…"
+                aria-label={`Link ${i + 1} address`}
+                className={`${INPUT} mono min-w-0 flex-1`}
+                style={problem ? { borderColor: 'var(--color-warn)' } : undefined}
+              />
+              <RowControls
+                index={i}
+                count={rows.length}
+                label={`link ${i + 1}`}
+                onMove={(dir) => onChange(move(rows, i, i + dir))}
+                onRemove={() => onChange(rows.filter((_, x) => x !== i))}
+              />
+            </div>
+            {problem && <p className="text-[11px]" style={{ color: 'var(--color-warn)' }}>{problem}</p>}
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap items-center gap-2">
+        <AddRow label="Add link" count={rows.length} max={LIMITS.social} onAdd={() => onChange([...rows, { label: '', href: '' }])} />
+      </div>
+      {suggestions.length > 0 && rows.length < LIMITS.social && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mono text-[10px] uppercase tracking-[0.18em] text-graphite">Quick add</span>
+          {suggestions.map((s) => (
+            <TinyBtn key={s} onClick={() => onChange([...rows, { label: s, href: s === 'Email' ? 'mailto:' : 'https://' }])}>
+              <IconPlus size={11} /> {s}
+            </TinyBtn>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

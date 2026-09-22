@@ -85,13 +85,15 @@ class RegistrationController extends Controller
             return $record;
         }
 
-        $client = $record->user;
+        $account = $record->user;
 
         return response()->json([
+            // staff | client: which login door the page sends the user to afterwards.
+            'kind' => $account->kind,
             'client' => [
-                'name' => $client->name,
-                'email' => $client->email,
-                'username' => $client->username,
+                'name' => $account->name,
+                'email' => $account->email,
+                'username' => $account->username,
             ],
             'expiresAt' => $record->expires_at->toIso8601String(),
         ]);
@@ -110,16 +112,16 @@ class RegistrationController extends Controller
             'password.confirmed' => 'The two passwords do not match.',
         ]);
 
-        $client = $record->user;
-        $client->forceFill(['password' => $data['password']])->save();
+        $account = $record->user;
+        $account->forceFill(['password' => $data['password']])->save();
         // Sign every existing session out; the password just changed.
-        $client->tokens()->delete();
+        $account->tokens()->delete();
 
         $record->forceFill(['used_at' => now()])->save();
 
-        Audit::log('Reset own password', $client->email, $client->name);
+        Audit::log('Reset own password', $account->email, $account->name);
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'kind' => $account->kind]);
     }
 
     /** Resolve a live token, or the JSON response explaining why it is dead. */
@@ -135,6 +137,10 @@ class RegistrationController extends Controller
         }
         if ($record->expires_at->isPast()) {
             return response()->json(['message' => 'This link has expired. Ask your Regis coverage for a new one.'], 410);
+        }
+        // A suspended account cannot revive itself through a leftover link.
+        if ($record->user->suspended) {
+            return response()->json(['message' => 'This account is suspended. Contact your Regis coverage.'], 403);
         }
 
         return $record;

@@ -9,9 +9,10 @@ import {
   IconArrowDown, IconArrowUp, IconBookmark, IconBookmarkFilled, IconCheck,
   IconExternal, IconPen, IconPlus, IconSearch, IconTrash, IconX,
 } from '../icons';
-import { ARTICLE_TAGS, fmtDate, type Article, type ArticleStatus, type InsightsPage } from '../data';
+import { ARTICLE_TAGS, SLUG_RE, fmtDate, slugify, type Article, type ArticleStatus, type InsightsPage } from '../data';
 import { Field, MiniBtn, Panel, TinyBtn } from '../kit/parts';
 import ImagePicker from '../kit/ImagePicker';
+import RichTextField from '../kit/RichTextField';
 import { PreviewFrame } from './services/PagePreview';
 import JournalPreview from './insights/JournalPreview';
 
@@ -21,14 +22,14 @@ const FILTERS: Array<'all' | ArticleStatus> = ['all', 'published', 'review'];
 type Tab = 'notes' | 'page';
 
 type DraftForm = {
-  tag: string; title: string; author: string; excerpt: string;
+  tag: string; title: string; slug: string; author: string; excerpt: string; body: string;
   status: ArticleStatus; date: string; featured: boolean;
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 const BLANK = (): DraftForm => ({
-  tag: ARTICLE_TAGS[0], title: '', author: '', excerpt: '',
+  tag: ARTICLE_TAGS[0], title: '', slug: '', author: '', excerpt: '', body: '',
   status: 'review', date: today(), featured: false,
 });
 
@@ -58,6 +59,8 @@ export default function InsightsModule() {
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<Article | 'new' | null>(null);
   const [form, setForm] = useState<DraftForm>(BLANK);
+  /** Once the editor types a slug by hand, the title stops suggesting one. */
+  const [slugTouched, setSlugTouched] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [armed, confirm] = useConfirm();
@@ -100,22 +103,33 @@ export default function InsightsModule() {
 
   function openEditor(target: Article | 'new') {
     setFormError(null);
-    if (target === 'new') setForm(BLANK());
-    else setForm({
-      tag: target.tag, title: target.title, author: target.author, excerpt: target.excerpt,
-      status: target.status, date: target.date.slice(0, 10), featured: target.featured,
-    });
+    if (target === 'new') { setForm(BLANK()); setSlugTouched(false); }
+    else {
+      setForm({
+        tag: target.tag, title: target.title, slug: target.slug ?? '', author: target.author, excerpt: target.excerpt,
+        body: target.body ?? '', status: target.status, date: target.date.slice(0, 10), featured: target.featured,
+      });
+      // An existing slug is an address readers may hold; never re-derive it silently.
+      setSlugTouched(Boolean(target.slug));
+    }
     setEditing(target);
   }
+
+  const setTitle = (v: string) => setForm((f) => ({ ...f, title: v, slug: slugTouched ? f.slug : slugify(v) }));
+  const setSlug = (v: string) => { setSlugTouched(true); setForm((f) => ({ ...f, slug: v.toLowerCase() })); };
+
+  const slugProblem = form.slug.trim() && !SLUG_RE.test(form.slug.trim()) ? 'Lowercase words joined by hyphens.' : undefined;
 
   async function saveNote() {
     if (!form.title.trim()) { setFormError('A working title is required before saving.'); return; }
     if (!form.author.trim()) { setFormError('Attribute the note to an analyst.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) { setFormError('Give the note a publication date.'); return; }
+    if (slugProblem) { setFormError('The slug is not valid: lowercase words joined by hyphens.'); return; }
+    if (form.slug.length > 200) { setFormError('The slug is over 200 characters.'); return; }
 
     const payload = {
-      tag: form.tag, title: form.title.trim(), author: form.author.trim(),
-      excerpt: form.excerpt.trim(), status: form.status, date: form.date, featured: form.featured,
+      tag: form.tag, title: form.title.trim(), slug: form.slug.trim(), author: form.author.trim(),
+      excerpt: form.excerpt.trim(), body: form.body, status: form.status, date: form.date, featured: form.featured,
     };
     setSaving(true);
     try {
@@ -302,6 +316,16 @@ export default function InsightsModule() {
                           {a.title}
                         </p>
                         {a.excerpt && <p className="mt-1 line-clamp-1 text-[12.5px] text-graphite">{a.excerpt}</p>}
+                        {a.status === 'published' && a.slug && (
+                          <a
+                            href={`/insights/${a.slug}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mono mt-1.5 inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.16em] text-graphite transition-colors hover:text-ink"
+                          >
+                            Read on site <span className="normal-case tracking-[0.04em] text-silver">/insights/{a.slug}</span> <IconExternal size={10} />
+                          </a>
+                        )}
                       </div>
                       <span className="col-span-4 order-4 hidden text-[13px] text-slate lg:col-span-2 lg:block">{a.author}</span>
                       <span className="mono num col-span-3 order-5 hidden whitespace-nowrap text-[12px] text-graphite lg:col-span-1 lg:block">{fmtDate(a.date)}</span>
@@ -544,7 +568,17 @@ export default function InsightsModule() {
         }
       >
         <div className="space-y-6">
-          <TextField label="Working title" value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="The thesis in one declarative sentence." error={formError ?? undefined} />
+          <TextField label="Working title" value={form.title} onChange={setTitle} placeholder="The thesis in one declarative sentence." error={formError ?? undefined} />
+          <TextField
+            label="Slug"
+            value={form.slug}
+            onChange={setSlug}
+            placeholder="derived-from-the-title"
+            helper={form.slug.trim()
+              ? `Published at /insights/${form.slug.trim()}${editing !== 'new' && editing?.slug && editing.slug !== form.slug.trim() ? ' — changing it breaks links readers already hold.' : '. A clash gets a numeric suffix.'}`
+              : 'Left blank, the API derives one from the title.'}
+            error={slugProblem}
+          />
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Sector tag" value={form.tag} onChange={(v) => setForm((f) => ({ ...f, tag: v }))} options={ARTICLE_TAGS} />
             <SelectField label="Status" value={form.status} onChange={(v) => setForm((f) => ({ ...f, status: v as ArticleStatus }))} options={['review', 'published']} />
@@ -554,6 +588,15 @@ export default function InsightsModule() {
             <TextField label="Analyst" value={form.author} onChange={(v) => setForm((f) => ({ ...f, author: v }))} placeholder="C. Sy" />
           </div>
           <TextField label="Standfirst" value={form.excerpt} onChange={(v) => setForm((f) => ({ ...f, excerpt: v }))} multiline placeholder="Two sentences a PM reads before deciding to open the note." helper="Appears in the archive list, the lead block, and the newsletter digest." />
+
+          <RichTextField
+            label="Note"
+            value={form.body}
+            onChange={(html) => setForm((f) => ({ ...f, body: html }))}
+            rows={12}
+            hint="The note itself, as readers see it at /insights/{slug}. Leave empty for a summary-only entry that links to the portal."
+            images={{ scope: 'insights', usedBy: `Insights / ${form.title.trim() || 'Untitled note'}` }}
+          />
 
           <div className="border-t rule pt-6">
             <ToggleRow

@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useReports } from './reports';
+import { CATALOG_WINDOW_PAGE, CATALOG_WINDOW_THRESHOLD, useReports } from './reports';
 import {
   REPORT_CATEGORIES, REPORT_COMPANIES, fmtBytes, fmtDate, trendingMetricDef, trendingWindowLabel,
   type Company, type Report, type ReportCategory, type ReportCompany, type TrendingMetric,
@@ -11,6 +11,7 @@ import { useAppTheme } from '../lib/theme';
 import { ThemeToggle } from '../components/ui/theme-toggle';
 import { useBookmarks } from './bookmarks';
 import { downloadReport } from './download';
+import { readPreferences } from './preferences';
 import { trackActivity } from './track';
 import ReportViewer from './ReportViewer';
 import RatingTag from './RatingTag';
@@ -51,6 +52,15 @@ function firstName(name: string): string {
   return parts[0].endsWith('.') && parts.length > 1 ? last : parts[0];
 }
 
+/** Two-letter mark for the account link: first and last initials. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '·';
+  const first = parts[0][0] ?? '';
+  const last = parts.length > 1 ? parts[parts.length - 1][0] ?? '' : '';
+  return `${first}${last}`.toUpperCase();
+}
+
 function ManilaClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -72,8 +82,13 @@ export default function PortalDashboard() {
   const saved = useBookmarks();
   const [query, setQuery] = useState('');
   const [searchFocus, setSearchFocus] = useState(false);
-  const [view, setView] = useState<'latest' | 'all' | ReportCategory>('latest');
-  const [companySel, setCompanySel] = useState<CompanySel>(null);
+  // The per-viewer defaults (set on /portal/account) seed the filters once;
+  // whatever the client picks during the visit wins from then on.
+  const [view, setView] = useState<'latest' | 'all' | ReportCategory>(() => readPreferences().defaultView);
+  const [companySel, setCompanySel] = useState<CompanySel>(() => {
+    const { defaultCompany } = readPreferences();
+    return defaultCompany ? { kind: 'type', type: defaultCompany } : null;
+  });
   const [companiesOpen, setCompaniesOpen] = useState(false);
   const [dateSel, setDateSel] = useState<DateSel>(null);
   const [dateOpen, setDateOpen] = useState(false);
@@ -83,6 +98,10 @@ export default function PortalDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const loading = status === 'loading';
+
+  /** Rows on screen when the catalog is big enough to window (see reports.tsx). */
+  const [shown, setShown] = useState(CATALOG_WINDOW_PAGE);
+  const windowed = reports.length > CATALOG_WINDOW_THRESHOLD;
 
   /** Blast deep links (/portal?report=…) open the viewer once the catalog is
       in; an id the client cannot see is dropped silently. One-shot — the param
@@ -130,6 +149,16 @@ export default function PortalDashboard() {
     () => REPORT_CATEGORIES.filter((c) => (counts.get(c) ?? 0) > 0),
     [counts],
   );
+
+  /** A preferred sector this mandate no longer carries falls back to Latest
+      rather than opening on an empty grid. */
+  useEffect(() => {
+    if (loading || view === 'latest' || view === 'all') return;
+    if (!sectors.includes(view)) setView('latest');
+  }, [loading, sectors, view]);
+
+  /** Where the rail starts: the preferred view, once the sectors are known. */
+  const sidebarActive = view === 'latest' ? 0 : view === 'all' ? sectors.length + 1 : Math.max(0, sectors.indexOf(view) + 1);
 
   const companyGroups = useMemo(() => {
     const g: Record<ReportCompany, Company[]> = { Local: [], Foreign: [] };
@@ -204,7 +233,11 @@ export default function PortalDashboard() {
     : companySelLabel ?? (view === 'latest' ? 'Latest reports' : view === 'all' ? 'All reports' : 'Results');
   const showHero = view === 'latest' && query.trim() === '' && companySel === null && dateSel === null;
   const featured = showHero ? filtered[0] : null;
-  const grid = showHero ? filtered.slice(1, 7) : filtered;
+  const grid = showHero ? filtered.slice(1, 7) : windowed ? filtered.slice(0, shown) : filtered;
+  const hidden = showHero || !windowed ? 0 : Math.max(0, filtered.length - shown);
+
+  // A new result set starts from the first window again.
+  useEffect(() => { setShown(CATALOG_WINDOW_PAGE); }, [filtered]);
 
   return (
     <div className="min-h-[100dvh] bg-bone text-ink">
@@ -247,10 +280,23 @@ export default function PortalDashboard() {
               </motion.span>
             </button>
 
-            <div className="hidden text-right sm:block">
-              <div className="text-[13px] leading-tight text-ink">{client?.name}</div>
-              <div className="mono text-[10px] uppercase tracking-[0.14em] text-graphite">{client?.firm}</div>
-            </div>
+            <Link
+              to="/portal/account"
+              title="Your account"
+              className="group/acct flex items-center gap-3 text-right transition-colors duration-300"
+            >
+              <span className="hidden sm:block">
+                <span className="block text-[13px] leading-tight text-ink transition-colors group-hover/acct:text-[color:var(--color-amber-deep)]">{client?.name}</span>
+                <span className="mono block text-[10px] uppercase tracking-[0.14em] text-graphite">{client?.firm}</span>
+              </span>
+              <span
+                aria-hidden
+                className="mono grid h-9 w-9 shrink-0 place-items-center border rule text-[10.5px] uppercase tracking-[0.06em] text-graphite transition-colors duration-300 group-hover/acct:border-[color:var(--color-amber-deep)] group-hover/acct:text-ink"
+              >
+                {initials(client?.name ?? '')}
+              </span>
+              <span className="sr-only">Account</span>
+            </Link>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <button
               type="button"
@@ -718,7 +764,7 @@ export default function PortalDashboard() {
                 itemGap={14}
                 fontSize={0.72}
                 smoothing={100}
-                defaultActive={0}
+                defaultActive={sidebarActive}
                 onItemClick={(index) => {
                   if (index === 0) setView('latest');
                   else if (index === sectors.length + 1) setView('all');
@@ -820,6 +866,20 @@ export default function PortalDashboard() {
                     ))}
                   </AnimatePresence>
                 </motion.div>
+                {hidden > 0 && (
+                  <div className="flex items-center justify-between gap-4 border-t rule pt-5">
+                    <span className="mono text-[10.5px] uppercase tracking-[0.16em] text-graphite">
+                      Showing <span className="num text-slate">{grid.length}</span> of <span className="num text-slate">{filtered.length}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShown((n) => n + CATALOG_WINDOW_PAGE)}
+                      className="mono border rule bg-white px-4 py-2.5 text-[10.5px] uppercase tracking-[0.14em] text-slate transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px"
+                    >
+                      Show {Math.min(CATALOG_WINDOW_PAGE, hidden)} more
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>

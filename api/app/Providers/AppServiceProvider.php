@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Models\User;
 use App\Services\MicrosoftGraphMailer;
+use App\Support\QueueHealth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -25,5 +27,10 @@ class AppServiceProvider extends ServiceProvider
     {
         // Report PDFs are readable by any active account, staff or client.
         Gate::define('view-report-files', fn (User $user) => ! $user->suspended);
+
+        // The worker's heartbeat: stamped on every loop (idle or not) and after
+        // every job, so the Email desk can tell whether `queue:work` is running.
+        Queue::looping(fn () => QueueHealth::beat());
+        Queue::after(fn () => QueueHealth::beat());
     }
 }

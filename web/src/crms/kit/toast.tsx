@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EASE } from '../../cms/ui';
+import { markSuccess } from '../../lib/activity';
 
 /* ─────────────────────────────────────────────────────────────
    Toasts replace the legacy alert() calls. Bottom-right stack,
@@ -27,6 +28,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const notify = useCallback((message: string, tone: Tone = 'ok') => {
     const id = ++seq.current;
+    if (tone === 'ok') markSuccess();
     setToasts((t) => [...t, { id, message, tone }].slice(-4));
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === 'warn' ? 6000 : 3600);
   }, []);

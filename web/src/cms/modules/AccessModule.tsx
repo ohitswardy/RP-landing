@@ -8,6 +8,7 @@ import {
   RowAction, SelectField, SkeletonRows, Stat, TextField, useConfirm, EASE,
 } from '../ui';
 import { IconCheck, IconEye, IconPen, IconPlus, IconSearch, IconShield, IconTrash } from '../icons';
+import UserBlobatar from '../kit/UserBlobatar';
 import {
   CLIENT_STATUS, REPORT_CATEGORIES, fmtDate, timeAgo,
   type Account, type AccountKind, type AuditEntry, type ClientStatus, type PermissionDef, type RoleDef,
@@ -871,6 +872,7 @@ export default function AccessModule() {
             value={accountForm.name}
             onChange={(v) => setAccountForm((f) => ({ ...f, name: v }))}
             placeholder="As it should appear in bylines and logs."
+            trailing={<UserBlobatar name={accountForm.name} size={34} />}
           />
 
           {accountEditing === 'new' ? (

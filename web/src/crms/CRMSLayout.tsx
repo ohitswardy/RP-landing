@@ -3,9 +3,10 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../cms/auth';
 import { useCrms } from './store';
 import { Chip } from '../cms/ui';
-import RailBrandCanvas from '../cms/RailBrandCanvas';
 import RailBrandLogo from '../cms/RailBrandLogo';
 import { usePublishedHeight } from '../cms/kit/stickyOffset';
+import UserBlobatar from '../cms/kit/UserBlobatar';
+import RailOrb from '../cms/kit/RailOrb';
 import { useAppTheme } from '@/lib/theme';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { ToastProvider } from './kit/toast';
@@ -14,6 +15,7 @@ import { IconSignOut, IconMenu, IconX, IconExternal, IconPin } from '../cms/icon
 import {
   ChalkboardSimpleIcon, ChatsCircleIcon, AirplaneTiltIcon, CalendarBlankIcon, BuildingsIcon, AddressBookIcon,
   ChartLineUpIcon, UsersThreeIcon, TreeStructureIcon, FileXlsIcon, MagnifyingGlassIcon, TagIcon, ListChecksIcon, LogIcon,
+  PulseIcon, LifebuoyIcon,
 } from '@phosphor-icons/react';
 
 /* ─────────────────────────────────────────────────────────────
@@ -59,6 +61,12 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/crms/logs', label: 'Logs', code: '13', icon: (p) => <LogIcon {...p} weight="bold" />, perm: 'crms.admin' },
 ];
 
+// The signed-in person's own corner: their footprint and the in-app guide. Any crms.access holder.
+const ACCOUNT_NAV: NavItem[] = [
+  { to: '/crms/my-activity', label: 'My activity', code: '14', icon: (p) => <PulseIcon {...p} weight="bold" /> },
+  { to: '/crms/help', label: 'Help', code: '15', icon: (p) => <LifebuoyIcon {...p} weight="bold" /> },
+];
+
 const PIN_KEY = 'regis-crms-rail-pinned';
 
 function ManilaClock() {
@@ -93,19 +101,22 @@ function RailFoot({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () =>
   const { session, signOut } = useAuth();
   const navigate = useNavigate();
   const { expanded, surface } = useSidebar();
-  const initials = (session?.name ?? '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
 
   return (
     <div className="shrink-0 border-t" style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }}>
       <RailBrandLogo />
       <div className="flex items-center gap-3.5 pb-2 pl-[26px] pr-5 pt-3">
-        <span className="mono grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border text-[9.5px] tracking-[0.04em] text-ink" style={{ background: 'var(--color-bone)', borderColor: 'color-mix(in oklab, var(--color-ink) 15%, transparent)' }}>
-          {initials || '—'}
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <SidebarLabel className="max-w-[140px] truncate text-[12.5px] text-ink">{session?.name ?? 'Signed out'}</SidebarLabel>
-          <SidebarLabel className="mono max-w-[140px] truncate text-[9px] uppercase tracking-[0.16em] text-graphite">{session?.role ?? '—'}</SidebarLabel>
-        </span>
+        <NavLink
+          to="/crms/account"
+          title="Your account"
+          className={({ isActive }) => `flex min-w-0 flex-1 items-center gap-3.5 transition-colors duration-300 ${isActive ? 'text-[color:var(--color-amber-deep)]' : 'text-ink hover:text-[color:var(--color-amber-deep)]'}`}
+        >
+          <UserBlobatar name={session?.name} size={26} />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <SidebarLabel className="max-w-[140px] truncate text-[12.5px]">{session?.name ?? 'Signed out'}</SidebarLabel>
+            <SidebarLabel className="mono max-w-[140px] truncate text-[9px] uppercase tracking-[0.16em] text-graphite">{session?.role ?? '—'}</SidebarLabel>
+          </span>
+        </NavLink>
         {surface === 'desktop' && expanded && (
           <button type="button" onClick={onTogglePin} aria-pressed={pinned} title={pinned ? 'Unpin rail' : 'Keep rail open'} className={`grid h-7 w-7 shrink-0 place-items-center transition-colors duration-300 active:scale-95 ${pinned ? 'text-[color:var(--color-amber)]' : 'text-graphite hover:text-ink'}`}>
             <IconPin size={15} />
@@ -124,12 +135,13 @@ function RailContent({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: ()
   const allowed = (items: NavItem[]) => items.filter((i) => !i.perm || can(i.perm));
   const sections: [string, NavItem[]][] = [
     ['Desk', allowed(DESK_NAV)], ['Master data', allowed(DATA_NAV)], ['Output', allowed(OUTPUT_NAV)], ['Administration', allowed(ADMIN_NAV)],
+    ['You', allowed(ACCOUNT_NAV)],
   ];
 
   return (
     <>
       <div className="relative flex h-[76px] shrink-0 items-center overflow-hidden border-b pl-[26px] pr-4" style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }}>
-        <RailBrandCanvas />
+        <RailOrb />
       </div>
       <nav className="flex flex-1 flex-col gap-7 overflow-y-auto overflow-x-hidden py-7" aria-label="CRMS modules">
         <RailLink item={HOME} />
@@ -159,8 +171,10 @@ export default function CRMSLayout() {
   const headerRef = useRef<HTMLElement>(null);
   usePublishedHeight(headerRef, shellRef, '--cms-header-h');
 
-  const all = [HOME, ...DESK_NAV, ...DATA_NAV, ...OUTPUT_NAV, ...ADMIN_NAV];
-  const current = all.filter((i) => location.pathname === i.to || (i.to !== '/crms' && location.pathname.startsWith(i.to.replace('/roadshows', '')))).pop() ?? all[0];
+  const all = [HOME, ...DESK_NAV, ...DATA_NAV, ...OUTPUT_NAV, ...ADMIN_NAV, ...ACCOUNT_NAV];
+  const current = location.pathname.startsWith('/crms/account')
+    ? { ...HOME, to: '/crms/account', label: 'Account', code: '—' }
+    : all.filter((i) => location.pathname === i.to || (i.to !== '/crms' && location.pathname.startsWith(i.to.replace('/roadshows', '')))).pop() ?? all[0];
   const lastEdit = audit[0];
 
   return (

@@ -9,6 +9,7 @@ const CONFIG: PortalConfig = {
   cta: 'Enter portal',
   stamp: 'Regis · Secure',
   glyph: 'top-right',
+  forgotHref: '/forgot-password',
   footnote: (
     <>
       Not yet a Regis client?{' '}
@@ -24,15 +25,17 @@ export default function Login() {
   const { client, signIn } = usePortal();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/portal';
+  const state = location.state as { from?: string; notice?: string } | null;
+  const from = state?.from ?? '/portal';
 
   if (client) return <Navigate to={from} replace />;
 
   return (
     <PortalAuth
       config={CONFIG}
-      onSubmit={async (identity, password) => {
-        const err = await signIn(identity, password);
+      notice={state?.notice ?? null}
+      onSubmit={async (identity, password, remember) => {
+        const err = await signIn(identity, password, remember);
         if (!err) navigate(from, { replace: true });
         return err;
       }}

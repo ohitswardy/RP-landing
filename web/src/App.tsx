@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import LoginCMS from './pages/LoginCMS';
 import LoginCRMS from './pages/LoginCRMS';
 import Contact from './pages/Contact';
+import NotFound from './pages/NotFound';
 import MarketRibbon from './components/MarketRibbon';
 import Breadcrumb from './components/Breadcrumb';
 import ScrollToTop from './components/ScrollToTop';
@@ -33,6 +34,11 @@ const NewsletterModule = lazy(() => import('./cms/modules/NewsletterModule'));
 const EmailModule = lazy(() => import('./cms/modules/EmailModule'));
 const AccessModule = lazy(() => import('./cms/modules/AccessModule'));
 const ClientLogsModule = lazy(() => import('./cms/modules/ClientLogsModule'));
+// The signed-in staff member's own page; one module, mounted in both staff shells.
+const AccountModule = lazy(() => import('./cms/modules/AccountModule'));
+const CareersModule = lazy(() => import('./cms/modules/CareersModule'));
+const WatchlistModule = lazy(() => import('./cms/modules/WatchlistModule'));
+const MediaModule = lazy(() => import('./cms/modules/MediaModule'));
 
 // The CRMS: a third area, same staff session, Administrator and Analyst only.
 const CRMSLayout = lazy(() => import('./crms/CRMSLayout'));
@@ -50,13 +56,26 @@ const CrmsTicker = lazy(() => import('./crms/modules/TickerSearchModule'));
 const CrmsInteractionTypes = lazy(() => import('./crms/modules/InteractionTypesModule'));
 const CrmsFormBuilder = lazy(() => import('./crms/modules/FormBuilderModule'));
 const CrmsLogs = lazy(() => import('./crms/modules/LogsModule'));
+const CrmsMyActivity = lazy(() => import('./crms/modules/MyActivityModule'));
+const CrmsHelp = lazy(() => import('./crms/modules/HelpModule'));
 
 // The client portal is its own lazy chunk, gated behind the portal session.
 const PortalDashboard = lazy(() => import('./portal/PortalDashboard'));
+const PortalAccount = lazy(() => import('./portal/PortalAccount'));
 
 // Standalone pages a client reaches from an emailed onboarding link.
 const PortalRegister = lazy(() => import('./pages/PortalRegister'));
 const PortalResetPassword = lazy(() => import('./pages/PortalResetPassword'));
+
+// Public pages off the main nav: split so the landing bundle stays lean.
+const InsightArticle = lazy(() => import('./pages/InsightArticle'));
+const Careers = lazy(() => import('./pages/Careers'));
+const NewsletterVerify = lazy(() => import('./pages/NewsletterVerify'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+
+function PublicFallback() {
+  return <div aria-hidden className="min-h-[50vh] bg-paper" />;
+}
 
 function PublicLayout() {
   const location = useLocation();
@@ -93,10 +112,17 @@ export default function App() {
           <Route path="/services" element={<Services />} />
           <Route path="/services/:slug" element={<Services />} />
           <Route path="/insights" element={<Insights />} />
+          <Route path="/insights/:slug" element={<Suspense fallback={<PublicFallback />}><InsightArticle /></Suspense>} />
+          <Route path="/careers" element={<Suspense fallback={<PublicFallback />}><Careers /></Suspense>} />
+          <Route path="/newsletter/verify/:token" element={<Suspense fallback={<PublicFallback />}><NewsletterVerify /></Suspense>} />
+          <Route path="/forgot-password" element={<Suspense fallback={<PublicFallback />}><ForgotPassword kind="client" /></Suspense>} />
+          <Route path="/forgot-password/staff" element={<Suspense fallback={<PublicFallback />}><ForgotPassword kind="staff" /></Suspense>} />
           <Route path="/login" element={<Login />} />
           <Route path="/login/cms" element={<LoginCMS />} />
           <Route path="/login/crms" element={<LoginCRMS />} />
           <Route path="/contact" element={<Contact />} />
+          {/* Catch-all: an unknown public URL still gets the navbar, footer and a way out. */}
+          <Route path="*" element={<NotFound />} />
         </Route>
 
         <Route
@@ -122,6 +148,10 @@ export default function App() {
           <Route path="email" element={<RequirePermission permission="email.manage"><Suspense fallback={null}><EmailModule /></Suspense></RequirePermission>} />
           <Route path="access" element={<RequirePermission permission="access.manage"><Suspense fallback={null}><AccessModule /></Suspense></RequirePermission>} />
           <Route path="logs" element={<RequirePermission permission="logs.view"><Suspense fallback={null}><ClientLogsModule /></Suspense></RequirePermission>} />
+          <Route path="account" element={<Suspense fallback={null}><AccountModule /></Suspense>} />
+          <Route path="careers" element={<RequirePermission permission="careers.manage"><Suspense fallback={null}><CareersModule /></Suspense></RequirePermission>} />
+          <Route path="market" element={<RequirePermission permission="market.manage"><Suspense fallback={null}><WatchlistModule /></Suspense></RequirePermission>} />
+          <Route path="media" element={<RequirePermission permission="media.manage"><Suspense fallback={null}><MediaModule /></Suspense></RequirePermission>} />
         </Route>
 
         <Route
@@ -156,6 +186,9 @@ export default function App() {
           <Route path="interaction-types" element={<RequirePermission permission="crms.admin" fallback="/crms"><Suspense fallback={null}><CrmsInteractionTypes /></Suspense></RequirePermission>} />
           <Route path="form-builder" element={<RequirePermission permission="crms.admin" fallback="/crms"><Suspense fallback={null}><CrmsFormBuilder /></Suspense></RequirePermission>} />
           <Route path="logs" element={<RequirePermission permission="crms.admin" fallback="/crms"><Suspense fallback={null}><CrmsLogs /></Suspense></RequirePermission>} />
+          <Route path="my-activity" element={<Suspense fallback={null}><CrmsMyActivity /></Suspense>} />
+          <Route path="help" element={<Suspense fallback={null}><CrmsHelp /></Suspense>} />
+          <Route path="account" element={<Suspense fallback={null}><AccountModule /></Suspense>} />
         </Route>
 
         <Route
@@ -164,6 +197,11 @@ export default function App() {
         />
         <Route
           path="/portal/reset/:token"
+          element={<Suspense fallback={<CmsFallback />}><PortalResetPassword /></Suspense>}
+        />
+        {/* Staff reset links land on the same page; it reads `kind` from the API. */}
+        <Route
+          path="/cms/reset/:token"
           element={<Suspense fallback={<CmsFallback />}><PortalResetPassword /></Suspense>}
         />
 
@@ -175,6 +213,20 @@ export default function App() {
                 <PortalBookmarksProvider>
                   <Suspense fallback={<CmsFallback />}>
                     <PortalDashboard />
+                  </Suspense>
+                </PortalBookmarksProvider>
+              </PortalReportsProvider>
+            </RequirePortal>
+          }
+        />
+        <Route
+          path="/portal/account"
+          element={
+            <RequirePortal>
+              <PortalReportsProvider>
+                <PortalBookmarksProvider>
+                  <Suspense fallback={<CmsFallback />}>
+                    <PortalAccount />
                   </Suspense>
                 </PortalBookmarksProvider>
               </PortalReportsProvider>

@@ -15,13 +15,16 @@ use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\NewsletterController;
+use App\Http\Controllers\Api\NewsletterSubscribeController;
 use App\Http\Controllers\Api\PageController;
+use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PersonController;
 use App\Http\Controllers\Api\PortalClientController;
 use App\Http\Controllers\Api\PortalController;
 use App\Http\Controllers\Api\RegistrationController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReportTypeController;
+use App\Http\Controllers\Api\SelfServiceController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SiteContentController;
 use App\Http\Controllers\Api\SubscriberController;
@@ -34,12 +37,23 @@ use Illuminate\Support\Facades\Route;
 Route::post('/cms/login', [AuthController::class, 'cmsLogin'])->middleware('throttle:10,1');
 Route::post('/portal/login', [AuthController::class, 'portalLogin'])->middleware('throttle:10,1');
 
+// Self-service "forgot password" for either door. Always 200; a matching
+// account gets a single-use link by email (finished at /portal/reset/{token}).
+Route::post('/portal/forgot-password', [PasswordResetController::class, 'forgotClient'])->middleware('throttle:10,1');
+Route::post('/cms/forgot-password', [PasswordResetController::class, 'forgotStaff'])->middleware('throttle:10,1');
+
 /* ── Public site content ──────────────────────────────────────── */
 
 Route::get('/content/home', [SiteContentController::class, 'home']);
 Route::get('/content/services', [SiteContentController::class, 'services']);
 Route::get('/content/insights', [SiteContentController::class, 'insights']);
+// One published note in full, with three related notes; drafts are 404.
+Route::get('/content/insights/{slug}', [SiteContentController::class, 'insight'])->where('slug', '[a-z0-9-]+');
 Route::get('/content/people', [SiteContentController::class, 'people']);
+// The market ribbon's symbol list, the open career postings, and the site-search index (cached 60 s).
+Route::get('/content/watchlist', [SiteContentController::class, 'watchlist']);
+Route::get('/content/careers', [SiteContentController::class, 'careers']);
+Route::get('/content/search', [SiteContentController::class, 'search']);
 Route::get('/content/about', [SiteContentController::class, 'about']);
 Route::get('/content/legal', [SiteContentController::class, 'legal']);
 Route::get('/content/contact', [SiteContentController::class, 'contact']);
@@ -58,6 +72,9 @@ Route::prefix('portal')->middleware('throttle:20,1')->group(function () {
 
 // One-click opt-out carried by every subscriber blast; renders a plain confirmation page.
 Route::get('/newsletter/unsubscribe/{token}', UnsubscribeController::class)->middleware('throttle:20,1');
+// Public double opt-in: the site's subscribe form, then the confirmation link it emails.
+Route::post('/newsletter/subscribe', [NewsletterSubscribeController::class, 'subscribe'])->middleware('throttle:6,1');
+Route::get('/newsletter/verify/{token}', [NewsletterSubscribeController::class, 'verify'])->middleware('throttle:20,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -72,6 +89,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::get('/bootstrap', BootstrapController::class);
+    // Any signed-in staff member may change their own password (no module permission needed).
+    Route::put('/password', [SelfServiceController::class, 'changePassword']);
     // Issue bodies load on demand — the bootstrap list carries summaries only.
     Route::get('/newsletters/{issue}', [NewsletterController::class, 'show']);
 
@@ -124,7 +143,16 @@ Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
         Route::put('/services/page', [ServiceController::class, 'updatePage']);
         Route::put('/services/reorder', [ServiceController::class, 'reorder']);
         Route::post('/services/upload', [ServiceController::class, 'upload']);
+        Route::post('/services', [ServiceController::class, 'store']);
         Route::put('/services/{service}', [ServiceController::class, 'update']);
+        Route::delete('/services/{service}', [ServiceController::class, 'destroy']);
+    });
+
+    // The media library on its own: list, upload, delete (refused while in use).
+    Route::middleware('permission:media.manage')->group(function () {
+        Route::get('/media', [MediaController::class, 'index']);
+        Route::post('/media', [MediaController::class, 'store']);
+        Route::delete('/media/{asset}', [MediaController::class, 'destroy']);
     });
 
     Route::middleware('permission:careers.manage')->group(function () {
@@ -153,6 +181,7 @@ Route::prefix('cms')->middleware(['auth:sanctum', 'staff'])->group(function () {
     Route::middleware('permission:email.manage')->group(function () {
         Route::get('/email-blasts', [EmailBlastController::class, 'index']);
         Route::get('/email-blasts/audience', [EmailBlastController::class, 'audience']);
+        Route::get('/email-blasts/readiness', [EmailBlastController::class, 'readiness']);
         Route::get('/email-blasts/match', [EmailBlastController::class, 'match']);
         Route::post('/email-blasts/render', [EmailBlastController::class, 'render'])->middleware('throttle:120,1');
         Route::post('/email-blasts', [EmailBlastController::class, 'store']);
@@ -210,6 +239,10 @@ Route::prefix('portal')->middleware(['auth:sanctum', 'client'])->group(function 
     // Consumption events land in the anti-tamper ledger; generous throttle
     // since every view/download/click posts one beacon.
     Route::post('/activity', [ClientLogController::class, 'store'])->middleware('throttle:120,1');
+
+    // The client's own account: profile readout and password change.
+    Route::get('/profile', [SelfServiceController::class, 'profile']);
+    Route::put('/password', [SelfServiceController::class, 'changePassword']);
 
     Route::get('/reports', [PortalController::class, 'reports']);
     Route::get('/bookmarks', [PortalController::class, 'bookmarks']);

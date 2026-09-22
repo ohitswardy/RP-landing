@@ -42,7 +42,23 @@ class Html
 
     private const ALIGNMENTS = ['left', 'right', 'center', 'justify'];
 
-    public static function clean(?string $html): string
+    /** What a long-form article body may carry beyond the mailer whitelist. */
+    private const ARTICLE_TAGS = [
+        'h2' => [], 'h3' => [], 'h4' => [],
+        'blockquote' => [],
+        'pre' => [], 'code' => [],
+        'figure' => [], 'figcaption' => [],
+        'sup' => [], 'sub' => [],
+    ];
+
+    /** Sanitize an insight-note or career body: the mailer whitelist plus headings, quotes, code. */
+    public static function article(?string $html): string
+    {
+        return self::clean($html, self::ARTICLE_TAGS);
+    }
+
+    /** @param array<string, array<int, string>> $extraTags additional tag => allowed-attributes entries */
+    public static function clean(?string $html, array $extraTags = []): string
     {
         $html = trim($html ?? '');
         if ($html === '') {
@@ -62,7 +78,7 @@ class Html
             return '';
         }
 
-        self::scrub($root);
+        self::scrub($root, self::TAGS + $extraTags);
 
         $out = '';
         foreach (iterator_to_array($root->childNodes) as $child) {
@@ -72,7 +88,7 @@ class Html
         return trim($out);
     }
 
-    private static function scrub(DOMNode $node): void
+    private static function scrub(DOMNode $node, array $tags): void
     {
         // Copy first: unwrapping and removal mutate the live child list.
         foreach (iterator_to_array($node->childNodes) as $child) {
@@ -85,7 +101,7 @@ class Html
                 continue;
             }
 
-            self::scrub($child);
+            self::scrub($child, $tags);
 
             $tag = strtolower($child->nodeName);
 
@@ -94,7 +110,7 @@ class Html
                 continue;
             }
 
-            if (! array_key_exists($tag, self::TAGS)) {
+            if (! array_key_exists($tag, $tags)) {
                 // Unknown tag (div, span, h1, ...): keep its content, lose the tag.
                 while ($child->firstChild) {
                     $node->insertBefore($child->firstChild, $child);
@@ -103,7 +119,7 @@ class Html
                 continue;
             }
 
-            self::scrubAttributes($child, self::TAGS[$tag]);
+            self::scrubAttributes($child, $tags[$tag]);
         }
     }
 

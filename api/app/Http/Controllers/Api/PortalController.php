@@ -7,7 +7,6 @@ use App\Models\Bookmark;
 use App\Models\Company;
 use App\Models\PortalSetting;
 use App\Models\Report;
-use App\Models\ReportType;
 use App\Support\Trending;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,7 +58,6 @@ class PortalController extends Controller
         return response()->json([
             'reports' => $reports->map->toWire()->values(),
             'companies' => $companies->map->toWire()->values(),
-            'reportTypes' => ReportType::orderBy('name')->get()->map->toWire()->values(),
             'trending' => [
                 'metric' => $settings->trending_metric,
                 'windowMonths' => (int) $settings->trending_window_months,

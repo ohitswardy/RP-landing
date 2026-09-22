@@ -267,6 +267,12 @@ export default function InteractionForm({ interaction, presets, onSaved }: {
         </div>
 
         <aside className="space-y-6 lg:col-span-4">
+          {!interaction && !meta.legacyUserMatched && (
+            <p className="border-l-2 pl-3 text-[12px] leading-relaxed text-graphite" style={{ borderColor: 'var(--color-amber-deep)' }}>
+              <span className="mono block text-[9.5px] uppercase tracking-[0.16em]" style={{ color: 'var(--color-amber-deep)' }}>No legacy CRMS user matches your email</span>
+              Author attribution will live in the audit ledger only. Your interactions still count in reports; they will not show under your name in Sales / Analysts sheets until an administrator adds you to the legacy directory.
+            </p>
+          )}
           <ImportancePanel
             on={draft.important}
             note={draft.importantNote}

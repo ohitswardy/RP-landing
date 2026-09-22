@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\SendEmailBlast;
-use App\Models\DistributionList;
 use App\Models\EmailBlast;
 use App\Models\EmailDelivery;
 use App\Models\Report;
@@ -14,6 +13,9 @@ use App\Services\MicrosoftGraphMailer;
 use App\Support\Audit;
 use App\Support\BlastRenderer;
 use App\Support\Html;
+use App\Support\QueueHealth;
+use App\Support\ResearchAudience;
+use App\Support\SectorGroupMatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +46,6 @@ class EmailBlastController extends Controller
     public function audience(Request $request, MicrosoftGraphMailer $mailer): JsonResponse
     {
         $actor = $request->user();
-        $sender = $mailer->senderFor($actor->outlook_email);
 
         return response()->json([
             'clients' => User::where('kind', User::KIND_CLIENT)
@@ -63,17 +64,35 @@ class EmailBlastController extends Controller
                     'firm' => $s->firm,
                 ])
                 ->values(),
-            'lists' => DistributionList::with('creator')->orderBy('name')->get()->map->toWire()->values(),
-            'dispatch' => [
-                'graphReady' => $mailer->enabled(),
-                'sender' => $sender,
-                'senderAllowed' => $sender ? $mailer->senderAllowed($sender) : false,
-                'senderShared' => $sender !== null && ! $actor->outlook_email,
-                'senderDomain' => (string) config('services.graph.sender_domain'),
-                'batchSize' => $mailer->batchSize(),
-                'attachmentMaxBytes' => $mailer->attachmentMaxBytes(),
-            ],
+            'lists' => DistributionListController::ownListsWire($actor),
+            // The CRMS research hierarchy, each sector resolved to the contacts a blast can reach.
+            'research' => ResearchAudience::groups(),
+            'dispatch' => $this->dispatchWire($actor, $mailer),
         ]);
+    }
+
+    /** The readiness strip on its own, so the desk can poll the worker without reloading the pool. */
+    public function readiness(Request $request, MicrosoftGraphMailer $mailer): JsonResponse
+    {
+        return response()->json(['dispatch' => $this->dispatchWire($request->user(), $mailer)]);
+    }
+
+    /** What the desk needs to know about the outbound channel before it offers "Send now". */
+    private function dispatchWire(User $actor, MicrosoftGraphMailer $mailer): array
+    {
+        $sender = $mailer->senderFor($actor->outlook_email);
+
+        return [
+            'graphReady' => $mailer->enabled(),
+            'sender' => $sender,
+            'senderAllowed' => $sender ? $mailer->senderAllowed($sender) : false,
+            'senderShared' => $sender !== null && ! $actor->outlook_email,
+            'senderDomain' => (string) config('services.graph.sender_domain'),
+            'batchSize' => $mailer->batchSize(),
+            'attachmentMaxBytes' => $mailer->attachmentMaxBytes(),
+            // Whether `queue:work` is actually running; a blast queued without it never leaves.
+            'queue' => QueueHealth::status(),
+        ];
     }
 
     /**
@@ -87,23 +106,36 @@ class EmailBlastController extends Controller
             'report' => ['required', 'integer', 'exists:reports,id'],
         ]);
 
-        $report = Report::findOrFail($data['report']);
+        $report = Report::with('company')->findOrFail($data['report']);
         $category = mb_strtolower(trim((string) $report->category));
         $analyst = mb_strtolower(trim((string) $report->analyst));
+
+        // Second source: the CRMS sector groups that contain the report's company,
+        // through each client contact's linked portal account.
+        $viaSectorGroup = array_flip(SectorGroupMatcher::portalUserIdsFor($report));
 
         $matches = User::where('kind', User::KIND_CLIENT)
             ->where('status', User::STATUS_APPROVED)
             ->where('suspended', false)
             ->where('client_type', 'Local')
             ->get()
-            ->filter(function (User $u) use ($category, $analyst) {
+            ->map(function (User $u) use ($category, $analyst, $viaSectorGroup) {
                 $sectors = array_map(fn ($s) => mb_strtolower(trim((string) $s)), $u->sector_prefs ?? []);
                 $analysts = array_map(fn ($a) => mb_strtolower(trim((string) $a)), $u->preferred_analysts ?? []);
 
-                return ($category !== '' && in_array($category, $sectors, true))
+                $prefs = ($category !== '' && in_array($category, $sectors, true))
                     || ($analyst !== '' && in_array($analyst, $analysts, true));
+                $group = isset($viaSectorGroup[(int) $u->id]);
+
+                return match (true) {
+                    $prefs && $group => [$u, 'both'],
+                    $prefs => [$u, 'prefs'],
+                    $group => [$u, 'sectorGroup'],
+                    default => null,
+                };
             })
-            ->map(fn (User $u) => $this->clientWire($u))
+            ->filter()
+            ->map(fn (array $pair) => [...$this->clientWire($pair[0]), 'via' => $pair[1]])
             ->values();
 
         return response()->json(['clients' => $matches]);
@@ -190,6 +222,12 @@ class EmailBlastController extends Controller
         }
         if ($blast->status === 'sent') {
             return response()->json(['message' => 'This blast has gone out. Duplicate it to send a revised version.'], 422);
+        }
+        if (! QueueHealth::alive() && ! $request->boolean('confirmNoWorker')) {
+            return response()->json([
+                'message' => 'The queue worker is not running. Start `php artisan queue:work` first, or confirm to queue the blast anyway; it will leave once a worker is up.',
+                'queue' => QueueHealth::status(),
+            ], 409);
         }
 
         $retry = $blast->status === 'failed';

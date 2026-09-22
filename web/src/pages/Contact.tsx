@@ -1,4 +1,5 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import emailjs from '@emailjs/browser';
 import Reveal from '../components/Reveal';
@@ -241,6 +242,23 @@ export default function Contact() {
 
   const [form, setForm] = useState({ name: '', firm: '', email: '', interest: '', message: '' });
   const [status, setStatus] = useState<SubmitStatus>('idle');
+  const [searchParams] = useSearchParams();
+  const topic = (searchParams.get('topic') ?? '').trim();
+
+  // A `?topic=` link (footer product labels, careers "apply") pre-selects the
+  // matching chip; a topic with no chip of its own selects "Other" and opens
+  // the message with it, so the desk sees what the enquiry is about.
+  useEffect(() => {
+    if (!topic) return;
+    const chips = inquiry.interests;
+    const match = chips.find((c) => c.toLowerCase() === topic.toLowerCase());
+    const other = chips.find((c) => c.toLowerCase() === 'other');
+    setForm((f) => ({
+      ...f,
+      interest: match ?? other ?? f.interest,
+      message: match || f.message ? f.message : `Regarding: ${topic}\n\n`,
+    }));
+  }, [topic, inquiry.interests]);
 
   // The chip list is CMS-authored, so a selection is only honoured while it
   // is still on the list; otherwise the first chip stands, as on first load.

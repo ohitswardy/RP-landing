@@ -11,6 +11,19 @@ import { usePublicContent } from './publicContent';
    ships as defaults.
    ────────────────────────────────────────────────────────── */
 
+/**
+ * The firm's regulatory identifiers, printed in the footer and inside the
+ * Terms. They are not part of any CMS document, so this is the ONE place
+ * they live on the public site.
+ *
+ * TODO before launch: replace both placeholders with the real SEC
+ * registration number and PSE trading participant licence number.
+ */
+export const REGULATORY_IDS = {
+  sec: 'AS-099-XXXXX',
+  pse: '[XXXXX]',
+} as const;
+
 export type LegalKey = 'terms' | 'privacy';
 export type LegalSection = { heading: string; body: string };
 export type LegalDoc = {
@@ -28,8 +41,8 @@ By accessing or using any services provided by Regis Partners, Inc. ("Regis Part
 
 Regis Partners, Inc. is a registered corporation and licensed broker-dealer under the Securities Regulation Code of the Philippines (Republic Act No. 8799). We are regulated by the Securities and Exchange Commission (SEC) and are a licensed trading participant of the Philippine Stock Exchange (PSE). Our operations are subject to the rules and regulations of the Bangko Sentral ng Pilipinas (BSP) where applicable.
 
-SEC Registration No.: AS-099-XXXXX
-PSE Trading Participant License No.: [XXXXX]
+SEC Registration No.: ${REGULATORY_IDS.sec}
+PSE Trading Participant License No.: ${REGULATORY_IDS.pse}
 
 ## Investment Risk Disclosure
 

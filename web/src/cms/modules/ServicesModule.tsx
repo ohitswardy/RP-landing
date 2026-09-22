@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useCms } from '../store';
+import { useCms, type NewServicePayload } from '../store';
 import {
-  BtnGhost, BtnPrimary, Chip, EmptyState, ModuleHeader, SkeletonRows, Switch, EASE,
+  BtnGhost, BtnPrimary, Chip, Drawer, EmptyState, ModuleHeader, RowAction, SkeletonRows, Switch, TextField, useConfirm, EASE,
 } from '../ui';
 import {
   IconArrowDown, IconArrowUp, IconCheck, IconExternal, IconPen, IconPlus, IconTrash,
 } from '../icons';
-import type { ServiceLine, ServicePage, ServicePillar, ServiceProof } from '../data';
+import { SLUG_RE, slugify, type ServiceLine, type ServicePage, type ServicePillar, type ServiceProof } from '../data';
 import ImagePicker from '../kit/ImagePicker';
 import HeroGallery from './services/HeroGallery';
 import PillarList from './services/PillarList';
@@ -55,12 +55,27 @@ function validatePage(p: ServicePage): string | null {
   return null;
 }
 
+/* ── New service line ──────────────────────────────────────── */
+
+type NewForm = { title: string; slug: string; eyebrow: string; dek: string; live: boolean };
+const BLANK_NEW = (): NewForm => ({ title: '', slug: '', eyebrow: 'Service', dek: '', live: false });
+
+function validateNew(f: NewForm): string | null {
+  if (!f.title.trim()) return 'The new practice needs a title.';
+  if (f.title.length > 120) return 'The title is over 120 characters.';
+  if (f.slug.trim() && !SLUG_RE.test(f.slug.trim())) return 'Slugs are lowercase words joined by hyphens.';
+  if (f.slug.length > 80) return 'The slug is over 80 characters.';
+  if (f.eyebrow.length > 60) return 'The eyebrow is over 60 characters.';
+  if (f.dek.length > 1000) return 'The standfirst is over 1,000 characters.';
+  return null;
+}
+
 /* ── Module ────────────────────────────────────────────────── */
 
 export default function ServicesModule() {
   const {
     services, servicePage, status,
-    updateService, reorderServices, updateServicePage,
+    addService, updateService, deleteService, reorderServices, updateServicePage,
   } = useCms();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -74,6 +89,15 @@ export default function ServicesModule() {
   const [pickingHero, setPickingHero] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const savedTimer = useRef<number | null>(null);
+
+  // Creating and deleting practice pages: structure, not copy, so neither rides the draft.
+  const [creating, setCreating] = useState(false);
+  const [newForm, setNewForm] = useState<NewForm>(BLANK_NEW);
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [newError, setNewError] = useState<string | null>(null);
+  const [newBusy, setNewBusy] = useState(false);
+  const [structureError, setStructureError] = useState<string | null>(null);
+  const [armed, confirm] = useConfirm();
 
   const loading = status === 'loading' && services.length === 0;
   const selected = useMemo(
@@ -159,6 +183,56 @@ export default function ServicesModule() {
     void reorderServices(next.map((s) => s.id));
   }
 
+  function openCreate() {
+    setNewForm(BLANK_NEW());
+    setSlugTouched(false);
+    setNewError(null);
+    setCreating(true);
+  }
+
+  const setNew = <K extends keyof NewForm>(key: K, value: NewForm[K]) => {
+    setNewError(null);
+    setNewForm((f) => {
+      const next = { ...f, [key]: value };
+      // Suggest the slug from the title until the editor takes it over.
+      if (key === 'title' && !slugTouched) next.slug = slugify(String(value));
+      return next;
+    });
+  };
+
+  async function create() {
+    const problem = validateNew(newForm);
+    if (problem) { setNewError(problem); return; }
+    const payload: NewServicePayload = {
+      title: newForm.title.trim(),
+      slug: newForm.slug.trim() || undefined,
+      eyebrow: newForm.eyebrow.trim() || undefined,
+      dek: newForm.dek.trim() || undefined,
+      live: newForm.live,
+    };
+    setNewBusy(true);
+    try {
+      const line = await addService(payload);
+      setCreating(false);
+      setError(null);
+      setSelectedId(line.id);
+    } catch (e) {
+      setNewError(e instanceof Error ? e.message : 'The practice page could not be created.');
+    } finally {
+      setNewBusy(false);
+    }
+  }
+
+  /** The API refuses (409) when the delete would leave /services with no live practice. */
+  function removeLine(s: ServiceLine) {
+    setStructureError(null);
+    void deleteService(s.id).then(() => {
+      if (selectedId === s.id) setSelectedId(null);
+    }).catch((e: unknown) => {
+      setStructureError(e instanceof Error ? e.message : 'The practice page could not be deleted.');
+    });
+  }
+
   return (
     <div className="space-y-9 pb-4">
       <ModuleHeader
@@ -185,6 +259,7 @@ export default function ServicesModule() {
             >
               View live pages <IconExternal size={12} />
             </a>
+            <BtnPrimary onClick={openCreate}><IconPlus size={14} /> New service line</BtnPrimary>
           </>
         }
       />
@@ -194,7 +269,8 @@ export default function ServicesModule() {
       {!loading && services.length === 0 && (
         <EmptyState
           title="No service lines are configured."
-          hint="The four practice pages are provisioned with the database. Ask systems administration to run the content seeder."
+          hint="Start the first practice page here; it appears on /services once it is published."
+          action={<BtnPrimary onClick={openCreate}><IconPlus size={14} /> New service line</BtnPrimary>}
         />
       )}
 
@@ -260,6 +336,11 @@ export default function ServicesModule() {
 
             <div className="mt-8 border-t rule pt-6">
               <span className="mono text-[10px] uppercase tracking-[0.18em] text-graphite">Card order</span>
+              {structureError && (
+                <p className="mt-3 border-l-2 pl-3 text-[12.5px] leading-relaxed" style={{ borderColor: 'var(--color-warn)', color: 'var(--color-warn)' }}>
+                  {structureError}
+                </p>
+              )}
               <ul className="mt-3 divide-y rule border-y rule">
                 {services.map((s, i) => (
                   <li key={s.id} className="flex items-center gap-4 py-2.5">
@@ -276,12 +357,23 @@ export default function ServicesModule() {
                       <MiniBtn label={`Move ${s.title} down`} disabled={i === services.length - 1} onClick={() => reorder(i, i + 1)}>
                         <IconArrowDown size={13} />
                       </MiniBtn>
+                      <RowAction
+                        label={armed === s.id ? `Confirm · delete ${s.title}` : `Delete ${s.title}`}
+                        danger
+                        onClick={() => confirm(s.id, () => removeLine(s))}
+                      >
+                        {armed === s.id ? <IconCheck size={14} /> : <IconTrash size={14} />}
+                      </RowAction>
+                      {armed === s.id && (
+                        <span className="mono text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--color-warn)' }}>sure?</span>
+                      )}
                     </div>
                   </li>
                 ))}
               </ul>
               <p className="mt-3 text-[11.5px] leading-relaxed text-graphite">
-                Order applies immediately — it is structure, not copy, so it is not held with the draft below.
+                Order and deletion apply immediately — they are structure, not copy, so they are not held with the draft below.
+                The last live practice cannot be deleted; publish another first.
               </p>
             </div>
           </Panel>
@@ -494,6 +586,61 @@ export default function ServicesModule() {
         onPick={(path) => setPage('heroImage', path)}
         onClose={() => setPickingHero(false)}
       />
+
+      {/* New practice page */}
+      <Drawer
+        open={creating}
+        title="New service line"
+        onClose={() => setCreating(false)}
+        footer={
+          <>
+            <BtnGhost onClick={() => setCreating(false)} disabled={newBusy}>Cancel</BtnGhost>
+            <BtnPrimary onClick={() => void create()} disabled={newBusy}>
+              {newBusy ? 'Creating…' : 'Create practice page'}
+            </BtnPrimary>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          <p className="text-[13px] leading-relaxed text-graphite">
+            The page starts hidden with a title and a standfirst. Photography, proof stats, and the ledger are edited in place once it exists.
+          </p>
+          <TextField
+            label="Title"
+            value={newForm.title}
+            onChange={(v) => setNew('title', v)}
+            placeholder="Capital Markets"
+            error={newError ?? undefined}
+          />
+          <TextField
+            label="Slug"
+            value={newForm.slug}
+            onChange={(v) => { setSlugTouched(true); setNew('slug', v.toLowerCase()); }}
+            placeholder="capital-markets"
+            helper={newForm.slug.trim()
+              ? `Published at /services/${newForm.slug.trim()} — a clash gets a numeric suffix.`
+              : 'Left blank, the API derives one from the title.'}
+            error={newForm.slug.trim() && !SLUG_RE.test(newForm.slug.trim()) ? 'Lowercase words joined by hyphens.' : undefined}
+          />
+          <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)]">
+            <TextField label="Eyebrow" value={newForm.eyebrow} onChange={(v) => setNew('eyebrow', v)} placeholder="Service" />
+            <div className="flex flex-col justify-end">
+              <div className="flex items-center justify-between gap-4 border rule bg-white px-4 py-3">
+                <span className="mono text-[10px] uppercase tracking-[0.18em] text-graphite">Publish now</span>
+                <Switch on={newForm.live} onToggle={() => setNew('live', !newForm.live)} label="Publish the new practice page" />
+              </div>
+            </div>
+          </div>
+          <TextField
+            label="Standfirst"
+            value={newForm.dek}
+            onChange={(v) => setNew('dek', v)}
+            multiline
+            placeholder="What the practice does, in two sentences."
+            helper="Also the summary on the /services landing card."
+          />
+        </div>
+      </Drawer>
 
       {/* Leaving an edited practice behind */}
       <Modal

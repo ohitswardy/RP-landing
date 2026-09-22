@@ -33,6 +33,7 @@ class ReportWorkbookTest extends TestCase
         $this->artisan('migrate', ['--database' => 'crms', '--path' => [
             'database/migrations/2026_09_07_100000_create_crms_schema.php',
             'database/migrations/2026_09_18_100000_add_important_to_crms_interactions.php',
+            'database/migrations/2026_09_22_100000_add_layout_to_crms_report_templates.php',
         ]]);
 
         $this->client = Client::create(['name' => 'Capital World', 'region' => 'US']);

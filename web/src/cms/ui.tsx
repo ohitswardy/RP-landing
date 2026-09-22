@@ -138,10 +138,12 @@ export function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => v
 /* ── Form fields (label above input, per house form rules) ─── */
 
 export function TextField({
-  label, value, onChange, placeholder, helper, error, multiline = false,
+  label, value, onChange, placeholder, helper, error, multiline = false, trailing,
 }: {
   label: string; value: string; onChange: (v: string) => void;
   placeholder?: string; helper?: string; error?: string; multiline?: boolean;
+  /** Pinned inside the right edge of the input, e.g. a live preview of what the value produces. Single-line only. */
+  trailing?: ReactNode;
 }) {
   const cls =
     'w-full border rule bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors duration-300 placeholder:text-silver focus:border-[color:var(--color-amber-deep)]';
@@ -150,6 +152,11 @@ export function TextField({
       <label className="mono text-[10.5px] uppercase tracking-[0.18em] text-graphite">{label}</label>
       {multiline ? (
         <textarea rows={4} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`${cls} resize-y leading-relaxed`} />
+      ) : trailing ? (
+        <div className="relative">
+          <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={`${cls} pr-14`} />
+          <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center">{trailing}</span>
+        </div>
       ) : (
         <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cls} />
       )}

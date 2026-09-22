@@ -17,13 +17,30 @@ class NewsletterIssue extends Model
      */
     public static function summaries(): \Illuminate\Support\Collection
     {
-        return static::query()
-            ->selectRaw("id, cadence, date, subject, updated_at, JSON_LENGTH(sections) AS section_count, JSON_EXTRACT(sections, '$[*].badge') AS badge_list")
-            ->orderByDesc('date')->orderByDesc('id')
-            ->get()
-            ->map(static function (self $row): array {
+        // MySQL/MariaDB reduce the JSON in SQL so the ~1,900-issue archive never
+        // loads its bodies; sqlite (phpunit) has no JSON_LENGTH, so it reads
+        // `sections` and reduces in PHP — same shape, tiny tables only.
+        $inSql = in_array(static::query()->getConnection()->getDriverName(), ['mysql', 'mariadb'], true);
+
+        $query = static::query()->orderByDesc('date')->orderByDesc('id');
+        $query = $inSql
+            ? $query->selectRaw("id, cadence, date, subject, updated_at, JSON_LENGTH(sections) AS section_count, JSON_EXTRACT(sections, '$[*].badge') AS badge_list")
+            : $query->select(['id', 'cadence', 'date', 'subject', 'updated_at', 'sections']);
+
+        return $query->get()
+            ->map(static function (self $row) use ($inSql): array {
+                if ($inSql) {
+                    $count = (int) $row->getAttribute('section_count');
+                    $raw = json_decode((string) $row->getAttribute('badge_list'), true) ?: [];
+                } else {
+                    $sections = $row->getAttribute('sections');
+                    $sections = is_array($sections) ? $sections : (json_decode((string) $sections, true) ?: []);
+                    $count = count($sections);
+                    $raw = array_map(fn ($s) => $s['badge'] ?? '', $sections);
+                }
+
                 $badges = [];
-                foreach (json_decode((string) $row->getAttribute('badge_list'), true) ?: [] as $b) {
+                foreach ($raw as $b) {
                     $b = trim((string) $b);
                     if ($b !== '' && ! in_array($b, $badges, true)) {
                         $badges[] = $b;
@@ -35,7 +52,7 @@ class NewsletterIssue extends Model
                     'cadence' => $row->cadence,
                     'date' => $row->date->format('Y-m-d'),
                     'subject' => $row->subject,
-                    'sectionCount' => (int) $row->getAttribute('section_count'),
+                    'sectionCount' => $count,
                     'badges' => $badges,
                     'updated' => $row->updated_at?->toIso8601String() ?? now()->toIso8601String(),
                 ];

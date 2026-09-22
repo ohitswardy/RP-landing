@@ -17,6 +17,7 @@ use App\Models\ServiceLine;
 use App\Models\ServicePage;
 use App\Models\StaffMember;
 use App\Models\Subscriber;
+use App\Models\User;
 use App\Models\WatchSymbol;
 use App\Support\AboutDefaults;
 use App\Support\ContactDefaults;
@@ -25,15 +26,24 @@ use App\Support\LegalDefaults;
 use App\Support\PeopleDefaults;
 use App\Support\ServiceDefaults;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Storage;
 
 class ContentSeeder extends Seeder
 {
     private const SAMPLE_PDF = '/reports/regis-sample-report.pdf';
 
+    /** The one demo portal account, so the portal works right after `migrate --seed`. */
+    public const DEMO_CLIENT_EMAIL = 'client@regis.ph';
+
+    public const DEMO_CLIENT_USERNAME = 'RP-DEMO-0001';
+
+    public const DEMO_CLIENT_PASSWORD = 'RegisClient2026!';
+
     public function run(): void
     {
         $this->articles();
         $this->reports();
+        $this->portalClient();
         $this->people();
         $this->about();
         $this->contact();
@@ -106,7 +116,20 @@ class ContentSeeder extends Seeder
             ['SM Prime: the NLEX-to-mall land bank optionality', 'Infrastructure', 'SM Prime', 'P. Garcia', '2026-06-23', 19, 'Reclamation politics aside, the entitled land bank is a multi-cycle option the market marks at zero.', 'smph-land-bank.pdf', 2260000, 'Company Update', 'Buy'],
         ];
 
+        // The sample PDF the web app ships. Copied once per report onto the
+        // private disk the CMS uploads to, so /api/reports/{id}/file streams
+        // (with watermark and ledger) exactly as a real upload would. When
+        // web/ is absent the catalog falls back to the public URL as before.
+        $sample = base_path('../web/public'.self::SAMPLE_PDF);
+        $sampleBytes = file_exists($sample) ? file_get_contents($sample) : null;
+
         foreach ($rows as [$title, $category, $companyName, $analyst, $date, $pages, $summary, $fileName, $fileSize, $type, $rating]) {
+            $filePath = null;
+            if ($sampleBytes !== null) {
+                $filePath = 'reports/seed-'.$fileName;
+                Storage::put($filePath, $sampleBytes);
+            }
+
             Report::create([
                 'title' => $title,
                 'category' => $category,
@@ -118,11 +141,48 @@ class ContentSeeder extends Seeder
                 'pages' => $pages,
                 'summary' => $summary,
                 'file_name' => $fileName,
-                'file_size' => $fileSize,
-                'file_url' => self::SAMPLE_PDF,
-                'file_path' => null,
+                'file_size' => $filePath !== null ? strlen($sampleBytes) : $fileSize,
+                'file_url' => $filePath !== null ? null : self::SAMPLE_PDF,
+                'file_path' => $filePath,
             ]);
         }
+
+        if ($sampleBytes === null) {
+            $this->command?->warn('Sample PDF not found at '.$sample.'; seeded reports point at the public URL and /api/reports/{id}/file will 404.');
+        }
+    }
+
+    /**
+     * One approved portal client so the portal can be exercised straight
+     * after `migrate --seed`. Empty preferences = the whole catalog.
+     */
+    private function portalClient(): void
+    {
+        $client = User::updateOrCreate(
+            ['email' => self::DEMO_CLIENT_EMAIL, 'kind' => User::KIND_CLIENT],
+            [
+                'name' => 'Demo Client',
+                'username' => self::DEMO_CLIENT_USERNAME,
+                'password' => self::DEMO_CLIENT_PASSWORD,
+                'status' => User::STATUS_APPROVED,
+                'firm' => 'Regis Partners (demo mandate)',
+                'position' => 'Portfolio Manager',
+                'client_type' => 'Local',
+                'sector_prefs' => [],
+                'preferred_analysts' => [],
+                'registered_at' => now(),
+                'approved_at' => now(),
+                'suspended' => false,
+            ],
+        );
+
+        $this->command?->info(sprintf(
+            'Portal client seeded: %s / %s (user id %s, %s)',
+            $client->email,
+            self::DEMO_CLIENT_PASSWORD,
+            $client->username,
+            $client->status,
+        ));
     }
 
     private function people(): void

@@ -73,7 +73,7 @@ class OneOffMeetingController extends CrmsController
         }
         $meeting = OneOffMeeting::create($this->attributes($data) + ['user_id' => $this->legacyUserId(), 'created' => now()]);
 
-        return $this->item($this->wire($meeting), $this->audit('Created one-off meeting', $meeting->subject()), 201);
+        return $this->item($this->wire($meeting), $this->audit('Created one-off meeting', $meeting->subject()), 201, $this->authorMeta());
     }
 
     public function update(Request $request, OneOffMeeting $meeting): JsonResponse
@@ -133,6 +133,7 @@ class OneOffMeetingController extends CrmsController
             'item' => $interaction->load(['client', 'type'])->toWire(),
             'meeting' => $this->wire($meeting),
             'audit' => $this->audit('Converted meeting to interaction', $interaction->reference())->toWire(),
+            'meta' => $this->authorMeta(),
         ], 201);
     }
 

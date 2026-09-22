@@ -22,6 +22,7 @@ class LoginController extends CrmsController
         $data = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string', 'min:8'],
+            'remember' => ['sometimes', 'boolean'],
         ]);
 
         $user = User::with('role.permissions')
@@ -41,10 +42,11 @@ class LoginController extends CrmsController
 
         $user->forceFill(['last_active_at' => now()])->saveQuietly();
         // Same ability as the CMS token: one session covers both areas.
-        $token = $user->createToken('crms', ['cms'])->plainTextToken;
+        $session = $user->issueSessionToken('crms', ['cms'], (bool) ($data['remember'] ?? false));
 
         return response()->json([
-            'token' => $token,
+            'token' => $session['token'],
+            'expiresAt' => $session['expiresAt'],
             'user' => [
                 'id' => (string) $user->id,
                 'name' => $user->name,
@@ -52,6 +54,7 @@ class LoginController extends CrmsController
                 'role' => $user->role?->name ?? 'Staff',
                 'permissions' => $user->permissionKeys(),
                 'outlookEmail' => $user->outlook_email,
+                'superAdmin' => \App\Support\SuperAdmin::is($user),
             ],
         ]);
     }

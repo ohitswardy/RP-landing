@@ -3,9 +3,10 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth';
 import { useCms } from './store';
 import { Chip } from './ui';
-import RailBrandCanvas from './RailBrandCanvas';
 import RailBrandLogo from './RailBrandLogo';
 import { usePublishedHeight } from './kit/stickyOffset';
+import UserBlobatar from './kit/UserBlobatar';
+import RailOrb from './kit/RailOrb';
 import { useAppTheme } from '@/lib/theme';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import {
@@ -22,6 +23,7 @@ import {
 import {
   ChalkboardSimpleIcon, ArticleIcon, ScrollIcon, SuitcaseIcon, UsersThreeIcon,
   FileIcon, NewspaperIcon, EnvelopeSimpleIcon, LogIcon, FingerprintIcon, HouseLineIcon,
+  BriefcaseIcon, ChartLineUpIcon, ImagesIcon, ArrowsClockwiseIcon,
 } from '@phosphor-icons/react';
 
 type NavItem = {
@@ -46,6 +48,7 @@ const CONTENT_NAV: NavItem[] = [
   { to: '/cms/services', label: 'Services', code: '04', icon: (p) => <SuitcaseIcon {...p} weight="bold" />, perm: 'services.manage' },
   { to: '/cms/people', label: 'People', code: '05', icon: (p) => <UsersThreeIcon {...p} weight="bold" />, perm: 'people.manage' },
   { to: '/cms/pages', label: 'Pages', code: '06', icon: (p) => <FileIcon {...p} weight="bold" />, perm: 'pages.manage' },
+  { to: '/cms/careers', label: 'Careers', code: '11', icon: (p) => <BriefcaseIcon {...p} weight="bold" />, perm: 'careers.manage' },
 ];
 
 const SITE_NAV: NavItem[] = [
@@ -53,6 +56,8 @@ const SITE_NAV: NavItem[] = [
   { to: '/cms/email', label: 'Email desk', code: '08', icon: (p) => <EnvelopeSimpleIcon {...p} weight="bold" />, perm: 'email.manage' },
   { to: '/cms/access', label: 'Users & access', code: '09', icon: (p) => <LogIcon {...p} weight="bold" />, perm: 'access.manage' },
   { to: '/cms/logs', label: 'Client logs', code: '10', icon: (p) => <FingerprintIcon {...p} weight="bold" />, perm: 'logs.view' },
+  { to: '/cms/market', label: 'Market ribbon', code: '12', icon: (p) => <ChartLineUpIcon {...p} weight="bold" />, perm: 'market.manage' },
+  { to: '/cms/media', label: 'Media', code: '13', icon: (p) => <ImagesIcon {...p} weight="bold" />, perm: 'media.manage' },
 ];
 
 const PIN_KEY = 'regis-cms-rail-pinned';
@@ -79,7 +84,7 @@ function RailBrand() {
       className="relative flex h-[76px] shrink-0 items-center overflow-hidden border-b pl-[26px] pr-4"
       style={{ borderColor: 'color-mix(in oklab, var(--color-ink) 12%, transparent)' }}
     >
-      <RailBrandCanvas />
+      <RailOrb />
     </div>
   );
 }
@@ -107,17 +112,35 @@ function RailLink({ item }: { item: NavItem }) {
   );
 }
 
-function RailLogo({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () => void }) {
-  const { session, signOut } = useAuth();
+function RailLogo({ pinned, onTogglePin }: {
+  pinned: boolean; onTogglePin: () => void;
+}) {
+  const { session, signOut, refresh, refreshing } = useAuth();
   const navigate = useNavigate();
   const { expanded, surface } = useSidebar();
+  const [refreshNote, setRefreshNote] = useState<'ok' | 'fail' | null>(null);
 
-  const initials = (session?.name ?? '')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join('');
+  useEffect(() => {
+    if (!refreshNote) return;
+    const t = window.setTimeout(() => setRefreshNote(null), 2400);
+    return () => window.clearTimeout(t);
+  }, [refreshNote]);
+
+  async function refreshPermissions() {
+    if (refreshing) return;
+    const err = await refresh();
+    setRefreshNote(err ? 'fail' : 'ok');
+  }
+
+  const refreshTitle = refreshing
+    ? 'Refreshing…'
+    : refreshNote === 'ok' ? 'Permissions up to date'
+      : refreshNote === 'fail' ? 'Refresh failed'
+        : 'Refresh permissions';
+  const refreshTone = refreshNote === 'ok'
+    ? 'text-[color:var(--color-signal)]'
+    : refreshNote === 'fail' ? 'text-[color:var(--color-warn)]'
+      : 'text-graphite hover:text-ink';
 
   return (
     <div
@@ -126,38 +149,55 @@ function RailLogo({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () =>
     >
       <RailBrandLogo />
 
-      {/* User info */}
+      {/* User info: the name opens the account page (profile, grants, session, password) */}
       <div className="flex items-center gap-3.5 pb-2 pl-[26px] pr-5 pt-3">
-        <span
-          className="mono grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full border text-[9.5px] tracking-[0.04em] text-ink"
-          style={{ background: 'var(--color-bone)', borderColor: 'color-mix(in oklab, var(--color-ink) 15%, transparent)' }}
+        <NavLink
+          to="/cms/account"
+          title="Your account"
+          className={({ isActive }) => `flex min-w-0 flex-1 items-center gap-3.5 transition-colors duration-300 ${isActive ? 'text-[color:var(--color-amber-deep)]' : 'text-ink hover:text-[color:var(--color-amber-deep)]'}`}
         >
-          {initials || '—'}
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <SidebarLabel className="max-w-[140px] truncate text-[12.5px] text-ink">
-            {session?.name ?? 'Signed out'}
-          </SidebarLabel>
-          <SidebarLabel className="mono max-w-[140px] truncate text-[9px] uppercase tracking-[0.16em] text-graphite">
-            {session?.role ?? '—'}
-          </SidebarLabel>
-        </span>
+          <UserBlobatar name={session?.name} size={26} />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <SidebarLabel className="max-w-[140px] truncate text-[12.5px]">
+              {session?.name ?? 'Signed out'}
+            </SidebarLabel>
+            <SidebarLabel className="mono max-w-[140px] truncate text-[9px] uppercase tracking-[0.16em] text-graphite">
+              {session?.role ?? '—'}
+            </SidebarLabel>
+          </span>
+        </NavLink>
 
-        {surface === 'desktop' && expanded && (
-          <button
-            type="button"
-            onClick={onTogglePin}
-            aria-pressed={pinned}
-            title={pinned ? 'Unpin rail' : 'Keep rail open'}
-            className={`grid h-7 w-7 shrink-0 place-items-center transition-colors duration-300 active:scale-95 ${
-              pinned ? 'text-[color:var(--color-amber)]' : 'text-graphite hover:text-ink'
-            }`}
-          >
-            <IconPin size={15} />
-          </button>
+        {expanded && (
+          <span className="flex shrink-0 items-center">
+            {/* Re-read this account's role and grants from the API without signing out */}
+            <button
+              type="button"
+              onClick={() => { void refreshPermissions(); }}
+              disabled={refreshing}
+              aria-label={refreshTitle}
+              title={refreshTitle}
+              className={`grid h-7 w-7 place-items-center transition-colors duration-300 active:scale-95 disabled:opacity-60 ${refreshTone}`}
+            >
+              <ArrowsClockwiseIcon size={15} weight="bold" className={refreshing ? 'animate-spin' : ''} />
+            </button>
+            {surface === 'desktop' && (
+              <button
+                type="button"
+                onClick={onTogglePin}
+                aria-pressed={pinned}
+                title={pinned ? 'Unpin rail' : 'Keep rail open'}
+                className={`grid h-7 w-7 place-items-center transition-colors duration-300 active:scale-95 ${
+                  pinned ? 'text-[color:var(--color-amber)]' : 'text-graphite hover:text-ink'
+                }`}
+              >
+                <IconPin size={15} />
+              </button>
+            )}
+          </span>
         )}
       </div>
 
+      {/* Account actions: the same account serves the CMS and the CRMS */}
       <button
         type="button"
         onClick={() => { signOut(); navigate('/login/cms'); }}
@@ -170,7 +210,9 @@ function RailLogo({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () =>
   );
 }
 
-function RailContent({ pinned, onTogglePin }: { pinned: boolean; onTogglePin: () => void }) {
+function RailContent({ pinned, onTogglePin }: {
+  pinned: boolean; onTogglePin: () => void;
+}) {
   const { can } = useAuth();
   const content = CONTENT_NAV.filter((i) => !i.perm || can(i.perm));
   const site = SITE_NAV.filter((i) => !i.perm || can(i.perm));
@@ -237,8 +279,10 @@ export default function CMSLayout() {
 
   const all = [OVERVIEW, ...CONTENT_NAV, ...SITE_NAV];
   const current =
-    all.filter((i) => location.pathname === i.to || (i.to !== '/cms' && location.pathname.startsWith(i.to))).pop() ??
-    all[0];
+    location.pathname.startsWith('/cms/account')
+      ? { ...OVERVIEW, to: '/cms/account', label: 'Account', code: '—' }
+      : all.filter((i) => location.pathname === i.to || (i.to !== '/cms' && location.pathname.startsWith(i.to))).pop() ??
+        all[0];
 
   const lastEdit = audit[0];
 

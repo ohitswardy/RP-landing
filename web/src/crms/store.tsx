@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { apiFetch } from '../lib/api';
 import type {
-  AuditEntry, Client, ClientAddress, ClientContact, Corporate, CorporateContact, Form, InteractionType,
-  PortalAccount, ReportTemplate, SectorGroup, SellsideContact,
+  AuditEntry, Client, ClientAddress, ClientContact, Corporate, CorporateContact, EventCategoryMeta, Form, InteractionType,
+  JefferiesMeta, PortalAccount, ReportSource, ReportTemplate, SectorGroup, SellsideContact,
 } from './data';
 
 /* ─────────────────────────────────────────────────────────────
@@ -30,7 +30,18 @@ export type CrmsCollections = {
 
 type CrmsState = CrmsCollections & {
   audit: AuditEntry[];
-  meta: { years: number[]; eventCategories: { slug: string; label: string }[]; genericClientId: string | null };
+  meta: {
+    years: number[];
+    eventCategories: EventCategoryMeta[];
+    genericClientId: string | null;
+    /** False when no legacy `user` row carries the signed-in email: saves then stamp no author, only the ledger names them. */
+    legacyUserMatched: boolean;
+    legacyUserId: string | null;
+    /** Everything a column of an imported report template can be filled with. */
+    reportSources: ReportSource[];
+    /** The Jefferies upload: which client row binds it, which binding renders it, and the bundled workbook. */
+    jefferies: JefferiesMeta;
+  };
 };
 
 type CollectionKey = keyof CrmsCollections;
@@ -55,7 +66,8 @@ type CrmsStore = CrmsState & {
 const EMPTY: CrmsState = {
   clients: [], addresses: [], clientContacts: [], corporates: [], corporateContacts: [], sellsideContacts: [],
   interactionTypes: [], forms: [], sectorGroups: [], reportTemplates: [], portalAccounts: [],
-  audit: [], meta: { years: [new Date().getFullYear()], eventCategories: [], genericClientId: null },
+  // legacyUserMatched starts true so the interaction form never warns before the bootstrap has answered.
+  audit: [], meta: { years: [new Date().getFullYear()], eventCategories: [], genericClientId: null, legacyUserMatched: true, legacyUserId: null, reportSources: [], jefferies: { clientId: null, templateId: null, bundled: null } },
 };
 
 const CrmsContext = createContext<CrmsStore | null>(null);

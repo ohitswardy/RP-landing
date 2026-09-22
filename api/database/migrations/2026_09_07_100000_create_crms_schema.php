@@ -47,7 +47,7 @@ return new class extends Migration
             $t->text('watchlist')->nullable();
             $t->text('coverage_team')->nullable();
             $t->text('sales')->nullable();
-            $t->string('distribution_list')->nullable();
+            $t->string('distribution_list')->nullable(); // intentionally unused: audiences live in CMS → Email desk distribution lists
             $t->string('assistant')->nullable();
             $t->string('assistant_email')->nullable();
             $t->string('assistant_contact_no')->nullable();
@@ -241,6 +241,7 @@ return new class extends Migration
             $t->unsignedInteger('sellside_contact_id');
         });
 
+        // Intentionally unused: the CRMS writes its audit trail to the CMS `audit_entries` table ("CRMS · " rows), never here.
         $this->table($s, 'log', function (Blueprint $t) {
             $t->string('activity');
             $t->text('payload')->nullable();

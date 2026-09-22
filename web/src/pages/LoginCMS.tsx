@@ -11,6 +11,7 @@ const CONFIG: PortalConfig = {
   cta: 'Enter CMS',
   stamp: 'Regis CMS · Internal',
   glyph: 'bottom-left',
+  forgotHref: '/forgot-password/staff',
   footnote: (
     <>
       Publishing access is provisioned to Regis staff only. Credential issues?{' '}
@@ -26,15 +27,17 @@ export default function LoginCMS() {
   const { session, signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/cms';
+  const state = location.state as { from?: string; notice?: string } | null;
+  const from = state?.from ?? '/cms';
 
   if (session) return <Navigate to={from} replace />;
 
   return (
     <PortalAuth
       config={CONFIG}
-      onSubmit={async (identity, password) => {
-        const err = await signIn(identity, password);
+      notice={state?.notice ?? null}
+      onSubmit={async (identity, password, remember) => {
+        const err = await signIn(identity, password, 'cms', { remember });
         if (!err) navigate(from, { replace: true });
         return err;
       }}

@@ -31,10 +31,13 @@ use Illuminate\Support\Facades\DB;
  */
 class ReportGenerator
 {
-    public const TYPES = ['generic', 'internal', 'client'];
+    public const TYPES = ['generic', 'internal', 'client', 'jefferies'];
 
     /** The legacy workbook labels every time of day with this zone (PH shares UTC+8). */
     public const TIME_ZONE = 'HKT';
+
+    /** The zone start times are logged in, for converting to UTC (Commcise). */
+    public const TIME_ZONE_IANA = 'Asia/Manila';
 
     /** Interaction types that count as corporate access; matched on a normalised name. */
     public const CORPORATE_ACCESS = [
@@ -67,29 +70,72 @@ class ReportGenerator
 
     private string $to = '';
 
-    /** @return array{filename: string, sheets: array<string, array>} */
-    public function build(string $type, string $from, string $to, ?Client $client = null): array
+    public function __construct(private UploadLayouts $uploads = new UploadLayouts, private LayoutRenderer $layouts = new LayoutRenderer) {}
+
+    /**
+     * Either `sheets` for the in-house writer (SimpleXlsx) or `path` to a
+     * finished workbook when the client's binding is an imported Excel
+     * template, which LayoutRenderer fills in place.
+     *
+     * @return array{filename: string, sheets?: array<string, array>, path?: string}
+     */
+    public function build(string $type, string $from, string $to, ?Client $client = null, string $generatedBy = 'Regis Partners'): array
     {
         $this->from = $from;
         $this->to = $to;
 
+        // An imported template may widen the audience beyond the one client (a co-brand upload of the whole foreign book);
+        // the Jefferies binding always does, whichever way it is reached.
+        $template = $type === 'client' && $client ? $this->activeTemplate($client) : null;
+        $layout = $template?->hasLayout() ? $template->layout : null;
+        $scope = $layout['scope'] ?? ($template?->code === 'jefferies' ? 'foreign' : 'client');
+        $jefferies = $type === 'jefferies' ? ReportTemplate::jefferies() : null;
+
         $rows = Interaction::with(['client', 'type'])
-            ->when($client, fn ($q) => $q->where('client_id', $client->id))
+            ->when($client && $scope === 'client', fn ($q) => $q->where('client_id', $client->id))
+            // The Jefferies file covers the foreign book only; Local clients are reported elsewhere.
+            ->when($type === 'jefferies' || $scope === 'foreign', fn ($q) => $q->whereHas('client', fn ($c) => $c->where('client_type', 'Foreign')))
             ->between($from, $to)
-            ->orderBy('interaction_date')->orderBy('id')
+            ->orderBy('interaction_date')->orderBy('time_start')->orderBy('id')
             ->get();
 
         $stamp = "($from to $to)";
+        $name = trim((string) $client?->name);
 
         return match ($type) {
             'internal' => [
                 'filename' => "Call Report $stamp.xlsx",
                 'sheets' => $this->internal($rows),
             ],
-            'client' => [
-                'filename' => ($client?->name ?? 'Client')." Consumption Report $stamp.xlsx",
-                'sheets' => ['Consumption' => $this->table($this->template($client), $rows)],
+            // Jefferies' own bulk-upload workbook, filled with the foreign book: a newer workbook imported over the
+            // bundle (on the Jefferies client) wins, else the file as Jefferies sent it.
+            'jefferies' => [
+                'filename' => $this->jefferiesFilename($from, $to),
+                'path' => $jefferies?->hasLayout()
+                    ? $this->layouts->render($jefferies, $rows, $jefferies->client, $generatedBy, $from, $to)
+                    : $this->layouts->renderBundled(BundledTemplates::JEFFERIES, $rows, null, $generatedBy, $from, $to),
             ],
+            'client' => match (true) {
+                // The client's imported workbook.
+                $layout !== null => [
+                    'filename' => $this->layoutFilename($layout, $client, $from, $to),
+                    'path' => $this->layouts->render($template, $rows, $client, $generatedBy, $from, $to),
+                ],
+                // The Jefferies client picked under By client: the same bulk upload the Jefferies type produces.
+                $template?->code === 'jefferies' => [
+                    'filename' => $this->jefferiesFilename($from, $to),
+                    'path' => $this->layouts->renderBundled(BundledTemplates::JEFFERIES, $rows, null, $generatedBy, $from, $to),
+                ],
+                // The Commcise template exactly as Schroders / JPM downloaded it, named the way Commcise names its downloads.
+                $template?->code === 'commcise' => [
+                    'filename' => $this->commciseFilename($client),
+                    'path' => $this->layouts->renderBundled(BundledTemplates::forCommcise($client), $rows, $client, $generatedBy, $from, $to),
+                ],
+                default => [
+                    'filename' => ($name !== '' ? $name : 'Client')." Consumption Report $stamp.xlsx",
+                    'sheets' => ['Consumption' => $this->table($this->template($client), $rows)],
+                ],
+            },
             default => [
                 'filename' => "Generic Report $stamp.xlsx",
                 'sheets' => ['Extract' => $this->table($this->extract(), $rows)],
@@ -343,12 +389,52 @@ class ReportGenerator
         ];
     }
 
+    /** "2026-09-22-Schroders-Commcise Template_20260922143000.xlsx": the name Commcise gives its own downloads. */
+    private function commciseFilename(?Client $client): string
+    {
+        $now = CarbonImmutable::now();
+        $who = BundledTemplates::forCommcise($client) === BundledTemplates::JPM ? 'JPM' : 'Schroders';
+
+        return $now->format('Y-m-d')."-$who-Commcise Template_".$now->format('YmdHis').'.xlsx';
+    }
+
+    /** "Aug 2026 - Regis Interactions.xlsx" for a single month, as the desk names it; the range otherwise. */
+    private function jefferiesFilename(string $from, string $to): string
+    {
+        return substr($from, 0, 7) === substr($to, 0, 7)
+            ? CarbonImmutable::parse($from)->format('M Y').' - Regis Interactions.xlsx'
+            : "Regis Interactions ($from to $to).xlsx";
+    }
+
+    /** The client's active binding, if any. */
+    private function activeTemplate(?Client $client): ?ReportTemplate
+    {
+        return $client ? ReportTemplate::where('client_id', $client->id)->where('is_active', true)->first() : null;
+    }
+
+    private function templateCode(?Client $client): ?string
+    {
+        return $this->activeTemplate($client)?->code;
+    }
+
+    /** "Sep 2026 - {title}.xlsx" for a single month (as the desk names its uploads), else the range. */
+    private function layoutFilename(array $layout, ?Client $client, string $from, string $to): string
+    {
+        $title = trim((string) ($layout['title'] ?? ''));
+        if ($title === '') {
+            $title = trim((string) $client?->name.' Template');
+        }
+        $title = trim(preg_replace('~[\\\\/:*?"<>|]+~', ' ', $title) ?? $title);
+
+        return substr($from, 0, 7) === substr($to, 0, 7)
+            ? CarbonImmutable::parse($from)->format('M Y')." - $title.xlsx"
+            : "$title ($from to $to).xlsx";
+    }
+
     /** Which client template applies: a bound one, else the generic extract. */
     private function template(?Client $client): array
     {
-        $code = $client
-            ? ReportTemplate::where('client_id', $client->id)->where('is_active', true)->value('code')
-            : null;
+        $code = $this->templateCode($client);
 
         return match ($code) {
             'corpaxe' => [

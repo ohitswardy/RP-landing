@@ -44,16 +44,40 @@ so a full copy takes hours. `--no-images` leaves the URLs pointing at regis.ph.
 
 ## Accounts
 
-The seeder creates exactly one account, the CWDevs super admin. Every other account comes
-from the legacy regis.ph export (`regis_accounts_export.sql` in the repo root, 23 CMS staff
-and 564 portal clients, dumped 2026-09-14):
+The seeder creates two accounts: the CWDevs super admin and one demo portal client so the
+portal can be exercised straight after `migrate --seed`. Every other account comes from the
+legacy regis.ph export (`regis_accounts_export.sql` in the repo root, 23 CMS staff and 564
+portal clients, dumped 2026-09-14):
 
-| Kind  | Email                   | Password       | Role          |
-|-------|-------------------------|----------------|---------------|
-| Staff | superadmin@cwdevs.com   | `CWDevs2021!`  | Administrator |
+| Kind   | Email                   | User id        | Password            | Role / status              |
+|--------|-------------------------|----------------|---------------------|----------------------------|
+| Staff  | superadmin@cwdevs.com   | —              | `CWDevs2021!`       | Administrator              |
+| Client | client@regis.ph         | `RP-DEMO-0001` | `RegisClient2026!`  | approved, Local, whole catalog |
 
-Set `SUPER_ADMIN_PASSWORD` in `.env` to seed a different one. The account is re-asserted by
-every import run, so it can never be lost.
+Set `SUPER_ADMIN_PASSWORD` in `.env` to seed a different one. The super admin is re-asserted
+by every import run, so it can never be lost. The demo client signs in at `/login` with
+either the email or the user id (case-insensitive). `ContentSeeder` also copies the sample
+PDF from `web/public/reports/` onto the private disk for every seeded report, so
+`GET /api/reports/{id}/file` streams for the seeded catalog; if `web/` is absent the reports
+fall back to the public sample URL and the seeder says so.
+
+**Forgot password** is self-service for both doors and emailed by the system through
+Microsoft Graph from `MS_GRAPH_SENDER`: `POST /api/portal/forgot-password {identity}`
+(clients, user id or email) and `POST /api/cms/forgot-password {email}` (staff). Both
+always answer 200 with a neutral message; a matching, non-suspended account receives a
+single-use link (`/portal/reset/{token}` for clients, `/cms/reset/{token}` for staff, 24 h)
+that `GET/POST /api/portal/reset/{token}` completes for either kind (the response carries
+`kind` so the page can send the user to the right login door). An invited client who lost
+their welcome email gets the registration link re-sent instead. If Graph is not configured
+the link is still issued and the request is logged and audited, but nothing is emailed.
+This is also how imported staff, who arrive with unusable passwords, get their first one:
+`/login/cms` → Forgot password.
+
+Signed-in accounts can change their own password (`PUT /api/portal/password`,
+`PUT /api/cms/password` with `{current, password, password_confirmation}`), which signs out
+every other session but keeps the current one, and clients can read their own mandate
+(`GET /api/portal/profile`). Logins accept `remember: true` for a 30-day token
+(`expiresAt` in the response); otherwise the token lives until the tab closes.
 
 The super admin, and only the super admin, can read an account's current password back from
 the Edit account drawer in Users & access (`GET /api/cms/users/{id}/password`, audited as
@@ -142,6 +166,15 @@ for the Regis tenant; restrict it to the desk's mailboxes with an Exchange
 `ApplicationAccessPolicy`, and the API additionally refuses any sender outside
 `MS_GRAPH_SENDER_DOMAIN`. Queued blasts need a worker: `php artisan queue:work`.
 
+Worker health: the worker stamps a cache heartbeat (`queue.heartbeat`) on every loop and after every
+job (`AppServiceProvider`). The readiness block (`GET …/audience` → `dispatch.queue`, or `GET …/readiness`)
+carries `{driver, alive, lastSeenAt, pending, stale}`: `alive` is true on the `sync` driver or when the
+heartbeat is under 90 s old, `pending` counts the `jobs` table on the database driver (null otherwise),
+`stale` counts blasts still `queued` after 5 min. `POST …/{id}/send` answers **409** while the worker is
+down unless the desk sends `confirmNoWorker: true`. Blasts left `queued` for over 15 minutes are
+re-dispatched by `php artisan blasts:requeue-stale` (`--minutes=`, `--dry-run`); schedule it or run it
+after bringing a worker back up — the job only ever sends the batches still pending, so nothing repeats.
+
 The sender mailbox resolves per staff member: their own `users.outlook_email` when the profile
 carries one, otherwise the shared desk mailbox in `MS_GRAPH_SENDER`. Most staff profiles have no
 personal Outlook address, so in practice the shared mailbox is the desk's sender. Whichever one
@@ -161,6 +194,16 @@ not publicly reachable. Third-party image URLs are left alone.
   login-gated portal deep link, the Foreign leg gets the Jefferies link from `external_link`.
 - **Distribution lists** (`distribution_lists`) are saved audiences the composer and the
   newsletter blast panel pick from; they are built from the same client/subscriber pool.
+  They are **personal**: every Administrator and Analyst keeps their own (`created_by`, name
+  unique per owner), and only the owner sees, edits or deletes a list. A list whose owner
+  account was deleted stays visible to everyone until someone edits it and takes it over.
+- **Research distribution** — `GET …/audience` also returns `research[]`: the CRMS
+  Research-Domestics / Research-Foreign hierarchy (`App\Support\ResearchAudience`, read-only
+  over the `crms` connection, empty when that database is absent), each sector with its tickers,
+  how many contacts are tagged into it, and the recipients a blast can reach — only contacts
+  linked to an approved, unsuspended portal account, the same bridge `SectorGroupMatcher`
+  walks. The desk shows the hierarchy on its Distribution lists tab and offers every sector as a
+  one-click pool in the composer; editing stays in the CRMS.
 - **Rendering** — report and ad-hoc bodies are sanitized (`Html::clean`) on save and set inside
   `resources/views/email/blast.blade.php` (logo, ticker/sector/title, analyst signature, CTA),
   with every field escaped. `POST …/render` returns that exact HTML for the composer preview.
@@ -187,24 +230,27 @@ not publicly reachable. Third-party image URLs are left alone.
 | Auth | `POST /api/cms/login`, `POST /api/portal/login`, `POST /api/logout`, `GET /api/me` |
 | CMS bootstrap | `GET /api/cms/bootstrap` (all collections in one round-trip) |
 | Landing page | `PUT /api/cms/home-page` (full document; gated by `home.manage`), `POST /api/cms/home/upload` (multipart photo); public read `GET /api/content/home` |
-| Insights | `POST/PUT/DELETE /api/cms/articles[/{id}]` |
+| Insights | `POST/PUT/DELETE /api/cms/articles[/{id}]` (accepts `slug` — auto-derived from the title when blank, kept unique — and `body` HTML, sanitized); public read `GET /api/content/insights` (summaries with `slug`, no bodies) and `GET /api/content/insights/{slug}` (one published note with `body` + 3 `related`; drafts and unknown slugs 404) |
 | Reports | `POST /api/cms/reports` (multipart PDF), `PUT /api/cms/reports/{id}`, `DELETE …` |
 | People | `POST/PUT/DELETE /api/cms/people[/{id}]`, `PUT /api/cms/people/reorder`, `POST /api/cms/people/upload` (multipart portrait) |
 | About page copy | `PUT /api/cms/about-page` (full document; gated by `people.manage`) |
-| Services | `PUT /api/cms/services/{id}`, `PUT /api/cms/services/page`, `PUT /api/cms/services/reorder`, `POST /api/cms/services/upload` (multipart image) |
-| Careers | `POST/PUT/DELETE /api/cms/careers[/{id}]` |
-| Market ribbon | `POST/PUT/DELETE /api/cms/watchlist[/{id}]`, `PUT /api/cms/watchlist/reorder` |
-| Newsletter | `DELETE /api/cms/subscribers/{id}`, `GET /api/newsletter/unsubscribe/{token}` (public, one-click opt-out) |
-| Email desk | `GET /api/cms/email-blasts` (ledger + monthly volume), `GET …/audience` (clients, subscribers, lists, dispatch readiness), `GET …/match?report=`, `POST …/render` (preview HTML), `POST/PUT/DELETE /api/cms/email-blasts[/{id}]`, `POST …/{id}/send` (Graph, queued), `GET …/{id}/deliveries`, `POST …/{id}/sent` (Outlook hand-off) |
+| Services | `POST /api/cms/services` (new line, slug from title, unpublished by default), `PUT /api/cms/services/{id}`, `DELETE /api/cms/services/{id}` (409 when it would leave no live line), `PUT /api/cms/services/page`, `PUT /api/cms/services/reorder`, `POST /api/cms/services/upload` (multipart image) |
+| Careers | `POST/PUT/DELETE /api/cms/careers[/{id}]` (with `summary` and `body` HTML); public read `GET /api/content/careers` (open postings, newest first) |
+| Market ribbon | `POST/PUT/DELETE /api/cms/watchlist[/{id}]`, `PUT /api/cms/watchlist/reorder` (every write returns `{item|items, audit}`); public read `GET /api/content/watchlist` (pinned first, then ribbon order) |
+| Media library | `GET /api/cms/media` (same wire as the bootstrap `media`), `POST /api/cms/media` (multipart image ≤ 8 MB), `DELETE /api/cms/media/{id}` (409 with `references[]` while any page, roster, service, note or posting still uses the file); gated by `media.manage` |
+| Newsletter | `DELETE /api/cms/subscribers/{id}`; public double opt-in `POST /api/newsletter/subscribe` `{email, name?}` (always 200, files the address unverified with `source: public`, emails a confirmation through Graph or logs when Graph is off), `GET /api/newsletter/verify/{token}` (flips `verified`, clears `unsubscribed_at`, returns `{ok, email}`), `GET /api/newsletter/unsubscribe/{token}` (one-click opt-out) |
+| Email desk | `GET /api/cms/email-blasts` (ledger + monthly volume), `GET …/audience` (clients, subscribers, lists, dispatch readiness incl. `queue` worker health), `GET …/readiness` (the dispatch block alone, for polling), `GET …/match?report=` (each match carries `via: prefs|sectorGroup|both`; the CRMS leg reads sector groups through `client_contact.portal_user_id`), `POST …/render` (preview HTML), `POST/PUT/DELETE /api/cms/email-blasts[/{id}]`, `POST …/{id}/send` (Graph, queued; 409 when no worker heartbeat on a non-sync driver unless `confirmNoWorker: true`), `GET …/{id}/deliveries`, `POST …/{id}/sent` (Outlook hand-off) |
 | Distribution lists | `GET/POST/PUT/DELETE /api/cms/distribution-lists[/{id}]` |
-| Page copy | `PUT /api/cms/pages/{id}` |
+| Page copy | `PUT /api/cms/pages/{id}`, `PUT /api/cms/contact-page` (full document; now with `social: [{label, href}]`) |
 | Users & access | `GET /api/cms/access`, `POST/PUT/DELETE /api/cms/users[/{id}]`, `POST/PUT/DELETE /api/cms/roles[/{id}]` |
 | Client onboarding | `POST /api/cms/portal-clients`, then `{id}/invite-link`, `{id}/approve`, `{id}/decline`, `{id}/reset-link`, `PUT {id}/password`, `PUT {id}/username` |
-| Onboarding links (public) | `GET/POST /api/portal/register/{token}`, `GET/POST /api/portal/reset/{token}` |
+| Onboarding links (public) | `GET/POST /api/portal/register/{token}`, `GET/POST /api/portal/reset/{token}` (clients and staff; response carries `kind`) |
+| Forgot password (public) | `POST /api/portal/forgot-password {identity}`, `POST /api/cms/forgot-password {email}` (always 200; emails a single-use link) |
+| Self-service | `GET /api/me` (session refresh, same shape as login), `GET /api/portal/profile`, `PUT /api/portal/password`, `PUT /api/cms/password` |
 | Portal | `GET /api/portal/reports`, `GET/PUT/DELETE /api/portal/bookmarks[/{reportId}]`, `POST /api/portal/activity` (consumption beacon) |
 | Client logs | `GET /api/cms/client-logs` (filter/sort/paginate), `GET …/export` (`?format=xlsx` or CSV), `GET …/verify` (hash-chain integrity) |
 | PDFs | `GET /api/reports/{id}/file` (streams; staff or client token) |
-| Site content (public) | `GET /api/content/services` (published /services copy and photos), `GET /api/content/people` (published About roster), `GET /api/content/about` (About copy + roster in one round-trip) |
+| Site content (public) | `GET /api/content/home`, `GET /api/content/services` (live lines only), `GET /api/content/insights[/{slug}]`, `GET /api/content/people`, `GET /api/content/about` (copy + roster), `GET /api/content/contact` (incl. `social`), `GET /api/content/legal`, `GET /api/content/nav`, `GET /api/content/watchlist`, `GET /api/content/careers`, `GET /api/content/search` (people / services / insights / pages index for the search modal, cached 60 s) |
 | Uploaded images (public) | `GET /api/media/{path}` (streams from the `site/` uploads folder) |
 
 Every CMS route is wrapped in `auth:sanctum` + `staff` middleware plus a `permission:{key}`
@@ -231,7 +277,23 @@ php artisan migrate          # creates the legacy tables only where missing, plu
                              # additive columns/indexes/tables from CRMSmasterplan.md §11.5
 php artisan db:seed --class=CrmsConfigSeeder   # template bindings, sector groups, backfills
 php artisan db:seed --class=CrmsSeeder         # demo master data only; a no-op once clients exist
+php artisan crms:distribution-list --dry-run   # what the research hierarchy would become
+php artisan crms:distribution-list --force     # rewrite it back onto the client's spec
 ```
+
+### The research distribution hierarchy
+
+`App\Support\ResearchDistribution` holds the client's list verbatim: **Research-Domestics** and
+**Research-Foreign**, each opening on a ticker-less `Strategy` sector and then Banks, Property,
+Power & Utilities, Telecommunications, Consumer, Gaming & Leisure, Mining, Conglomerates and
+Transportation. The two audiences deliberately differ — domestic Property carries the REITs
+(`AREIT`, `RCR`) and Mining adds `APX`, while foreign Property keeps `FLI`/`VLL` and Consumer adds
+Emperador. Resolution normalises the legacy ticker noise (`APX PM`, `CREIT.PS`, trailing spaces) and
+maps the client's `EMI` onto the dump's `EMP`; `SectorGroupMatcher` matches a report's bare symbol
+against the same suffixed spellings. `CrmsConfigSeeder` only tags sectors that are still empty, so
+`crms:distribution-list --force` is the way to overwrite a taxonomy an Administrator has drifted.
+Contacts subscribe at **sector** level (`client_contact_sector_group`); there is no per-ticker
+subscription, so a client who wants one stock only is tagged into that stock's sector.
 
 ### Loading the client's dump
 
@@ -264,8 +326,30 @@ interaction types: a client without its own form or types falls back to it.
 | `crms.contacts.manage` | clients, addresses, client contacts, portal link/unlink, corporates, Regis directory, sector groups |
 | `crms.interactions.manage` | interactions (create/edit/delete, send-to-recipients flag) |
 | `crms.events.manage` | events and their meetings / investors / flights / transport / hotels / Regis party; meeting → interaction |
-| `crms.reports.generate` | consumption workbooks (`POST /api/crms/reports/generate`) |
-| `crms.admin` | interaction types, form builder, report-template bindings, CRMS logs |
+| `crms.reports.generate` | consumption workbooks and third-party upload files (`POST /api/crms/reports/generate`, `type` = `generic` / `internal` / `client` / `jefferies`). `jefferies` fills Jefferies' own bulk-upload workbook through the binding on the client named Jefferies (`ReportTemplate::jefferies()`: code `jefferies` = the bundled file, an imported `custom` workbook on that client takes over); a client bound to `commcise` gets the exact Schroders or JPM Commcise template; a client bound to an imported template (`code` = `custom`) gets the workbook it uploaded. All three are filled in place by `App\Services\Crms\LayoutRenderer`; the bundled files live in `resources/report-templates` (`App\Services\Crms\BundledTemplates`) |
+| `crms.admin` | interaction types, form builder, report-template bindings, imported report templates (`POST /api/crms/report-templates/layout` multipart `clientId` + `file` (.xlsx, ≤ 10 MB, optional when re-mapping) + `layout` JSON; `POST …/layout/preview` maps against the latest rows; `GET …/{template}/layout/file` returns the original workbook), CRMS logs |
+
+Bundled report templates: `resources/report-templates/jefferies.xlsx` (Jefferies' "Aug 2026 -
+Regis Interactions.xlsx" with the data rows removed, row 2 kept for its styles and the Errors
+formula), `schroders-commcise.xlsx` and `jpm-commcise.xlsx` (the Commcise downloads of
+2026-09-21, byte-for-byte). `App\Services\Crms\BundledTemplates` holds their column → source maps;
+`GET /api/crms/report-templates/bundled/{key}/file` hands the file back. `CrmsConfigSeeder` binds the
+Jefferies file to the client named Jefferies (code `jefferies`), and the bootstrap's `meta.jefferies`
+carries that client id, the binding in force and the bundled layout, so the Reports module can offer
+Original / Import for it like any client template.
+
+Imported report templates (Form builder → Report template, or Reports → Import Excel): the client's
+own workbook is stored on the private disk (`crms/report-layouts/client-{id}-{stamp}.xlsx`) and
+`report_templates.layout` holds the map — `sheet`, `headerRow`, `dataStart`, `scope`
+(`client` / `foreign` / `all`), `columns[] {index, header, source, separator, format, text}` and
+`cells[] {ref, source}` for title-block stamps. Sources are the keys in
+`App\Services\Crms\ReportSources::catalog()` (published as bootstrap `meta.reportSources`), plus
+`form.{internalName}`, `meta.*`, `const`, `blank` and `formula` (keep the template's own per-row
+formula). `App\Support\XlsxTemplate` fills the data sheet by string surgery on the sheet XML:
+rows ≥ `dataStart` are replaced, the sample row's cell styles and formulas are reused (formulas
+re-addressed per row), data-validation and conditional-format ranges are re-based, `Any value`
+validations are dropped, the calc chain is removed and `fullCalcOnLoad` set; every other part is
+byte-identical. Removing the binding or moving it to a built-in code deletes the workbook.
 
 Notes that differ from the legacy Angular app:
 

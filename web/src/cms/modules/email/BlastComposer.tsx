@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useCms } from '../../store';
-import { apiFetch } from '../../../lib/api';
+import { apiFetch, ApiError } from '../../../lib/api';
+import { isNoWorkerRefusal, NoWorkerModal } from './queue';
 import { writeClipboard, writeClipboardHtml, outlookCompose } from '../../../lib/clipboard';
 import { downloadEmlDraft } from '../../../lib/eml';
 import { BtnGhost, BtnPrimary, Chip, TextField, Switch, EASE } from '../../ui';
@@ -12,9 +13,9 @@ import { Segmented } from '../access/parts';
 import RichTextField from '../../kit/RichTextField';
 import { IconCheck, IconCopy, IconMail } from '../../icons';
 import {
-  BLAST_KIND, fmtDate,
+  BLAST_KIND, MATCH_VIA, fmtDate,
   type AudienceClient, type AudienceSubscriber, type AuditEntry, type BlastKind, type BlastVariant,
-  type DispatchInfo, type DistributionList, type EmailBlast, type EmailRecipient,
+  type DispatchInfo, type DistributionList, type EmailBlast, type EmailRecipient, type MatchVia, type ResearchGroup,
 } from '../../data';
 import { renderIssueHtml } from '../newsletter/emailHtml';
 import RecipientPicker from './RecipientPicker';
@@ -51,12 +52,13 @@ function fmtMb(bytes: number): string {
   return `${(bytes / 1048576).toFixed(bytes >= 10 * 1048576 ? 0 : 1)} MB`;
 }
 
-export default function BlastComposer({ editingId, base, clients, subscribers, lists, dispatch, onSaved, onClose }: {
+export default function BlastComposer({ editingId, base, clients, subscribers, lists, research = [], dispatch, onSaved, onClose }: {
   editingId: string | null;
   base: EmailBlast | null;
   clients: AudienceClient[];
   subscribers: AudienceSubscriber[];
   lists: DistributionList[];
+  research?: ResearchGroup[];
   dispatch: DispatchInfo;
   onSaved: (item: EmailBlast, audit?: AuditEntry) => void;
   onClose: () => void;
@@ -78,6 +80,10 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
   const [previewVariant, setPreviewVariant] = useState<BlastVariant>('local');
   const [matching, setMatching] = useState(false);
   const [matchNote, setMatchNote] = useState<string | null>(null);
+  /** Why each auto-matched address is on the list, keyed by lower-cased email. */
+  const [matchVia, setMatchVia] = useState<Record<string, MatchVia>>({});
+  /** A send the API refused because no worker is running. */
+  const [noWorker, setNoWorker] = useState<{ id: string; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -166,11 +172,20 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
         ...recipients,
         ...added.map((c) => ({ email: c.email.toLowerCase(), name: c.name, userId: c.id, source: 'client' as const })),
       ]);
+      setMatchVia((m) => {
+        const next = { ...m };
+        for (const c of res.clients) if (c.via) next[c.email.toLowerCase()] = c.via;
+        return next;
+      });
+      const tally = (k: MatchVia) => res.clients.filter((c) => c.via === k).length;
+      const breakdown = res.clients.some((c) => c.via)
+        ? ` (${(['prefs', 'sectorGroup', 'both'] as MatchVia[]).filter((k) => tally(k) > 0).map((k) => `${tally(k)} ${MATCH_VIA[k].label.toLowerCase()}`).join(', ')})`
+        : '';
       setMatchNote(added.length > 0
-        ? `${added.length} matched client${added.length === 1 ? '' : 's'} added — prune before sending.`
+        ? `${added.length} matched client${added.length === 1 ? '' : 's'} added${breakdown} — prune before sending.`
         : res.clients.length > 0
-          ? 'Every matched client is already on the list.'
-          : 'No local client preferences match this report’s sector or analyst.');
+          ? `Every matched client is already on the list${breakdown}.`
+          : 'No local client preferences or sector groups match this report’s sector or analyst.');
     } catch (e) {
       setMatchNote(e instanceof Error ? e.message : 'Matching failed. Try again.');
     } finally {
@@ -265,10 +280,31 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
     }
     setSendArmed(false);
     setSending(true);
+    let savedId: string | null = null;
     try {
       const item = await save();
       if (!item) return;
+      savedId = item.id;
       const res = await apiFetch<ItemResponse>(`/cms/email-blasts/${item.id}/send`, { method: 'POST', audience: 'cms' });
+      appendAudit(res.audit);
+      onSaved(res.item, res.audit);
+      onClose();
+    } catch (e) {
+      if (savedId && isNoWorkerRefusal(e)) { setNoWorker({ id: savedId, message: (e as ApiError).message }); return; }
+      setError(e instanceof Error ? e.message : 'The blast could not be queued.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  /** The desk chose to queue despite no worker: the blast waits at "Queued" until one starts. */
+  async function queueAnyway() {
+    if (!noWorker) return;
+    setSending(true);
+    try {
+      const res = await apiFetch<ItemResponse>(`/cms/email-blasts/${noWorker.id}/send`, {
+        method: 'POST', audience: 'cms', body: { confirmNoWorker: true },
+      });
       appendAudit(res.audit);
       onSaved(res.item, res.audit);
       onClose();
@@ -510,8 +546,10 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
             clients={clients}
             subscribers={subscribers}
             lists={lists}
+            research={research}
             value={recipients}
             onChange={setRecipients}
+            badges={matchVia}
             label={split ? 'Local recipients' : 'Recipients'}
             hint={split ? 'Portal deep link. Clients hidden from each other via BCC.' : undefined}
           />
@@ -522,8 +560,10 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
                 clients={clients}
                 subscribers={subscribers}
                 lists={lists}
+                research={research}
                 value={foreignRecipients ?? []}
                 onChange={setForeignRecipients}
+                badges={matchVia}
                 label="Foreign recipients"
                 hint="Jefferies link from the field above. Sent after the Local leg."
               />
@@ -699,6 +739,14 @@ export default function BlastComposer({ editingId, base, clients, subscribers, l
           </div>
         )}
       </div>
+
+      <NoWorkerModal
+        open={noWorker !== null}
+        message={noWorker?.message ?? ''}
+        queue={dispatch.queue}
+        onClose={() => setNoWorker(null)}
+        onConfirm={() => { void queueAnyway(); }}
+      />
     </motion.div>
   );
 }

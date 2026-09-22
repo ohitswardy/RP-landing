@@ -50,6 +50,9 @@ class ContactDefaults
                 'emailLabel' => 'Email',
                 'email' => 'info@regis.ph',
             ],
+
+            // Footer / contact-page social links: [{label, href}]. Empty until the desk adds some.
+            'social' => [],
         ];
     }
 }

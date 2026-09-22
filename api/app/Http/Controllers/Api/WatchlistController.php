@@ -38,8 +38,9 @@ class WatchlistController extends Controller
         ]);
 
         $symbol->update(['pinned' => (bool) $data['pinned']]);
+        $audit = Audit::log($symbol->pinned ? 'Pinned ribbon symbol' : 'Unpinned ribbon symbol', $symbol->sym);
 
-        return response()->json(['item' => $symbol->toWire()]);
+        return response()->json(['item' => $symbol->toWire(), 'audit' => $audit->toWire()]);
     }
 
     public function reorder(Request $request): JsonResponse
@@ -54,8 +55,9 @@ class WatchlistController extends Controller
         }
 
         $items = WatchSymbol::orderBy('position')->orderBy('id')->get()->map->toWire()->values();
+        $audit = Audit::log('Reordered ribbon symbols', 'Market ribbon');
 
-        return response()->json(['items' => $items]);
+        return response()->json(['items' => $items, 'audit' => $audit->toWire()]);
     }
 
     public function destroy(WatchSymbol $symbol): JsonResponse

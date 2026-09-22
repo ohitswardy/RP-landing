@@ -1,6 +1,7 @@
+import { useEffect } from 'react';
 import PageHeader from '../components/PageHeader';
 import Reveal from '../components/Reveal';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useServicesContent, type ServiceLine, type ServicePage } from '../lib/servicesContent';
 
 export default function Services() {
@@ -20,6 +21,16 @@ export default function Services() {
 /* ── /services ─────────────────────────────────────────────── */
 
 function ServicesIndex({ page, services }: { page: ServicePage; services: ServiceLine[] }) {
+  const { hash } = useLocation();
+
+  // /services#{slug} from the home page: the cards only exist once the
+  // content has landed, after the router's own scroll attempt.
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [hash, services]);
+
   return (
     <>
       <PageHeader
@@ -33,6 +44,7 @@ function ServicesIndex({ page, services }: { page: ServicePage; services: Servic
           <div className="grid grid-cols-1 md:grid-cols-2 border-t border-l rule">
             {services.map((s, i) => (
               <Reveal key={s.slug} delay={i * 0.06} className="border-r border-b rule p-10 md:p-12 hover:bg-bone transition-colors duration-500 group">
+                <span id={s.slug} className="block scroll-mt-40" aria-hidden />
                 <Link to={`/services/${s.slug}`} className="block">
                   <h3 className="text-[clamp(1.75rem,3vw,2.5rem)] leading-[1.08] tracking-[-0.022em] font-medium">
                     {s.title}

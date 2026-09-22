@@ -11,7 +11,22 @@ const LABELS: Record<string, string> = {
   sales:     'Sales Advisory',
   trading:   'Trading & Execution',
   corporate: 'Corporate Access',
+  careers:   'Careers',
+  newsletter: 'Newsletter',
+  verify:    'Confirm subscription',
+  'forgot-password': 'Reset password',
+  staff:     'Staff',
+  cms:       'CMS',
+  crms:      'CRMS',
 };
+
+/** "bsp-quiet-pivot" reads as "Bsp quiet pivot": a slug segment is words, not a token. */
+function humanize(seg: string): string {
+  let words = seg;
+  try { words = decodeURIComponent(seg); } catch { /* keep the raw segment */ }
+  words = words.replace(/[-_]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 function useStickyTop() {
   const [top, setTop] = useState(101);
@@ -53,7 +68,7 @@ export default function Breadcrumb() {
   const crumbs = [
     { label: 'Home', href: '/' },
     ...segments.map((seg, i) => ({
-      label: LABELS[seg.toLowerCase()] ?? seg.charAt(0).toUpperCase() + seg.slice(1),
+      label: LABELS[seg.toLowerCase()] ?? humanize(seg),
       href: '/' + segments.slice(0, i + 1).join('/'),
     })),
   ];

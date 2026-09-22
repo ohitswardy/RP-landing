@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Reveal from '../components/Reveal';
 import {
-  fmtNoteDate, useInsightsContent,
+  fmtNoteDate, noteHref, useInsightsContent,
   type InsightsPage, type JournalNote,
 } from '../lib/insightsContent';
 
@@ -50,7 +50,7 @@ function Journal({ page, notes }: { page: InsightsPage; notes: JournalNote[] }) 
     return page.list.limit > 0 ? scoped.slice(0, page.list.limit) : scoped;
   }, [notes, tag, unfiltered, showLead, lead?.id, page.list.limit]);
 
-  const { showExcerpt, showAuthor, showDate, noteHref } = page.list;
+  const { showExcerpt, showAuthor, showDate } = page.list;
 
   return (
     <>
@@ -62,7 +62,7 @@ function Journal({ page, notes }: { page: InsightsPage; notes: JournalNote[] }) 
       />
 
       <section className="bg-paper">
-        {showLead && lead && <LeadNote note={lead} href={noteHref} showAuthor={showAuthor} showDate={showDate} />}
+        {showLead && lead && <LeadNote note={lead} showAuthor={showAuthor} showDate={showDate} />}
 
         {page.filters.enabled && rail.length > 0 && (
           <div className="container-fluid py-10 md:py-12 border-b rule">
@@ -118,7 +118,7 @@ function Journal({ page, notes }: { page: InsightsPage; notes: JournalNote[] }) 
                     exit={{ opacity: 0, transition: { duration: 0.2 } }}
                   >
                     <Link
-                      to={noteHref}
+                      to={noteHref(n)}
                       className="group -mx-2 grid grid-cols-12 items-baseline gap-x-6 px-2 py-8 transition-colors duration-500 hover:bg-bone md:py-10"
                     >
                       <div className="col-span-12 md:col-span-2 eyebrow !mb-0">{n.tag}</div>
@@ -179,14 +179,14 @@ function RailButton({ label, count, active, onClick }: {
 
 /* ── Lead note ─────────────────────────────────────────────── */
 
-function LeadNote({ note, href, showAuthor, showDate }: {
-  note: JournalNote; href: string; showAuthor: boolean; showDate: boolean;
+function LeadNote({ note, showAuthor, showDate }: {
+  note: JournalNote; showAuthor: boolean; showDate: boolean;
 }) {
   return (
     <div className="border-b rule bg-bone">
       <div className="container-fluid py-14 md:py-20">
         <Reveal>
-          <Link to={href} className="group grid grid-cols-12 gap-x-6 gap-y-6">
+          <Link to={noteHref(note)} className="group grid grid-cols-12 gap-x-6 gap-y-6">
             <div className="col-span-12 md:col-span-3">
               <span aria-hidden className="mb-5 block h-[2px] w-8" style={{ background: 'var(--color-amber)' }} />
               <div className="eyebrow !mb-0">{note.tag}</div>

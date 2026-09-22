@@ -218,6 +218,7 @@ class EventController extends CrmsController
             'item' => $interaction->load(['client', 'type'])->toWire(),
             'meeting' => $meeting->toWire(),
             'audit' => $this->audit('Converted meeting to interaction', $interaction->reference())->toWire(),
+            'meta' => $this->authorMeta(),
         ], 201);
     }
 

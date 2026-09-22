@@ -27,7 +27,9 @@ class PortalSetting extends Model
 
     public static function current(): self
     {
-        return static::query()->oldest('id')->first() ?? static::create([]);
+        // refresh() so a row born on this call carries the column defaults
+        // rather than nulls until its next read.
+        return static::query()->oldest('id')->first() ?? static::create([])->refresh();
     }
 
     /** The Trending Content ranking rules, as the CMS edits them. */

@@ -23,7 +23,7 @@ export default function Careers({ copy }: { copy: HomeCopy['careers'] }) {
               )}
               {copy.cta.label && (
                 <div className="mt-10">
-                  <ArrowCta to={copy.cta.href || '/contact'} tone="paper">{copy.cta.label}</ArrowCta>
+                  <ArrowCta to={copy.cta.href || '/careers'} tone="paper">{copy.cta.label}</ArrowCta>
                 </div>
               )}
             </Reveal>

@@ -4,8 +4,8 @@ import { useCms } from '../store';
 import { BtnGhost, BtnPrimary, Chip, EmptyState, ModuleHeader, RowAction, SkeletonRows, Stat, useConfirm, EASE } from '../ui';
 import { IconCheck, IconCopy, IconDownload, IconEye, IconMail, IconPen, IconPlus, IconSearch, IconTrash } from '../icons';
 import {
-  NEWSLETTER_CADENCES, fmtDate, timeAgo,
-  type NewsletterCadence, type NewsletterIssue, type NewsletterIssueSummary, type Subscriber,
+  NEWSLETTER_CADENCES, SUBSCRIBER_STATE, fmtDate, subscriberState, timeAgo,
+  type NewsletterCadence, type NewsletterIssue, type NewsletterIssueSummary, type Subscriber, type SubscriberState,
 } from '../data';
 import IssueComposer from './newsletter/IssueComposer';
 import IssueViewer from './newsletter/IssueViewer';
@@ -285,17 +285,33 @@ function YearBtn({ active, label, onClick }: { active: boolean; label: string; o
 
 /* ── Recipients (the distribution list, unchanged behavior) ──── */
 
+type SubscriberFilter = 'all' | SubscriberState;
+const SUBSCRIBER_FILTERS: Array<{ key: SubscriberFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'verified', label: 'Verified' },
+  { key: 'unverified', label: 'Unverified' },
+  { key: 'unsubscribed', label: 'Unsubscribed' },
+];
+
 function RecipientsPanel() {
   const { subscribers, removeSubscriber } = useCms();
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<SubscriberFilter>('all');
   const [armed, confirm] = useConfirm();
+
+  const counts = useMemo(() => {
+    const m: Record<SubscriberFilter, number> = { all: subscribers.length, verified: 0, unverified: 0, unsubscribed: 0 };
+    for (const s of subscribers) m[subscriberState(s)] += 1;
+    return m;
+  }, [subscribers]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return subscribers.filter((s) => !q || s.email.toLowerCase().includes(q) || s.firm.toLowerCase().includes(q));
-  }, [subscribers, query]);
+    return subscribers
+      .filter((s) => filter === 'all' || subscriberState(s) === filter)
+      .filter((s) => !q || s.email.toLowerCase().includes(q) || s.firm.toLowerCase().includes(q) || s.source.toLowerCase().includes(q));
+  }, [subscribers, query, filter]);
 
-  const verified = subscribers.filter((s) => s.verified).length;
   const last30 = subscribers.filter((s) => new Date(s.joined) > new Date(Date.now() - 30 * 86400000)).length;
 
   function remove(s: Subscriber) {
@@ -303,8 +319,10 @@ function RecipientsPanel() {
   }
 
   function exportCsv() {
-    const head = 'email,firm,joined,source,verified';
-    const body = subscribers.map((s) => [s.email, `"${s.firm}"`, s.joined, s.source, s.verified].join(',')).join('\n');
+    const head = 'email,firm,joined,source,verified,verified_at,unsubscribed_at';
+    const body = subscribers.map((s) => [
+      s.email, `"${s.firm.replace(/"/g, '""')}"`, s.joined, `"${s.source.replace(/"/g, '""')}"`, s.verified, s.verifiedAt ?? '', s.unsubscribedAt ?? '',
+    ].join(',')).join('\n');
     const blob = new Blob([`${head}\n${body}`], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -316,43 +334,67 @@ function RecipientsPanel() {
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-3 gap-6 border-b rule pb-7">
+      <div className="grid grid-cols-2 gap-6 border-b rule pb-7 md:grid-cols-5">
         <div className="px-1 md:px-4"><Stat value={String(subscribers.length)} label="Subscribers" /></div>
         <div className="border-l px-4 md:px-8" style={{ borderColor: 'color-mix(in oklab, var(--color-amber) 45%, transparent)' }}>
-          <Stat value={String(verified)} label="Verified" />
+          <Stat value={String(counts.verified)} label="Verified" />
+        </div>
+        <div className="border-l px-4 md:px-8" style={{ borderColor: 'color-mix(in oklab, var(--color-amber) 45%, transparent)' }}>
+          <Stat value={String(counts.unverified)} label="Unverified" />
+        </div>
+        <div className="border-l px-4 md:px-8" style={{ borderColor: 'color-mix(in oklab, var(--color-amber) 45%, transparent)' }}>
+          <Stat value={String(counts.unsubscribed)} label="Opted out" />
         </div>
         <div className="border-l px-4 md:px-8" style={{ borderColor: 'color-mix(in oklab, var(--color-amber) 45%, transparent)' }}>
           <Stat value={`+${last30}`} label="Last 30 days" />
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <label className="relative block w-full max-w-[320px]">
-          <span className="sr-only">Search subscribers</span>
-          <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-silver" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Email or firm…"
-            className="w-full border rule bg-white py-2.5 pl-9 pr-3 text-[13.5px] outline-none transition-colors placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
-          />
-        </label>
-        <BtnGhost onClick={exportCsv}><IconDownload size={14} /> Export CSV</BtnGhost>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap gap-1.5">
+          {SUBSCRIBER_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={`mono border px-3 py-1.5 text-[10.5px] uppercase tracking-[0.14em] transition-colors duration-300 active:translate-y-px ${
+                filter === f.key ? 'border-navy bg-navy text-paper' : 'rule bg-transparent text-graphite hover:text-ink'
+              }`}
+            >
+              {f.label}
+              <span className="num ml-2 opacity-50">{counts[f.key]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="relative block w-full max-w-[320px] md:w-[260px]">
+            <span className="sr-only">Search subscribers</span>
+            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-silver" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Email, firm, or source…"
+              className="w-full border rule bg-white py-2.5 pl-9 pr-3 text-[13.5px] outline-none transition-colors placeholder:text-silver focus:border-[color:var(--color-amber-deep)]"
+            />
+          </label>
+          <BtnGhost onClick={exportCsv}><IconDownload size={14} /> Export CSV</BtnGhost>
+        </div>
       </div>
 
       {rows.length === 0 ? (
         <EmptyState
-          title={query ? 'No subscriber matches.' : 'The list is empty.'}
-          hint={query ? 'Search covers the email address and the firm name.' : 'Sign-ups from the site footer and the Insights page land here after double opt-in.'}
-          action={query ? <BtnGhost onClick={() => setQuery('')}>Clear search</BtnGhost> : undefined}
+          title={query ? 'No subscriber matches.' : filter !== 'all' ? 'Nobody in this state.' : 'The list is empty.'}
+          hint={query ? 'Search covers the email address, the firm name, and the sign-up source.' : 'Sign-ups from the site footer and the Insights page land here after double opt-in.'}
+          action={query || filter !== 'all' ? <BtnGhost onClick={() => { setQuery(''); setFilter('all'); }}>Clear filters</BtnGhost> : undefined}
         />
       ) : (
         <div className="border-y rule">
           <div className="mono grid grid-cols-12 gap-4 border-b rule py-2.5 text-[9.5px] uppercase tracking-[0.2em] text-graphite">
-            <span className="col-span-5 md:col-span-4">Address</span>
-            <span className="col-span-3 hidden md:block">Firm</span>
+            <span className="col-span-5 md:col-span-3">Address</span>
+            <span className="col-span-2 hidden md:block">Firm</span>
             <span className="col-span-2">Joined</span>
             <span className="col-span-2 hidden md:block">Source</span>
+            <span className="col-span-3 hidden md:col-span-2 md:block">Status</span>
             <span className="col-span-2 md:col-span-1" />
           </div>
           <ul className="divide-y rule">
@@ -366,13 +408,20 @@ function RecipientsPanel() {
                   exit={{ opacity: 0, height: 0, transition: { duration: 0.25 } }}
                   className="grid grid-cols-12 items-center gap-4 py-3.5"
                 >
-                  <div className="col-span-5 min-w-0 md:col-span-4">
-                    <p className="mono truncate text-[12.5px] text-ink">{s.email}</p>
+                  <div className="col-span-5 min-w-0 md:col-span-3">
+                    <p className={`mono truncate text-[12.5px] ${s.unsubscribedAt ? 'text-graphite line-through decoration-[color:var(--color-warn)]/60' : 'text-ink'}`}>{s.email}</p>
                   </div>
-                  <span className="col-span-3 hidden truncate text-[13px] text-slate md:block">{s.firm}</span>
+                  <span className="col-span-2 hidden truncate text-[13px] text-slate md:block">{s.firm || '—'}</span>
                   <span className="mono num col-span-2 text-[12px] text-graphite">{fmtDate(s.joined)}</span>
-                  <span className="col-span-2 hidden md:block">
-                    <Chip tone={s.verified ? 'live' : 'amber'}>{s.verified ? 'Verified' : 'Pending'}</Chip>
+                  <span className="mono col-span-2 hidden truncate text-[10.5px] uppercase tracking-[0.12em] text-graphite md:block" title={s.source}>{s.source || '—'}</span>
+                  <span className="col-span-3 hidden min-w-0 flex-col gap-0.5 md:col-span-2 md:flex">
+                    {(() => {
+                      const st = SUBSCRIBER_STATE[subscriberState(s)];
+                      return <Chip tone={st.tone}>{st.label}</Chip>;
+                    })()}
+                    <span className="mono num truncate text-[9.5px] tracking-[0.04em] text-silver">
+                      {s.unsubscribedAt ? `out ${fmtDate(s.unsubscribedAt)}` : s.verifiedAt ? `since ${fmtDate(s.verifiedAt)}` : 'awaiting opt-in'}
+                    </span>
                   </span>
                   <div className="col-span-2 flex justify-end md:col-span-1">
                     <RowAction label={armed === s.id ? 'Confirm remove' : `Remove ${s.email}`} danger onClick={() => confirm(s.id, () => remove(s))}>

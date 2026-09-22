@@ -4,14 +4,33 @@ import { AnimatePresence, motion, useMotionValue, useSpring } from 'framer-motio
 import Reveal from './Reveal';
 import ArrowCta from './ArrowCta';
 import type { HomeCopy } from '../cms/data';
+import { slugify } from '../lib/insightsContent';
+import { useServiceLines, type ServiceLine } from '../lib/servicesContent';
 
 const ease = [0.25, 1, 0.5, 1] as const;
+
+/**
+ * Where a home-page service row goes. An authored practice link
+ * (`/services/{slug}`) is kept. A row left on the bare index — or blank —
+ * is matched to a live service line by slug or title (case-insensitive)
+ * and opens that practice page; with no match it lands on the index at
+ * the row's own anchor, which the Services page scrolls to.
+ */
+export function resolveServiceHref(row: { title: string; href: string }, lines: ServiceLine[]): string {
+  const href = row.href.trim();
+  if (href && href !== '/services' && href !== '/services/') return href;
+  const slug = slugify(row.title);
+  const title = row.title.trim().toLowerCase();
+  const line = lines.find((l) => l.slug.toLowerCase() === slug || l.title.trim().toLowerCase() === title);
+  return line ? `/services/${line.slug}` : `/services#${slug}`;
+}
 
 /** The practice index. Rows and photos are authored in the CMS Landing page module. */
 export default function Services({ copy }: { copy: HomeCopy['services'] }) {
   const [active, setActive] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const rows = copy.rows;
+  const lines = useServiceLines();
 
   // Cursor-following preview — springs trail the pointer for weight.
   const mx = useMotionValue(0);
@@ -97,7 +116,7 @@ export default function Services({ copy }: { copy: HomeCopy['services'] }) {
                 className="border-b rule-navy"
               >
                 <Link
-                  to={s.href || '/services'}
+                  to={resolveServiceHref(s, lines)}
                   onMouseEnter={() => setActive(i)}
                   className="group grid grid-cols-12 items-baseline gap-x-4 py-7 md:py-9 -mx-4 px-4 transition-colors duration-500 hover:bg-[color:var(--color-navy-mid)]"
                 >

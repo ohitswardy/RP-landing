@@ -28,6 +28,7 @@
 
   --color-signal:      oklch(0.640 0.130 145);
   --color-warn:        oklch(0.640 0.190 28);
+  --color-cobalt:      oklch(0.560 0.160 255);   /* transfer-in-progress blue    */
 
   --font-sans:    "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono:    "Geist Mono", ui-monospace, monospace;
@@ -339,6 +340,7 @@ html.dark {
   --color-amber-deep: oklch(0.730 0.145 55);
   --color-signal:     oklch(0.700 0.130 145);
   --color-warn:       oklch(0.700 0.180 28);
+  --color-cobalt:     oklch(0.720 0.140 255);
 }
 
 /* Inside an inverted navy button/chip, "paper" is the text colour, so it
@@ -376,6 +378,7 @@ html.dark {
   --color-amber-deep: var(--tone-amber-deep);
   --color-signal:     oklch(0.640 0.130 145);
   --color-warn:       oklch(0.640 0.190 28);
+  --color-cobalt:     oklch(0.560 0.160 255);
 }
 
 /* Brand bitmaps are navy on transparent (mark) and navy on white (banner).

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePublicContent } from '../lib/publicContent';
 
 export type TickerEntry = {
   sym: string;
@@ -13,30 +14,95 @@ export type TickerState = {
   updatedAt: Date | null;
 };
 
-// Symbols we want to surface on the ribbon, in display order.
-const WATCH = [
+/* ─────────────────────────────────────────────────────────────
+   The market ribbon. Which symbols it shows comes from the CMS
+   watchlist (GET /api/content/watchlist, pinned names first); the
+   prices come straight from the community phisix feed, polled every
+   minute from the browser. When the watchlist is unreachable the
+   bundled list below stands in, and when the feed is unreachable the
+   seeded DEMO prices do, with the badge saying so.
+   ───────────────────────────────────────────────────────────── */
+
+export type WatchSymbol = { id: string; sym: string; name: string; pinned: boolean };
+
+/** The bundled watchlist: the ribbon's historical 15 names, in display order. */
+export const WATCHLIST_FALLBACK: WatchSymbol[] = [
   'PSEi', 'ALI', 'BPI', 'SM', 'JFC', 'TEL', 'AC', 'ICT',
   'BDO', 'MER', 'URC', 'GLO', 'AEV', 'MBT', 'AP',
-] as const;
+].map((sym, i) => ({ id: `fallback-${i}`, sym, name: sym, pinned: false }));
 
-// Static fallback so the UI never empties out.
-const DEMO: TickerEntry[] = [
-  { sym: 'PSEi', last: '6,742.18', chg: '+0.42%', dir: 'up' },
-  { sym: 'ALI',  last: '24.85',    chg: '+1.18%', dir: 'up' },
-  { sym: 'BPI',  last: '128.40',   chg: '-0.31%', dir: 'down' },
-  { sym: 'SM',   last: '925.00',   chg: '+0.05%', dir: 'up' },
-  { sym: 'JFC',  last: '241.60',   chg: '-0.74%', dir: 'down' },
-  { sym: 'TEL',  last: '1,388.00', chg: '+0.93%', dir: 'up' },
-  { sym: 'AC',   last: '588.50',   chg: '-0.17%', dir: 'down' },
-  { sym: 'ICT',  last: '378.20',   chg: '+2.14%', dir: 'up' },
-  { sym: 'BDO',  last: '152.10',   chg: '+0.27%', dir: 'up' },
-  { sym: 'MER',  last: '417.00',   chg: '-0.84%', dir: 'down' },
-  { sym: 'URC',  last: '102.30',   chg: '+0.49%', dir: 'up' },
-  { sym: 'GLO',  last: '1,856.00', chg: '-1.06%', dir: 'down' },
-  { sym: 'AEV',  last: '49.80',    chg: '+0.61%', dir: 'up' },
-  { sym: 'MBT',  last: '74.55',    chg: '-0.13%', dir: 'down' },
-  { sym: 'AP',   last: '38.40',    chg: '+0.79%', dir: 'up' },
-];
+/** Seeded prices so the ribbon never runs empty. */
+const DEMO_PRICES: Record<string, Omit<TickerEntry, 'sym'>> = {
+  PSEI: { last: '6,742.18', chg: '+0.42%', dir: 'up' },
+  ALI:  { last: '24.85',    chg: '+1.18%', dir: 'up' },
+  BPI:  { last: '128.40',   chg: '-0.31%', dir: 'down' },
+  SM:   { last: '925.00',   chg: '+0.05%', dir: 'up' },
+  JFC:  { last: '241.60',   chg: '-0.74%', dir: 'down' },
+  TEL:  { last: '1,388.00', chg: '+0.93%', dir: 'up' },
+  AC:   { last: '588.50',   chg: '-0.17%', dir: 'down' },
+  ICT:  { last: '378.20',   chg: '+2.14%', dir: 'up' },
+  BDO:  { last: '152.10',   chg: '+0.27%', dir: 'up' },
+  MER:  { last: '417.00',   chg: '-0.84%', dir: 'down' },
+  URC:  { last: '102.30',   chg: '+0.49%', dir: 'up' },
+  GLO:  { last: '1,856.00', chg: '-1.06%', dir: 'down' },
+  AEV:  { last: '49.80',    chg: '+0.61%', dir: 'up' },
+  MBT:  { last: '74.55',    chg: '-0.13%', dir: 'down' },
+  AP:   { last: '38.40',    chg: '+0.79%', dir: 'up' },
+};
+
+/** phisix keys the index as "PSEI"; the ribbon has always printed it "PSEi". */
+function displaySymbol(sym: string): string {
+  return sym.toUpperCase() === 'PSEI' ? 'PSEi' : sym.toUpperCase();
+}
+
+/** Demo entries for a symbol list: seeded prices where known, dashes where not. */
+export function demoEntries(symbols: WatchSymbol[]): TickerEntry[] {
+  return symbols.map((w) => {
+    const seeded = DEMO_PRICES[w.sym.toUpperCase()];
+    return seeded
+      ? { sym: displaySymbol(w.sym), ...seeded }
+      : { sym: displaySymbol(w.sym), last: '—', chg: '0.00%', dir: 'flat' };
+  });
+}
+
+/** Pinned names first, otherwise the CMS order; duplicates and blanks dropped. */
+export function orderWatchlist(symbols: WatchSymbol[]): WatchSymbol[] {
+  const seen = new Set<string>();
+  const clean = symbols.filter((s) => {
+    const key = s.sym.trim().toUpperCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  // Array.prototype.sort is stable, so within each group the CMS order holds.
+  return [...clean].sort((a, b) => Number(b.pinned) - Number(a.pinned));
+}
+
+/** Tolerate a partial payload; an empty list is not a list. */
+export function normalizeWatchlist(raw: unknown): WatchSymbol[] {
+  const r = raw as { symbols?: unknown } | null;
+  if (!r || !Array.isArray(r.symbols)) return WATCHLIST_FALLBACK;
+  const list = r.symbols
+    .map((s): WatchSymbol => {
+      const x = (s ?? {}) as Partial<WatchSymbol>;
+      return {
+        id: String(x.id ?? ''),
+        sym: String(x.sym ?? '').trim().toUpperCase(),
+        name: String(x.name ?? ''),
+        pinned: Boolean(x.pinned),
+      };
+    })
+    .filter((s) => s.sym !== '');
+  return list.length > 0 ? orderWatchlist(list) : WATCHLIST_FALLBACK;
+}
+
+/** The ribbon's symbol list: the CMS watchlist, or the bundled 15 until it lands / if it fails. */
+export function useWatchlist(): WatchSymbol[] {
+  const { data } = usePublicContent('/content/watchlist', WATCHLIST_FALLBACK, normalizeWatchlist);
+  return data;
+}
+
+/* ── phisix ────────────────────────────────────────────────── */
 
 type PhisixStock = {
   symbol: string;
@@ -70,33 +136,37 @@ function formatChange(pct: number): string {
   return `${sign}${pct.toFixed(2)}%`;
 }
 
-async function fetchPhisix(signal: AbortSignal): Promise<TickerEntry[] | null> {
+/** Map a phisix payload onto the watchlist, in watchlist order. */
+export function pickQuotes(data: PhisixResponse, symbols: WatchSymbol[]): TickerEntry[] {
+  const bySym = new Map<string, PhisixStock>();
+  for (const s of data.stock) bySym.set(s.symbol.toUpperCase(), s);
+
+  const out: TickerEntry[] = [];
+  for (const w of symbols) {
+    const s = bySym.get(w.sym.toUpperCase());
+    if (!s) continue;
+    const dir: TickerEntry['dir'] =
+      s.percent_change > 0 ? 'up' : s.percent_change < 0 ? 'down' : 'flat';
+    out.push({
+      sym: displaySymbol(w.sym),
+      last: formatPrice(s.price.amount),
+      chg: formatChange(s.percent_change),
+      dir,
+    });
+  }
+  return out;
+}
+
+async function fetchPhisix(signal: AbortSignal, symbols: WatchSymbol[]): Promise<TickerEntry[] | null> {
   for (const url of ENDPOINTS) {
     try {
       const res = await fetch(url, { signal, cache: 'no-store' });
       if (!res.ok) continue;
       const data: PhisixResponse = await res.json();
       if (!Array.isArray(data?.stock)) continue;
-
-      const bySym = new Map<string, PhisixStock>();
-      for (const s of data.stock) bySym.set(s.symbol.toUpperCase(), s);
-
-      const out: TickerEntry[] = [];
-      for (const w of WATCH) {
-        // phisix uses "PSEI" for the index, we render it as "PSEi"
-        const lookup = w === 'PSEi' ? 'PSEI' : w;
-        const s = bySym.get(lookup);
-        if (!s) continue;
-        const dir: TickerEntry['dir'] =
-          s.percent_change > 0 ? 'up' : s.percent_change < 0 ? 'down' : 'flat';
-        out.push({
-          sym: w,
-          last: formatPrice(s.price.amount),
-          chg: formatChange(s.percent_change),
-          dir,
-        });
-      }
-      if (out.length >= 4) return out;
+      const out = pickQuotes(data, symbols);
+      // A feed that knows almost none of our names is not a feed worth showing.
+      if (out.length >= Math.min(4, symbols.length)) return out;
     } catch {
       // try the next endpoint
     }
@@ -105,8 +175,10 @@ async function fetchPhisix(signal: AbortSignal): Promise<TickerEntry[] | null> {
 }
 
 export function useTicker(refreshMs = 60_000): TickerState {
+  const watchlist = useWatchlist();
+  const demo = useMemo(() => demoEntries(watchlist), [watchlist]);
   const [state, setState] = useState<TickerState>({
-    entries: DEMO,
+    entries: demo,
     status: 'loading',
     updatedAt: null,
   });
@@ -119,14 +191,14 @@ export function useTicker(refreshMs = 60_000): TickerState {
       aborter.current?.abort();
       const ac = new AbortController();
       aborter.current = ac;
-      const result = await fetchPhisix(ac.signal);
+      const result = await fetchPhisix(ac.signal, watchlist);
       if (cancelled) return;
       if (result) {
         setState({ entries: result, status: 'live', updatedAt: new Date() });
       } else {
         // Stay on whatever we had, but mark demo so the badge is honest
         setState((prev) => ({
-          entries: prev.entries.length ? prev.entries : DEMO,
+          entries: prev.status === 'live' && prev.entries.length ? prev.entries : demo,
           status: 'demo',
           updatedAt: prev.updatedAt,
         }));
@@ -140,7 +212,7 @@ export function useTicker(refreshMs = 60_000): TickerState {
       window.clearInterval(id);
       aborter.current?.abort();
     };
-  }, [refreshMs]);
+  }, [refreshMs, watchlist, demo]);
 
   return state;
 }

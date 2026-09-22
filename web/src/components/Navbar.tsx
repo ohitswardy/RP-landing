@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import SearchModal, { computeResults, SEARCH_PANEL_WIDTH, TRENDING } from './SearchModal';
+import SearchModal, { computeResults, SEARCH_PANEL_WIDTH, TRENDING, useSearchIndex } from './SearchModal';
 import { useNavMedia, type NavMenuKey } from '../lib/navMedia';
 
 const ease = [0.25, 1, 0.5, 1] as const;
@@ -52,6 +52,7 @@ const MENUS: Record<NavMenuKey, MenuDef> = {
           { label: 'Our Heritage',          desc: 'Founded 1999. Twenty-five years of milestones.',   href: '/about#heritage' },
           { label: 'Leadership',            desc: 'Senior partners who run the desk.',                href: '/about#leadership' },
           { label: 'Awards',     desc: 'Asiamoney, II, and FinanceAsia recognition.',     href: '/about#awards' },
+          { label: 'Careers',               desc: 'Open roles across the desk.',                       href: '/careers' },
         ],
       },
     ],
@@ -110,6 +111,9 @@ export default function Navbar() {
   const loc = useLocation();
   const navigate = useNavigate();
   const navMedia = useNavMedia();
+  // The search index rides its own endpoint, fetched once per session; the
+  // bundled index stands in until it lands or if it fails.
+  const searchIndex = useSearchIndex();
 
   useEffect(() => { setOpen(null); setMobileOpen(false); setPortalOpen(false); }, [loc.pathname]);
 
@@ -143,7 +147,7 @@ export default function Navbar() {
     }
   }, [mobileOpen]);
 
-  const mobileResults = useMemo(() => computeResults(mobileQuery), [mobileQuery]);
+  const mobileResults = useMemo(() => computeResults(mobileQuery, searchIndex), [mobileQuery, searchIndex]);
 
   // Focus + reset on open
   useEffect(() => {
@@ -181,7 +185,7 @@ export default function Navbar() {
   }, [searchOpen]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const results = computeResults(query);
+    const results = computeResults(query, searchIndex);
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActiveIndex((i) => Math.min(i + 1, results.length - 1));
@@ -354,6 +358,7 @@ export default function Navbar() {
               {/* Dropdown — anchored below this wrapper */}
               <SearchModal
                 open={searchOpen}
+                index={searchIndex}
                 query={query}
                 onQueryChange={(q) => { setQuery(q); setActiveIndex(0); inputRef.current?.focus(); }}
                 activeIndex={activeIndex}

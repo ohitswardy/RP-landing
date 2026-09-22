@@ -1,4 +1,5 @@
 import { ApiError, apiFetch, getToken } from '../../../lib/api';
+import { trackActivity } from '../../../lib/activity';
 import type { AuditEntry, CrmsEvent, EventChildren } from '../../data';
 
 /* ─────────────────────────────────────────────────────────────
@@ -11,18 +12,20 @@ import type { AuditEntry, CrmsEvent, EventChildren } from '../../data';
 const pdfPath = (event: CrmsEvent, contactId: string | null) => `/crms/events/${event.id}/itinerary.pdf${contactId ? `?contactId=${contactId}` : ''}`;
 
 /** Fetches the PDF with the session token and hands it to the browser as a download. */
-export async function downloadItinerary(event: CrmsEvent, contactId: string | null = null): Promise<string> {
-  const token = getToken('cms');
-  const res = await fetch(`/api${pdfPath(event, contactId)}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
-  if (!res.ok) throw new ApiError(res.status, res.status === 401 ? 'Your session has expired. Sign in again.' : 'The itinerary PDF could not be built.');
-  const disposition = res.headers.get('content-disposition') ?? '';
-  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `${event.categoryLabel} Schedule - ${event.subject}.pdf`;
-  const url = URL.createObjectURL(await res.blob());
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.rel = 'noopener';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  return filename;
+export function downloadItinerary(event: CrmsEvent, contactId: string | null = null): Promise<string> {
+  return trackActivity('download', async () => {
+    const token = getToken('cms');
+    const res = await fetch(`/api${pdfPath(event, contactId)}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+    if (!res.ok) throw new ApiError(res.status, res.status === 401 ? 'Your session has expired. Sign in again.' : 'The itinerary PDF could not be built.');
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `${event.categoryLabel} Schedule - ${event.subject}.pdf`;
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    return filename;
+  }, { success: true });
 }
 
 /** Emails the PDF through the desk mailbox; resolves with the address it went to. */

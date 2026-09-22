@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useReports } from './reports';
+import { CATALOG_WINDOW_PAGE, CATALOG_WINDOW_THRESHOLD, useReports } from './reports';
 import { fmtBytes, fmtDate, timeAgo, type Report } from '../cms/data';
 import { useBookmarks } from './bookmarks';
 import { downloadReport } from './download';
@@ -21,7 +21,7 @@ type Props = {
 
 export default function BookmarksModal({ open, onClose, onView }: Props) {
   const { reports } = useReports();
-  const { ids, count, savedAt, remove, clear } = useBookmarks();
+  const { ids, count, savedAt, remove, clear, loadError, reload } = useBookmarks();
   const [query, setQuery] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -35,7 +35,14 @@ export default function BookmarksModal({ open, onClose, onView }: Props) {
 
   // Same engine as the catalog search, so one filter vocabulary covers both.
   const search = useReportSearch(saved, query);
-  const shown = useMemo(() => search.rank(saved.filter(search.match)), [saved, search]);
+  const matched = useMemo(() => search.rank(saved.filter(search.match)), [saved, search]);
+
+  // Big catalogs window the shelf too, so a heavy saver never renders hundreds of rows at once.
+  const windowed = reports.length > CATALOG_WINDOW_THRESHOLD;
+  const [limit, setLimit] = useState(CATALOG_WINDOW_PAGE);
+  useEffect(() => { setLimit(CATALOG_WINDOW_PAGE); }, [matched, open]);
+  const shown = windowed ? matched.slice(0, limit) : matched;
+  const hidden = matched.length - shown.length;
 
   // onClose arrives as a fresh arrow each render; keep it in a ref so the focus/scroll-lock
   // effect only runs when `open` flips, not on every keystroke in the search box.
@@ -133,6 +140,19 @@ export default function BookmarksModal({ open, onClose, onView }: Props) {
 
               {/* ── Shelf ──────────────────────────────────────── */}
               <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+                {loadError && (
+                  <div className="flex items-center justify-between gap-4 border-b px-5 py-3 md:px-7" style={{ borderColor: 'color-mix(in oklab, var(--color-warn) 40%, transparent)' }}>
+                    <p role="alert" className="text-[12.5px] text-slate">{loadError}</p>
+                    <button
+                      type="button"
+                      onClick={reload}
+                      className="mono shrink-0 border px-3 py-1.5 text-[9.5px] uppercase tracking-[0.14em] transition-colors hover:text-ink"
+                      style={{ borderColor: 'color-mix(in oklab, var(--color-amber-deep) 55%, transparent)', color: 'var(--color-amber-deep)' }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
                 {saved.length === 0 ? (
                   <EmptyShelf />
                 ) : shown.length === 0 ? (
@@ -161,6 +181,20 @@ export default function BookmarksModal({ open, onClose, onView }: Props) {
                       ))}
                     </AnimatePresence>
                   </ul>
+                )}
+                {hidden > 0 && (
+                  <div className="flex items-center justify-between gap-4 border-t rule px-5 py-3.5 md:px-7">
+                    <span className="mono text-[10px] uppercase tracking-[0.16em] text-graphite">
+                      Showing <span className="num text-slate">{shown.length}</span> of <span className="num text-slate">{matched.length}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setLimit((n) => n + CATALOG_WINDOW_PAGE)}
+                      className="mono border rule px-3.5 py-2 text-[10px] uppercase tracking-[0.14em] text-slate transition-colors duration-300 hover:border-[color:var(--color-amber-deep)] hover:text-ink active:translate-y-px"
+                    >
+                      Show {Math.min(CATALOG_WINDOW_PAGE, hidden)} more
+                    </button>
+                  </div>
                 )}
               </div>
 

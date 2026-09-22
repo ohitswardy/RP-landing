@@ -11,6 +11,7 @@ const CONFIG: PortalConfig = {
   cta: 'Enter CRMS',
   stamp: 'Regis CRMS · Restricted',
   glyph: 'center',
+  forgotHref: '/forgot-password/staff',
   footnote: (
     <>
       Coverage, mandate, and client records are restricted to authorised desks.{' '}
@@ -31,15 +32,17 @@ export default function LoginCRMS() {
   const { session, can, signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/crms';
+  const state = location.state as { from?: string; notice?: string } | null;
+  const from = state?.from ?? '/crms';
 
   if (session && can('crms.access')) return <Navigate to={from} replace />;
 
   return (
     <PortalAuth
       config={CONFIG}
-      onSubmit={async (identity, password) => {
-        const err = await signIn(identity, password, 'crms');
+      notice={state?.notice ?? null}
+      onSubmit={async (identity, password, remember) => {
+        const err = await signIn(identity, password, 'crms', { remember });
         if (!err) navigate(from, { replace: true });
         return err;
       }}

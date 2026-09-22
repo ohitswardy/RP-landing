@@ -3,14 +3,30 @@ import { motion } from 'framer-motion';
 import Reveal from './Reveal';
 import ArrowCta from './ArrowCta';
 import type { HomeCopy } from '../cms/data';
+import { noteHref, useInsightNotes, type JournalNote } from '../lib/insightsContent';
 
 const ease = [0.25, 1, 0.5, 1] as const;
+
+/**
+ * Where a home-page insight card goes. A card authored with a real link
+ * keeps it. One left on the bare journal (`/insights`, or blank) is matched
+ * to a published note by title so it opens the note itself; if no note
+ * matches it still lands on the journal.
+ */
+export function resolveInsightHref(card: { title: string; href: string }, notes: JournalNote[]): string {
+  const href = card.href.trim();
+  if (href && href !== '/insights' && href !== '/insights/') return href;
+  const key = card.title.trim().toLowerCase();
+  const note = key ? notes.find((n) => n.title.trim().toLowerCase() === key) : undefined;
+  return note ? noteHref(note) : '/insights';
+}
 
 /** Featured research and the ledger under it. Authored in the CMS Landing page module. */
 export default function Insights({ copy }: { copy: HomeCopy['insights'] }) {
   const aside = Boolean(copy.intro || copy.cta.label);
   const featured = copy.featured;
   const rows = copy.rows;
+  const notes = useInsightNotes();
 
   return (
     <section className="bg-paper text-ink">
@@ -49,7 +65,7 @@ export default function Insights({ copy }: { copy: HomeCopy['insights'] }) {
                 transition={{ duration: 0.7, delay: i * 0.08, ease }}
                 className="group"
               >
-                <Link to={c.href || '/insights'} className="block">
+                <Link to={resolveInsightHref(c, notes)} className="block">
                   <div className="aspect-[16/9] overflow-hidden bg-bone">
                     {c.image && (
                       <img
@@ -84,7 +100,7 @@ export default function Insights({ copy }: { copy: HomeCopy['insights'] }) {
                 className="border-b rule"
               >
                 <Link
-                  to={r.href || '/insights'}
+                  to={resolveInsightHref(r, notes)}
                   className="group grid grid-cols-12 items-baseline gap-x-4 py-6 md:py-7 -mx-4 px-4 transition-colors hover:bg-bone"
                 >
                   <div className="col-span-12 md:col-span-3 mono text-[10px] tracking-[0.16em] uppercase text-graphite">

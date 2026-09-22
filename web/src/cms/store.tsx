@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ApiError, getToken } from '../lib/api';
+import { beginActivity, markSuccess } from '../lib/activity';
 import {
   EMPTY_ABOUT, EMPTY_CONTACT, EMPTY_HOME, EMPTY_INSIGHTS, EMPTY_TRENDING_RULES,
   type AboutCopy, type ContactCopy, type HomeCopy, type Article, type ArticleStatus, type InsightsPage, type StaffMember, type ServiceLine,
   type ServicePage, type ServicePillar, type ServiceProof,
   type Subscriber, type PageBlock, type AuditEntry, type Report, type MediaAsset, type ReportCategory, type ReportCompany, type Company,
-  type ReportType, type ReportRating,
+  type ReportType, type ReportRating, type Career, type CareerType, type CareerStatus, type WatchSymbol,
   type NewsletterCadence, type NewsletterIssue, type NewsletterIssueSummary, type NewsletterRailBlock, type NewsletterSection, type TrendingRules,
   summarizeIssue,
 } from './data';
@@ -36,6 +37,10 @@ type CmsState = {
   subscribers: Subscriber[];
   pages: PageBlock[];
   media: MediaAsset[];
+  /** Postings on the public /careers page. */
+  careers: Career[];
+  /** The public market ribbon's symbols, in list order (pinned lead on the page). */
+  watchlist: WatchSymbol[];
   audit: AuditEntry[];
 };
 
@@ -50,7 +55,43 @@ export type ArticlePayload = {
   /** ISO yyyy-mm-dd. Omitted on create means today. */
   date?: string;
   featured?: boolean;
+  /** Blank means "derive from the title". */
+  slug?: string;
+  /** The note body as HTML. */
+  body?: string;
 };
+
+export type CareerPayload = {
+  title: string; dept: string; type: CareerType; location: string; summary: string;
+  /** HTML. */
+  body: string;
+  /** Update only; postings are created open. */
+  status?: CareerStatus;
+};
+
+/** What a service line starts life with; everything but the title is optional. */
+export type NewServicePayload = {
+  title: string;
+  slug?: string;
+  eyebrow?: string;
+  dek?: string;
+  introHeading?: string;
+  img?: string;
+  heroImages?: string[];
+  pillars?: ServicePillar[];
+  proof?: ServiceProof[];
+  live?: boolean;
+};
+
+/** A delete the API refused because something still points at the asset. */
+export class MediaInUseError extends Error {
+  references: string[];
+  constructor(message: string, references: string[]) {
+    super(message);
+    this.name = 'MediaInUseError';
+    this.references = references;
+  }
+}
 export type ReportPayload = {
   title: string;
   category: ReportCategory | null;
@@ -131,11 +172,34 @@ type CmsStore = CmsState & {
   /** Replace the About page copy; resolves to the saved document. */
   updateAboutPage: (p: AboutCopy) => Promise<AboutCopy>;
 
+  /** Add a practice page; resolves to the new line so the module can select it. */
+  addService: (p: NewServicePayload) => Promise<ServiceLine>;
   updateService: (id: string, p: ServicePayload) => Promise<void>;
+  /** Remove a practice page. Rejects with the API's 409 message when it would leave zero live lines. */
+  deleteService: (id: string) => Promise<void>;
   reorderServices: (ids: string[]) => Promise<void>;
   updateServicePage: (p: Partial<ServicePage>) => Promise<void>;
   /** Upload a photo, file it in the media library, and return the new asset. */
   uploadImage: (file: File, meta: { label?: string; usedBy?: string; scope: UploadScope; kind?: MediaAsset['kind'] }) => Promise<MediaAsset>;
+  /** Upload straight into the media library (media.manage), unattached to any module. */
+  uploadMedia: (file: File, meta?: { label?: string; usedBy?: string; kind?: MediaAsset['kind'] }) => Promise<MediaAsset>;
+  /** Delete a library asset. Rejects with MediaInUseError (naming the documents) when it is still referenced. */
+  deleteMedia: (id: string) => Promise<void>;
+  /** Re-read the whole library from the API. */
+  refreshMedia: () => Promise<void>;
+
+  addCareer: (p: CareerPayload) => Promise<Career>;
+  updateCareer: (id: string, p: Partial<CareerPayload>) => Promise<void>;
+  deleteCareer: (id: string) => Promise<void>;
+
+  addWatchSymbol: (sym: string) => Promise<WatchSymbol>;
+  /** Only the pin can change on a symbol; the ticker itself is its identity. */
+  updateWatchSymbol: (id: string, p: { pinned: boolean }) => Promise<void>;
+  reorderWatchlist: (ids: string[]) => Promise<void>;
+  deleteWatchSymbol: (id: string) => Promise<void>;
+
+  /** Change the signed-in staff member's own password. Rejects with an ApiError carrying field errors on 422. */
+  changeOwnPassword: (p: { current: string; password: string; confirmation: string }) => Promise<void>;
 
   createNewsletter: (p: NewsletterPayload) => Promise<void>;
   updateNewsletter: (id: string, p: Partial<NewsletterPayload>) => Promise<void>;
@@ -160,7 +224,7 @@ const EMPTY: CmsState = {
   articles: [], reports: [], companies: [], reportTypes: [], trendingRules: EMPTY_TRENDING_RULES,
   people: [], services: [], servicePage: EMPTY_SERVICE_PAGE,
   aboutPage: EMPTY_ABOUT, contactPage: EMPTY_CONTACT, homePage: EMPTY_HOME, insightsPage: EMPTY_INSIGHTS,
-  newsletters: [], subscribers: [], pages: [], media: [], audit: [],
+  newsletters: [], subscribers: [], pages: [], media: [], careers: [], watchlist: [], audit: [],
 };
 
 const CmsContext = createContext<CmsStore | null>(null);
@@ -180,9 +244,10 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     setStatus('loading');
     setError(null);
     try {
-      const data = await apiFetch<CmsState>('/cms/bootstrap', { audience: 'cms' });
+      const data = await apiFetch<Partial<CmsState>>('/cms/bootstrap', { audience: 'cms' });
       if (!alive.current) return;
-      setState(data);
+      // Older API builds omit the newer collections; never let a missing key crash a module.
+      setState({ ...EMPTY, ...data });
       setStatus('ready');
     } catch (e) {
       if (!alive.current) return;
@@ -424,9 +489,20 @@ export function CmsProvider({ children }: { children: ReactNode }) {
 
   /* ── Services ─────────────────────────────────────────────── */
 
+  const addService = useCallback(async (p: NewServicePayload) => {
+    const res = await apiFetch<ItemResponse<ServiceLine>>('/cms/services', { method: 'POST', body: p, audience: 'cms' });
+    apply('services', (prev) => upsert(prev, res.item), res.audit);
+    return res.item;
+  }, [apply]);
+
   const updateService = useCallback(async (id: string, p: ServicePayload) => {
     const res = await apiFetch<ItemResponse<ServiceLine>>(`/cms/services/${id}`, { method: 'PUT', body: p, audience: 'cms' });
     apply('services', (prev) => upsert(prev, res.item), res.audit);
+  }, [apply]);
+
+  const deleteService = useCallback(async (id: string) => {
+    const res = await apiFetch<DeleteResponse>(`/cms/services/${id}`, { method: 'DELETE', audience: 'cms' });
+    apply('services', (prev) => prev.filter((x) => x.id !== id), res.audit);
   }, [apply]);
 
   const reorderServices = useCallback(async (ids: string[]) => {
@@ -461,6 +537,108 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     apply('media', (prev) => upsert(prev, res.item, true), res.audit);
     return res.item;
   }, [apply]);
+
+  /* ── Media library ────────────────────────────────────────── */
+
+  const uploadMedia = useCallback(async (file: File, meta: { label?: string; usedBy?: string; kind?: MediaAsset['kind'] } = {}) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (meta.label) fd.append('label', meta.label);
+    if (meta.usedBy) fd.append('usedBy', meta.usedBy);
+    if (meta.kind) fd.append('kind', meta.kind);
+    const res = await apiFetch<ItemResponse<MediaAsset>>('/cms/media', { method: 'POST', formData: fd, audience: 'cms' });
+    apply('media', (prev) => upsert(prev, res.item, true), res.audit);
+    return res.item;
+  }, [apply]);
+
+  const deleteMedia = useCallback(async (id: string) => {
+    // apiFetch keeps only `message`/`errors` from a failed body, and the 409 here
+    // carries the list of documents still pointing at the file. Read it by hand.
+    const token = getToken('cms');
+    const end = beginActivity('task');
+    let res: Response;
+    try {
+      res = await fetch(`/api/cms/media/${id}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+    } finally {
+      end();
+    }
+    let data: { message?: string; references?: string[]; audit?: AuditEntry } = {};
+    try { data = await res.json(); } catch { /* empty body */ }
+    if (res.status === 409) throw new MediaInUseError(data.message ?? 'This image is still in use.', data.references ?? []);
+    if (!res.ok) throw new ApiError(res.status, data.message ?? `Request failed (${res.status}).`);
+    markSuccess();
+    apply('media', (prev) => prev.filter((x) => x.id !== id), data.audit);
+  }, [apply]);
+
+  const refreshMedia = useCallback(async () => {
+    const res = await apiFetch<{ items: MediaAsset[] }>('/cms/media', { audience: 'cms' });
+    apply('media', () => res.items);
+  }, [apply]);
+
+  /* ── Careers ──────────────────────────────────────────────── */
+
+  const addCareer = useCallback(async (p: CareerPayload) => {
+    const res = await apiFetch<ItemResponse<Career>>('/cms/careers', { method: 'POST', body: p, audience: 'cms' });
+    apply('careers', (prev) => upsert(prev, res.item, true), res.audit);
+    return res.item;
+  }, [apply]);
+
+  const updateCareer = useCallback(async (id: string, p: Partial<CareerPayload>) => {
+    const res = await apiFetch<ItemResponse<Career>>(`/cms/careers/${id}`, { method: 'PUT', body: p, audience: 'cms' });
+    apply('careers', (prev) => upsert(prev, res.item), res.audit);
+  }, [apply]);
+
+  const deleteCareer = useCallback(async (id: string) => {
+    const res = await apiFetch<DeleteResponse>(`/cms/careers/${id}`, { method: 'DELETE', audience: 'cms' });
+    apply('careers', (prev) => prev.filter((x) => x.id !== id), res.audit);
+  }, [apply]);
+
+  /* ── Market ribbon ────────────────────────────────────────── */
+
+  const addWatchSymbol = useCallback(async (sym: string) => {
+    const res = await apiFetch<ItemResponse<WatchSymbol>>('/cms/watchlist', {
+      method: 'POST', body: { sym: sym.trim().toUpperCase() }, audience: 'cms',
+    });
+    apply('watchlist', (prev) => upsert(prev, res.item), res.audit);
+    return res.item;
+  }, [apply]);
+
+  const updateWatchSymbol = useCallback(async (id: string, p: { pinned: boolean }) => {
+    const res = await apiFetch<ItemResponse<WatchSymbol>>(`/cms/watchlist/${id}`, { method: 'PUT', body: p, audience: 'cms' });
+    apply('watchlist', (prev) => upsert(prev, res.item), res.audit);
+  }, [apply]);
+
+  const reorderWatchlist = useCallback(async (ids: string[]) => {
+    // Optimistic, like the other reorders; the server echoes the final list.
+    setState((s) => {
+      const byId = new Map(s.watchlist.map((w) => [w.id, w]));
+      const next = ids.map((id) => byId.get(id)).filter((w): w is WatchSymbol => Boolean(w));
+      return { ...s, watchlist: next };
+    });
+    const res = await apiFetch<ListResponse<WatchSymbol>>('/cms/watchlist/reorder', {
+      method: 'PUT', body: { ids }, audience: 'cms',
+    });
+    apply('watchlist', () => res.items, res.audit);
+  }, [apply]);
+
+  const deleteWatchSymbol = useCallback(async (id: string) => {
+    const res = await apiFetch<DeleteResponse>(`/cms/watchlist/${id}`, { method: 'DELETE', audience: 'cms' });
+    apply('watchlist', (prev) => prev.filter((x) => x.id !== id), res.audit);
+  }, [apply]);
+
+  /* ── Own account ──────────────────────────────────────────── */
+
+  const changeOwnPassword = useCallback(async (p: { current: string; password: string; confirmation: string }) => {
+    const res = await apiFetch<{ ok: boolean; audit?: AuditEntry }>('/cms/password', {
+      method: 'PUT',
+      body: { current: p.current, password: p.password, password_confirmation: p.confirmation },
+      audience: 'cms',
+    });
+    appendAudit(res.audit);
+  }, [appendAudit]);
 
   /* ── Newsletter issues ────────────────────────────────────── */
 
@@ -543,7 +721,11 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     createCompany, updateCompany, deleteCompany,
     createReportType, renameReportType, deleteReportType,
     createPerson, updatePerson, deletePerson, reorderPeople, updateAboutPage,
-    updateService, reorderServices, updateServicePage, uploadImage,
+    addService, updateService, deleteService, reorderServices, updateServicePage, uploadImage,
+    uploadMedia, deleteMedia, refreshMedia,
+    addCareer, updateCareer, deleteCareer,
+    addWatchSymbol, updateWatchSymbol, reorderWatchlist, deleteWatchSymbol,
+    changeOwnPassword,
     createNewsletter, updateNewsletter, deleteNewsletter, fetchNewsletter,
     removeSubscriber,
     updatePage, updateContactPage, updateHomePage,
@@ -554,7 +736,11 @@ export function CmsProvider({ children }: { children: ReactNode }) {
     createCompany, updateCompany, deleteCompany,
     createReportType, renameReportType, deleteReportType,
     createPerson, updatePerson, deletePerson, reorderPeople, updateAboutPage,
-    updateService, reorderServices, updateServicePage, uploadImage,
+    addService, updateService, deleteService, reorderServices, updateServicePage, uploadImage,
+    uploadMedia, deleteMedia, refreshMedia,
+    addCareer, updateCareer, deleteCareer,
+    addWatchSymbol, updateWatchSymbol, reorderWatchlist, deleteWatchSymbol,
+    changeOwnPassword,
     createNewsletter, updateNewsletter, deleteNewsletter, fetchNewsletter,
     removeSubscriber,
     updatePage, updateContactPage, updateHomePage,

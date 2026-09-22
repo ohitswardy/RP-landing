@@ -10,8 +10,10 @@ use App\Http\Controllers\Crms\EventController;
 use App\Http\Controllers\Crms\InsightController;
 use App\Http\Controllers\Crms\InteractionController;
 use App\Http\Controllers\Crms\LoginController;
+use App\Http\Controllers\Crms\MyActivityController;
 use App\Http\Controllers\Crms\OneOffMeetingController;
 use App\Http\Controllers\Crms\ReportController;
+use App\Http\Controllers\Crms\ReportLayoutController;
 use App\Http\Controllers\Crms\SellsideContactController;
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +42,8 @@ Route::prefix('crms')->middleware(['auth:sanctum', 'staff', 'permission:crms.acc
     Route::get('/dashboard/summary', [InsightController::class, 'summary']);
     Route::get('/corporates/{corporate}/holders', [InsightController::class, 'holders']);
     Route::get('/client-contacts/{contact}/portal', [ClientContactController::class, 'portal']);
+    // The signed-in staff member's own footprint (masterplan "My Profile / My Activity").
+    Route::get('/my-activity', MyActivityController::class);
 
     Route::middleware('permission:crms.contacts.manage')->group(function () {
         Route::post('/clients', [ClientController::class, 'store']);
@@ -105,6 +109,11 @@ Route::prefix('crms')->middleware(['auth:sanctum', 'staff', 'permission:crms.acc
         Route::put('/forms/{form}', [ConfigController::class, 'updateForm']);
         Route::delete('/forms/{form}', [ConfigController::class, 'destroyForm']);
         Route::post('/report-templates', [ConfigController::class, 'storeTemplate']);
+        // Imported Excel templates (Form builder → Report template): the workbook + column map, its preview, the original file.
+        Route::post('/report-templates/layout', [ReportLayoutController::class, 'store']);
+        Route::post('/report-templates/layout/preview', [ReportLayoutController::class, 'preview']);
+        Route::get('/report-templates/bundled/{key}/file', [ReportLayoutController::class, 'bundled'])->where('key', '[a-z-]+');
+        Route::get('/report-templates/{template}/layout/file', [ReportLayoutController::class, 'download']);
         Route::put('/report-templates/{template}', [ConfigController::class, 'updateTemplate']);
         Route::delete('/report-templates/{template}', [ConfigController::class, 'destroyTemplate']);
         Route::get('/logs', [InsightController::class, 'logs']);

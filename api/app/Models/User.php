@@ -105,6 +105,70 @@ class User extends Authenticatable
         return $this->status === self::STATUS_APPROVED;
     }
 
+    /** How long a "remember me" session lasts before the token expires. */
+    public const REMEMBER_DAYS = 30;
+
+    /**
+     * Issue a Sanctum session token. A remembered session carries a 30-day
+     * expiry that Sanctum enforces on every request; otherwise the token
+     * never expires on its own and the browser's sessionStorage ends it.
+     *
+     * @return array{token: string, expiresAt: string|null}
+     */
+    public function issueSessionToken(string $name, array $abilities, bool $remember = false): array
+    {
+        $expiresAt = $remember ? now()->addDays(self::REMEMBER_DAYS) : null;
+        $issued = $this->createToken($name, $abilities, $expiresAt);
+
+        return [
+            'token' => $issued->plainTextToken,
+            'expiresAt' => $issued->accessToken->expires_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Revoke every session for this account except the one making the
+     * request (when there is one), so a self-service password change signs
+     * out every other device without dropping the user mid-flow.
+     */
+    public function revokeOtherTokens(): void
+    {
+        $current = $this->currentAccessToken();
+        $query = $this->tokens();
+        if ($current instanceof \Laravel\Sanctum\PersonalAccessToken) {
+            $query->where('id', '!=', $current->id);
+        }
+        $query->delete();
+    }
+
+    /** The signed-in client as the portal session and /me describe them. */
+    public function toClientSessionWire(): array
+    {
+        return [
+            'id' => (string) $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'username' => $this->username,
+            'firm' => $this->firm ?? 'Institutional client',
+        ];
+    }
+
+    /** The client's own account page: identity plus the mandate they are provisioned on. */
+    public function toProfileWire(): array
+    {
+        return [
+            'id' => (string) $this->id,
+            'name' => $this->name,
+            'username' => $this->username,
+            'email' => $this->email,
+            'firm' => $this->firm,
+            'clientType' => $this->client_type,
+            'sectorPrefs' => $this->sector_prefs ?? [],
+            'preferredAnalysts' => $this->preferred_analysts ?? [],
+            'memberSince' => ($this->approved_at ?? $this->registered_at ?? $this->created_at)?->toIso8601String(),
+        ];
+    }
+
     /** The client's mandate: the sectors and analyst bylines they are
         provisioned to read, lowercased and trimmed so matching survives the
         casing the desk happened to type. Empty lists on either side mean that

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { EASE, EmptyState, SkeletonRows } from '../../cms/ui';
+import { markSuccess } from '../../lib/activity';
 import { IconArrowDown, IconArrowUp, IconDownload, IconSearch, IconX } from '../../cms/icons';
 import { Select } from '../../cms/kit/pickers';
 
@@ -116,6 +117,7 @@ export default function DataTable<T extends { id: string }>({
     a.download = `${title.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    markSuccess();
   };
 
   const print = () => {

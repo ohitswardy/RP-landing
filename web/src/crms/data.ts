@@ -355,11 +355,57 @@ export type Itinerary = {
 export type SectorScope = 'domestic' | 'foreign';
 export type SectorGroup = { id: string; name: string; scope: SectorScope; position: number; corporateIds: string[]; subscriberCount: number };
 
-export type ReportTemplateCode = 'corpaxe' | 'gmo' | 'jpmorgan' | 'schroders' | 'trowe';
+export type ReportTemplateCode = 'corpaxe' | 'gmo' | 'jpmorgan' | 'schroders' | 'trowe' | 'commcise' | 'jefferies' | 'custom';
 export const TEMPLATE_CODES: Record<ReportTemplateCode, string> = {
-  corpaxe: 'Corpaxe consumption', gmo: 'GMO', jpmorgan: 'JPMorgan', schroders: 'Schroders', trowe: 'T. Rowe Price',
+  corpaxe: 'Corpaxe consumption', gmo: 'GMO', jpmorgan: 'JPMorgan (legacy sheet)', schroders: 'Schroders (legacy sheet)', trowe: 'T. Rowe Price', commcise: 'Commcise template (the client’s own workbook)',
+  jefferies: 'Jefferies bulk upload (the co-brand’s own workbook)',
+  custom: 'Imported Excel template',
 };
-export type ReportTemplate = { id: string; clientId: string; clientName: string | null; code: ReportTemplateCode; active: boolean };
+/** Built-in layouts an administrator may bind by hand; `custom` only arrives through an import. */
+export const BINDABLE_CODES = (Object.keys(TEMPLATE_CODES) as ReportTemplateCode[]).filter((c) => c !== 'custom');
+
+export type ReportLayoutScope = 'client' | 'foreign' | 'all';
+/** One column of an imported template: which CRMS source fills it and how the value is written. */
+export type ReportLayoutColumn = { index: number; header: string; source: string; separator: string; format: string | null; text: string | null };
+export type ReportLayoutCell = { ref: string; source: string; text: string | null };
+/** An imported Excel template as stored: the workbook stays on the server, this is the map onto it. */
+export type ReportLayout = {
+  file: string | null;
+  title: string | null;
+  sheet: string;
+  sheets: string[];
+  headerRow: number;
+  dataStart: number;
+  scope: ReportLayoutScope;
+  columns: ReportLayoutColumn[];
+  cells: ReportLayoutCell[];
+  importedAt: string | null;
+};
+/** A template that ships with the CRMS (the Schroders / JPM Commcise workbooks, Jefferies' bulk upload), described like an import. */
+export type BundledLayout = ReportLayout & { key: string };
+export type ReportTemplate = {
+  id: string; clientId: string; clientName: string | null; code: ReportTemplateCode; active: boolean;
+  /** An imported workbook's map (code `custom`). */
+  layout: ReportLayout | null;
+  /** The bundled workbook a built-in code fills (codes `commcise` and `jefferies`). */
+  bundled: BundledLayout | null;
+};
+/**
+ * The Jefferies upload as the bootstrap describes it: the client row that holds its binding (null until a client
+ * named Jefferies exists), the binding it renders through today, and the bundled workbook as Jefferies sent it.
+ */
+export type JefferiesMeta = { clientId: string | null; templateId: string | null; bundled: BundledLayout | null };
+
+/** A data source an imported template's column can be filled with (meta.reportSources). */
+export type ReportSource = {
+  key: string;
+  label: string;
+  group: string;
+  kind: 'text' | 'date' | 'time' | 'number';
+  multi: boolean;
+  aliases: string[];
+  flavors?: Record<string, string[]>;
+};
 
 export type PortalAccount = {
   id: string;
@@ -423,3 +469,39 @@ export function fmtRange(from: string, to: string | null): string {
   if (!to || to === from) return fmtDay(from);
   return `${fmtDay(from)} – ${fmtDay(to)}`;
 }
+
+/* ── Bootstrap meta ────────────────────────────────────────── */
+
+/** A roadshow category as the bootstrap lists it: slug and label from the enum, id and name from the legacy `event_category` row when one exists. */
+export type EventCategoryMeta = { slug: string; label: string; id: string | null; legacyName: string | null };
+
+/* ── My Activity ───────────────────────────────────────────── */
+
+export type ActivityKind = 'interaction' | 'meeting' | 'event' | 'audit';
+
+/** One row of the merged feed. href is null for ledger rows, which name a target but carry no id. */
+export type ActivityItem = {
+  key: string;
+  kind: ActivityKind;
+  at: string | null;
+  title: string;
+  subtitle: string | null;
+  href: string | null;
+  minutes: number | null;
+  important: boolean;
+  disposition: Disposition | null;
+};
+
+export type MyActivity = {
+  range: { from: string; to: string };
+  profile: {
+    name: string;
+    email: string;
+    role: string | null;
+    outlookEmail: string | null;
+    /** The legacy `user` row this account maps to by email; interactions.user_id is stamped only when matched. */
+    legacyUser: { matched: boolean; id: string | null; name: string | null; type: string | null; email: string | null };
+  };
+  totals: { interactions: number; minutes: number; important: number; meetingsCreated: number; eventsCreated: number; eventsAttended: number; actions: number };
+  feed: Paged<ActivityItem>;
+};

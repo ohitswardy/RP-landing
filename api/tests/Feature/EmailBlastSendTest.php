@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\EmailBlast;
 use App\Models\Report;
+use App\Models\Role;
 use App\Models\Subscriber;
 use App\Models\User;
 use App\Services\MicrosoftGraphMailer;
@@ -25,7 +26,15 @@ class EmailBlastSendTest extends TestCase
     {
         parent::setUp();
         $this->seed(RbacSeeder::class);
-        $this->admin = User::where('email', 'e.dagal@regis.ph')->firstOrFail();
+        // RbacSeeder seeds only the super admin now; the desk actor is built here.
+        $this->admin = User::factory()->create([
+            'name' => 'Edward S. Dagal',
+            'email' => 'e.dagal@regis.ph',
+            'outlook_email' => 'e.dagal@regis.ph',
+            'kind' => User::KIND_STAFF,
+            'status' => User::STATUS_APPROVED,
+            'role_id' => Role::where('name', 'Administrator')->value('id'),
+        ]);
         Sanctum::actingAs($this->admin, ['cms']);
         config()->set('app.frontend_url', 'https://regis.ph');
         config()->set('app.url', 'https://api.regis.ph');

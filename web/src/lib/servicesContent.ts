@@ -148,3 +148,9 @@ export function useServicesContent(): ServicesContent | null {
   const { data, ready } = usePublicContent('/content/services', SERVICES_FALLBACK, normalize);
   return ready ? data : null;
 }
+
+/** The live service lines, with the bundled set standing in before/without the API. */
+export function useServiceLines(): ServiceLine[] {
+  const { data } = usePublicContent('/content/services', SERVICES_FALLBACK, normalize);
+  return data.services;
+}

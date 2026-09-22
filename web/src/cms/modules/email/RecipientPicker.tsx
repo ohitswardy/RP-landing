@@ -2,14 +2,15 @@ import { useMemo, useState } from 'react';
 import { Chip } from '../../ui';
 import { TinyBtn } from '../../kit/parts';
 import { IconPlus, IconSearch, IconX } from '../../icons';
-import type { AudienceClient, AudienceSubscriber, DistributionList, EmailRecipient } from '../../data';
+import { MATCH_VIA, RESEARCH_SCOPE, type AudienceClient, type AudienceSubscriber, type DistributionList, type EmailRecipient, type MatchVia, type ResearchGroup } from '../../data';
 
 /* ─────────────────────────────────────────────────────────────
    Who a blast goes to. One deduplicated list fed from several
    directions: a client search (preference chips visible, so
    pruning an auto-matched list is informed), one-click pools
-   (Local clients, Foreign clients, verified subscribers), saved
-   distribution lists, and manually typed addresses.
+   (Local clients, Foreign clients, verified subscribers), the CRMS
+   research sectors, the staff member's own saved lists, and
+   manually typed addresses.
    ───────────────────────────────────────────────────────────── */
 
 export function clientRecipient(c: AudienceClient): EmailRecipient {
@@ -30,15 +31,19 @@ function notYetOn(selected: Set<string>, items: EmailRecipient[]): EmailRecipien
 }
 
 export default function RecipientPicker({
-  clients, subscribers, lists = [], value, onChange, label = 'Recipients', hint,
+  clients, subscribers, lists = [], research = [], value, onChange, label = 'Recipients', hint, badges,
 }: {
   clients: AudienceClient[];
   subscribers: AudienceSubscriber[];
   lists?: DistributionList[];
+  /** The CRMS research hierarchy; each sector adds the contacts reachable through a portal account. */
+  research?: ResearchGroup[];
   value: EmailRecipient[];
   onChange: (next: EmailRecipient[]) => void;
   label?: string;
   hint?: string;
+  /** Why an auto-matched address is on the list, by lower-cased email (report blasts). */
+  badges?: Record<string, MatchVia>;
 }) {
   const [query, setQuery] = useState('');
   const [manual, setManual] = useState('');
@@ -71,6 +76,20 @@ export default function RecipientPicker({
       items: notYetOn(selected, l.contacts.map((c) => ({ ...c, email: c.email.toLowerCase() }))),
     })),
     [lists, selected],
+  );
+
+  /** Research sectors by audience, each a one-click pool like a saved list. */
+  const researchPools = useMemo<Array<{ scope: ResearchGroup['scope']; pools: QuickAdd[] }>>(
+    () => (['domestic', 'foreign'] as const)
+      .map((scope) => ({
+        scope,
+        pools: research
+          .filter((g) => g.scope === scope)
+          .sort((a, b) => a.position - b.position)
+          .map((g) => ({ key: `research:${g.id}`, label: g.name, items: notYetOn(selected, g.recipients) })),
+      }))
+      .filter((s) => s.pools.length > 0),
+    [research, selected],
   );
 
   const addMany = (items: EmailRecipient[]) => {
@@ -129,6 +148,15 @@ export default function RecipientPicker({
             >
               <span className={r.source === 'client' ? 'text-ink group-hover:text-inherit' : ''}>{r.name || r.email}</span>
               {r.source !== 'manual' && <span className="uppercase text-[8.5px] text-silver">{r.source}</span>}
+              {badges?.[r.email.toLowerCase()] && (
+                <span
+                  className="uppercase text-[8.5px] tracking-[0.1em]"
+                  style={{ color: 'var(--color-amber-deep)' }}
+                  title={MATCH_VIA[badges[r.email.toLowerCase()]].hint}
+                >
+                  {MATCH_VIA[badges[r.email.toLowerCase()]].label}
+                </span>
+              )}
               <IconX size={9} />
             </button>
           ))}
@@ -184,10 +212,26 @@ export default function RecipientPicker({
         ))}
       </div>
 
-      {/* Saved distribution lists */}
+      {/* CRMS research sectors — one row per audience */}
+      {researchPools.map((s) => (
+        <div key={s.scope} className="space-y-2 border-t rule pt-3">
+          <span className="mono block text-[9.5px] uppercase tracking-[0.2em] text-silver">
+            {RESEARCH_SCOPE[s.scope].code} <span className="normal-case tracking-normal text-silver/70">· CRMS</span>
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {s.pools.map((p) => (
+              <TinyBtn key={p.key} onClick={() => addMany(p.items)} disabled={p.items.length === 0}>
+                <IconPlus size={11} /> {p.label} <span className="num text-silver">{p.items.length}</span>
+              </TinyBtn>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* The staff member's own saved lists */}
       {listPools.length > 0 && (
         <div className="space-y-2 border-t rule pt-3">
-          <span className="mono block text-[9.5px] uppercase tracking-[0.2em] text-silver">Distribution lists</span>
+          <span className="mono block text-[9.5px] uppercase tracking-[0.2em] text-silver">My lists</span>
           <div className="flex flex-wrap items-center gap-2">
             {listPools.map((p) => (
               <TinyBtn key={p.key} onClick={() => addMany(p.items)} disabled={p.items.length === 0}>

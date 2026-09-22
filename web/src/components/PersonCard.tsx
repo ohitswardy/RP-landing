@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import PersonModal from './PersonModal';
+import { slugify } from '../lib/insightsContent';
 
 export interface Person {
   n: string;
@@ -36,7 +37,8 @@ export default function PersonCard({ person, index = 0 }: PersonCardProps) {
   return (
     <>
     <motion.div
-      className="group cursor-pointer"
+      id={slugify(person.n)}
+      className="group cursor-pointer scroll-mt-40"
       onClick={() => setModalOpen(true)}
       role="button"
       tabIndex={0}
